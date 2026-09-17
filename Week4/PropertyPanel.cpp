@@ -120,6 +120,13 @@ namespace
 			break;
 		}
 
+		case EPropertyType::Vector4:
+		{
+			FVector4* Value = static_cast<FVector4*>(ValuePtr);
+			ImGui::ColorEdit4(Label.c_str(), &Value->x);
+			break;
+		}
+
 		case EPropertyType::String:
 		{
 			FString* Value = static_cast<FString*>(ValuePtr);
@@ -150,7 +157,7 @@ namespace
 		}
 
 		TArray<const FClassInfo*> ClassChain;
-		for (const FClassInfo* Class = Object->GetClass(); Class; Class = Class->SuperClass)
+		for (const FClassInfo* Class = Object->GetRuntimeClass(); Class; Class = Class->SuperClass)
 		{
 			ClassChain.Add(Class);
 		}

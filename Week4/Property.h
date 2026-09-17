@@ -3,7 +3,7 @@
 #include "core.h"
 #include "Vector.h"
 
-enum class EPropertyType { Unknown, Float, Int, String, Bool, Vector, };
+enum class EPropertyType { Unknown, Float, Int, String, Bool, Vector, Vector4};
 
 template <typename T>
 constexpr EPropertyType GetPropertyType()
@@ -22,6 +22,7 @@ DEFINE_PROPERTY_TYPE(float, Float)
 DEFINE_PROPERTY_TYPE(bool, Bool)
 DEFINE_PROPERTY_TYPE(FString, String)
 DEFINE_PROPERTY_TYPE(FVector, Vector)
+DEFINE_PROPERTY_TYPE(FVector4, Vector4)
 
 struct FProperty
 {

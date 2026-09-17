@@ -9,6 +9,7 @@
 #include "ShowFlags.h"
 #include "MathUtility.h"
 #include "Json/json.hpp"
+#include "Property.h"
 
 class UPlaneComponent : public UPrimitiveComponent
 {
@@ -76,7 +77,12 @@ private:
 class USpotLightComponent : public USceneComponent
 {
 	REFLECT_CLASS(USpotLightComponent, USceneComponent)
-
+	REFLECT_START(className)
+		PROPERTY(Range)
+		PROPERTY(mColor)
+		PROPERTY(mInnerConeAngle)
+		PROPERTY(mOuterConeAngle)
+	REFLECT_END()
 public:
 	void Tick(float DeltaTime) override
 	{

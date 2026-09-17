@@ -13,8 +13,6 @@ class AActor : public UObject
 {
 	REFLECT_CLASS(AActor, UObject)
 
-	REFLECT_START(ClassName)
-	REFLECT_END()
 public:
 	AActor() = default;
 	virtual ~AActor();

@@ -1,6 +1,16 @@
 ﻿
+template <typename T>
+inline void RegisterClassProperties(FClassInfo* InClass)
+{
+	if constexpr (requires { T::RegisterProperties(InClass); })
+	{
+		T::RegisterProperties(InClass);
+	}
+}
+
 #define REFLECT_CLASS(className, superClassName)									\
 public:																				\
+	using ThisClass = className;													\
 	using Super = superClassName;													\
 	static const FClassInfo* GetClass()												\
 	{																				\
@@ -17,9 +27,19 @@ public:																				\
 				}																	\
 			}																		\
 		);																			\
+		static const bool bPropertiesRegistered = []()						\
+		{															\
+			RegisterClassProperties<className>(&classInstance);					\
+			return true;												\
+		}();															\
+		(void)bPropertiesRegistered;												\
 		return &classInstance;														\
 	}																				\
-private:
+virtual const FClassInfo* GetRuntimeClass() const override							\
+    {                                                                               \
+        return ThisClass::GetClass();                                               \
+    }																				\
+private:																			
 
 // Property Reflection
 #define REFLECT_START(className)										\
