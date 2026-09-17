@@ -609,6 +609,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	mPanelWidth = ImGui::GetWindowWidth();
 
 	mPropertyPanel->OnRender();
+
 #pragma region Transform
 	//if (mSelectedActor)
 	//{

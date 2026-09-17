@@ -27,11 +27,11 @@ public:																				\
 				}																	\
 			}																		\
 		);																			\
-		static const bool bPropertiesRegistered = []()						\
-		{															\
-			RegisterClassProperties<className>(&classInstance);					\
-			return true;												\
-		}();															\
+		static const bool bPropertiesRegistered = []()								\
+		{																			\
+			RegisterClassProperties<className>(&classInstance);						\
+			return true;															\
+		}();																		\
 		(void)bPropertiesRegistered;												\
 		return &classInstance;														\
 	}																				\

@@ -3,18 +3,26 @@
 #include "core.h"
 #include "Vector.h"
 
-enum class EPropertyType { Unknown, Float, Int, String, Bool, Vector, Vector4};
+enum class EPropertyType { Unknown, Float, Int, String, Bool, Vector, Vector4, WString, Asset};
 
 template <typename T>
-constexpr EPropertyType GetPropertyType()
+struct TPropertyTypeTraits
 {
-    static_assert(sizeof(T) == 0, "Not Valid Type");
-    return EPropertyType::Unknown;
-}
+    static_assert(sizeof(T) == 0, "Not Valid Type. Please register it using DEFINE_PROPERTY_TYPE.");
+    static constexpr EPropertyType Value = EPropertyType::Unknown;
+};
 
-#define DEFINE_PROPERTY_TYPE(CppType, EnumValue)                    \
-    template <> constexpr EPropertyType GetPropertyType<CppType>()  \
-    { return EPropertyType::EnumValue; }
+template <typename T>
+struct TPropertyTypeTraits<TSharedPtr<T>>
+{
+    static constexpr EPropertyType Value = EPropertyType::Asset;
+};
+
+#define DEFINE_PROPERTY_TYPE(CppType, EnumValue)            \
+    template <> struct TPropertyTypeTraits<CppType>         \
+    {                                                       \
+        static constexpr EPropertyType Value = EPropertyType::EnumValue; \
+    };
 
 DEFINE_PROPERTY_TYPE(int, Int)
 DEFINE_PROPERTY_TYPE(uint32, Int)
@@ -23,6 +31,13 @@ DEFINE_PROPERTY_TYPE(bool, Bool)
 DEFINE_PROPERTY_TYPE(FString, String)
 DEFINE_PROPERTY_TYPE(FVector, Vector)
 DEFINE_PROPERTY_TYPE(FVector4, Vector4)
+DEFINE_PROPERTY_TYPE(std::wstring, WString)
+
+template <typename T>
+constexpr EPropertyType GetPropertyType()
+{
+    return TPropertyTypeTraits<T>::Value;
+}
 
 struct FProperty
 {

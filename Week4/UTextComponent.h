@@ -14,7 +14,11 @@
 class UPlaneComponent : public UPrimitiveComponent
 {
 	REFLECT_CLASS(UPlaneComponent, UPrimitiveComponent)
-
+	REFLECT_START(className)
+		PROPERTY(mbBillboard)
+		PROPERTY(mEnableDepthTest)
+		PROPERTY(mEnableDepthWrite)
+	REFLECT_END()
 public:
 	UPlaneComponent()
 	{
@@ -176,7 +180,13 @@ public:
 class UText3DComponent : public USceneComponent
 {
 	REFLECT_CLASS(UText3DComponent, USceneComponent)
-
+	REFLECT_START(className)
+		PROPERTY(mFontAtlasAsset)
+		PROPERTY(mColor)
+		PROPERTY(mbBillboard)
+		PROPERTY(mEnableDepthTest)
+		PROPERTY(mEnableDepthWrite)
+		REFLECT_END()
 public:
 	UText3DComponent() = default;
 

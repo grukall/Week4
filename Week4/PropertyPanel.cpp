@@ -87,17 +87,20 @@ namespace
 
 		return isVectorChanged;
 	}
-
 	// UClass에 등록된 프로퍼티를 타입에 맞는 위젯으로 그린다
 	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
 	{
 		void* ValuePtr = reinterpret_cast<char*>(Object) + Property.Offset;
 		FString Label = Property.Name;
-		Label.InsertAt(0, FString("##"));
+		Label.InsertAt(0, FString("##")); // 내부 ID용 식별자 생성
 
-		ImGui::Text(Property.Name.c_str());
-		ImGui::SameLine(120.0f);
-		ImGui::SetNextItemWidth(-1.0f);
+		// Vector 타입은 DrawVector3Controller 내부에서 레이블을 자체적으로 그리므로 예외 처리
+		if (Property.Type != EPropertyType::Vector)
+		{
+			ImGui::Text(Property.Name.c_str());
+			ImGui::SameLine(120.0f);
+			ImGui::SetNextItemWidth(-1.0f);
+		}
 
 		switch (Property.Type)
 		{
@@ -116,7 +119,8 @@ namespace
 		case EPropertyType::Vector:
 		{
 			FVector* Value = static_cast<FVector*>(ValuePtr);
-			ImGui::DragFloat3(Label.c_str(), &Value->x, 0.1f);
+			// 만들어두신 고급 컨트롤러를 사용하도록 변경! (레이블 폭은 120.0f로 맞춤)
+			DrawVector3Controller(Property.Name, *Value, 0.0f, 120.0f);
 			break;
 		}
 
@@ -139,6 +143,48 @@ namespace
 				*Value = (FString)Buffer;
 			}
 			if (CustomFont) ImGui::PopFont();
+			break;
+		}
+
+		// --- 새로 추가된 타입들 ---
+
+		case EPropertyType::WString:
+		{
+			std::wstring* Value = static_cast<std::wstring*>(ValuePtr);
+
+			// 1. wstring -> char (ImGui 표시용 변환)
+			char Buffer[256] = {};
+			size_t convertedChars = 0;
+			wcstombs_s(&convertedChars, Buffer, sizeof(Buffer), Value->c_str(), _TRUNCATE);
+
+			if (CustomFont) ImGui::PushFont(CustomFont);
+
+			// 2. ImGui 입력 처리
+			if (ImGui::InputText(Label.c_str(), Buffer, sizeof(Buffer)))
+			{
+				// 3. char -> wstring (실제 데이터 갱신용 변환)
+				wchar_t wBuffer[256] = {};
+				mbstowcs_s(&convertedChars, wBuffer, sizeof(wBuffer), Buffer, _TRUNCATE);
+				*Value = std::wstring(wBuffer);
+			}
+
+			if (CustomFont) ImGui::PopFont();
+			break;
+		}
+
+		case EPropertyType::Asset:
+		{
+			// TSharedPtr 구조이므로 단순 값 복사가 불가능함.
+			// 실제 구현 시에는 Content Browser나 Asset Manager와 연동하여 
+			// 드래그 앤 드롭이나 콤보 박스(선택창)로 구현해야 합니다.
+
+			// 당장은 UI 레이아웃 유지를 위해 자리표시자(Placeholder) 버튼 생성
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+			if (ImGui::Button(std::string("Select Asset" + (std::string)Label).c_str(), ImVec2(-1.0f, 0.0f)))
+			{
+				// TODO: 에셋 브라우저 팝업 열기 로직
+			}
+			ImGui::PopStyleColor();
 			break;
 		}
 
@@ -222,8 +268,6 @@ void FPropertyPanel::OnRender()
 		Target->SetRotation(Transform.Rotation);
 		Target->SetScale(Transform.Scale);
 
-		ImGui::Separator();
-
 		if (Target)
 		{
 			DrawProperties(Target, CustomFont);
@@ -231,7 +275,6 @@ void FPropertyPanel::OnRender()
 			const TArray<UActorComponent*>& Components = Target->GetComponents();
 			for (UActorComponent* Component : Components)
 			{
-				ImGui::Separator();
 				DrawProperties(Component, CustomFont);
 			}
 		}
