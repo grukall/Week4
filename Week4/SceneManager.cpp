@@ -723,28 +723,29 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	//	}
 
 	//	///////////////////////////////////////////////////////////////////////////////////////AtlasAnimation
-	//	UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
-	//	for (UActorComponent* component : mSelectedActor->GetComponents())
-	//	{
-	//		if (component->IsA<UAtlasAnimationComponent>())
-	//		{
-	//			atlasAnimationComponent = component->Cast<UAtlasAnimationComponent>();
-	//			break;
-	//		}
-	//	}
+			UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
+			for (UActorComponent* component : mSelectedActor->GetComponents())
+			{
+				if (component->IsA<UAtlasAnimationComponent>())
+				{
+					atlasAnimationComponent = component->Cast<UAtlasAnimationComponent>();
+					break;
+				}
+			}
 
-	//	if (atlasAnimationComponent)
-	//	{
-	//		ImGui::SeparatorText("Atlas Animation");
+			//if (atlasAnimationComponent)
+			//{
+			//	ImGui::SeparatorText("Atlas Animation");
 
-	//		TArray<FString> spriteAtlasAssetNames;
-	//		guiReference.AssetManager->ForEachMetaInfo([&spriteAtlasAssetNames](const FAssetMetaInfo& metaInfo) {
-	//			if (metaInfo.AssetType != EAssetType::SpriteAtlas)
-	//			{
-	//				return;
-	//			}
-	//			spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
-	//		});
+			//	TArray<FString> spriteAtlasAssetNames;
+			//	guiReference.AssetManager->ForEachMetaInfo([&spriteAtlasAssetNames](const FAssetMetaInfo& metaInfo) {
+			//		if (metaInfo.AssetType != EAssetType::SpriteAtlas)
+			//		{
+			//			return;
+			//		}
+			//		spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
+			//		});
+			//}
 
 			// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
 			TArray<FString> spriteAtlasAssetNames;
@@ -793,12 +794,8 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	//	}
 
 	//	///////////////////////////////////////////////////////////////////////////////////////
-	//	USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
-	//	if (rootComponent && rootComponent->IsA<UPrimitiveComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
-	//	{
-	//		UPrimitiveComponent* primitiveComponent = rootComponent->Cast<UPrimitiveComponent>();
-
 		USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
+
 		if (rootComponent && rootComponent->IsA<UMeshComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
 		{
 			UMeshComponent* primitiveComponent = rootComponent->Cast<UMeshComponent>();
@@ -813,7 +810,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 					return;
 				}
 				textureAssetNames.Add(metaInfo.AssetName.ToString());
-			});
+				});
 
 			UTexture2D* currentTexture = primitiveComponent->GetTexture();
 			FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
@@ -835,9 +832,10 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				ImGui::EndCombo();
 			}
 		}
-	}
+
 	ImGui::End();
 }
+
 
 void FSceneManager::updateOutlinerGUI(const FGuiReference& guiReference)
 {
