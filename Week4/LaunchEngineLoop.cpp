@@ -6,6 +6,7 @@
 #include "Console.h"
 #include "GraphicsManager.h"
 #include "CubeComponent.h"
+#include "UStaticMeshComponent.h"
 #include "ObjectFactory.h"
 #include "Cube.h"
 #include "Sphere.h"
@@ -112,45 +113,45 @@ void FEngineLoop::InitAssetManager()
 	URenderer* renderer = mGraphicsManager->GetRenderer();
 	
 	// Register built-in asset types
-	TSharedPtr<FStaticMeshAsset> cubeAsset = MakeShared<FStaticMeshAsset>(FName("CubeMesh"), *renderer, Cube_vertices, sizeof(Cube_vertices) / sizeof(FVertexSimple), Cube_indices, sizeof(Cube_indices) / sizeof(uint32));
+	UStaticMesh* cubeAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("CubeMesh"), *renderer, Cube_vertices, sizeof(Cube_vertices) / sizeof(FVertexSimple), Cube_indices, sizeof(Cube_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(cubeAsset);
 
-	TSharedPtr<FStaticMeshAsset> sphereAsset = MakeShared<FStaticMeshAsset>(FName("SphereMesh"), *renderer, Sphere_vertices, sizeof(Sphere_vertices) / sizeof(FVertexSimple), Sphere_indices, sizeof(Sphere_indices) / sizeof(uint32));
+	UStaticMesh* sphereAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("SphereMesh"), *renderer, Sphere_vertices, sizeof(Sphere_vertices) / sizeof(FVertexSimple), Sphere_indices, sizeof(Sphere_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(sphereAsset);
 
-	TSharedPtr<FStaticMeshAsset> circleAsset = MakeShared<FStaticMeshAsset>(FName("CircleMesh"), *renderer, Circle_vertices, sizeof(Circle_vertices) / sizeof(FVertexSimple), Circle_indices, sizeof(Circle_indices) / sizeof(uint32));
+	UStaticMesh* circleAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("CircleMesh"), *renderer, Circle_vertices, sizeof(Circle_vertices) / sizeof(FVertexSimple), Circle_indices, sizeof(Circle_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(circleAsset);
 
-	TSharedPtr<FStaticMeshAsset> triangleAsset = MakeShared<FStaticMeshAsset>(FName("TriangleMesh"), *renderer, Triangle_vertices, sizeof(Triangle_vertices) / sizeof(FVertexSimple), Triangle_indices, sizeof(Triangle_indices) / sizeof(uint32));
+	UStaticMesh* triangleAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("TriangleMesh"), *renderer, Triangle_vertices, sizeof(Triangle_vertices) / sizeof(FVertexSimple), Triangle_indices, sizeof(Triangle_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(triangleAsset);
 
-	TSharedPtr<FStaticMeshAsset> gizmoArrowAsset = MakeShared<FStaticMeshAsset>(FName("GizmoArrowMesh"), *renderer, GizmoArrow_vertices, sizeof(GizmoArrow_vertices) / sizeof(FVertexSimple), GizmoArrow_indices, sizeof(GizmoArrow_indices) / sizeof(uint32));
+	UStaticMesh* gizmoArrowAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("GizmoArrowMesh"), *renderer, GizmoArrow_vertices, sizeof(GizmoArrow_vertices) / sizeof(FVertexSimple), GizmoArrow_indices, sizeof(GizmoArrow_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(gizmoArrowAsset);
 
-	TSharedPtr<FStaticMeshAsset> PlaneAsset = MakeShared<FStaticMeshAsset>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
+	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(PlaneAsset);
 
-	TSharedPtr<FTexture2DAssetLoader> TextureLoader = MakeShared<FTexture2DAssetLoader>(*renderer);
-	TSharedPtr<FFontAssetLoader> FontLoader = MakeShared<FFontAssetLoader>(*mFontManager);
+	FTexture2DAssetLoader* TextureLoader = new FTexture2DAssetLoader(*renderer);
+	FFontAssetLoader* FontLoader = new FFontAssetLoader(*mFontManager);
 
-	TSharedPtr<FFileAssetSource> FileAssetSource = MakeShared<FFileAssetSource>(*mFileManager, "Textures/Test.jpg");
+	FFileAssetSource* FileAssetSource = new FFileAssetSource(*mFileManager, "Textures/Test.jpg");
 	mAssetManager->RegisterAsset(FName("TestTexture"), TextureLoader, FileAssetSource);
 
-	TSharedPtr<FFileAssetSource> SpotLightIconAssetSource = MakeShared<FFileAssetSource>(*mFileManager, "Textures/Icon_SpotLight.png");
+	FFileAssetSource* SpotLightIconAssetSource = new FFileAssetSource(*mFileManager, "Textures/Icon_SpotLight.png");
 	mAssetManager->RegisterAsset(FName("SpotLightIcon"), TextureLoader, SpotLightIconAssetSource);
 
-	TSharedPtr<FFileAssetSource> ExplosionTextureSource = MakeShared<FFileAssetSource>(*mFileManager, "Textures/ExplosionAtlas.png");
+	FFileAssetSource* ExplosionTextureSource = new FFileAssetSource(*mFileManager, "Textures/ExplosionAtlas.png");
 	mAssetManager->RegisterAsset(FName("ExplosionTexture"), TextureLoader, ExplosionTextureSource);
 
-	TSharedPtr<FTexture2DAsset> ExplosionTexture2DAsset = mAssetManager->GetAssetAs<FTexture2DAsset>("ExplosionTexture", true);
-	TSharedPtr<FSpriteAtlasAsset> ExplosionSpriteAtlasAsset = MakeShared<FSpriteAtlasAsset>(FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
+	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
+	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas>(FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
 	mAssetManager->RegisterAsset(ExplosionSpriteAtlasAsset);
 
-	TSharedPtr<FFileAssetSource> FontAssetSource = MakeShared<FFileAssetSource>(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
+	FFileAssetSource* FontAssetSource = new FFileAssetSource(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
 	mAssetManager->RegisterAsset(FName("TestFont"), FontLoader, FontAssetSource);
 	
-	TSharedPtr<FFontAsset> TestFontAsset = mAssetManager->GetAssetAs<FFontAsset>(FName("TestFont"), true);
-	TSharedPtr<FFontAtlasAsset> FontAtlasAsset = MakeShared<FFontAtlasAsset>(FName("TestFontAtlas"), *renderer, TestFontAsset, 512, 512, 2, 2);
+	UFont* TestFontAsset = mAssetManager->GetAssetAs<UFont>(FName("TestFont"), true);
+	UFontAtlas* FontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("TestFontAtlas"), *renderer, TestFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(FontAtlasAsset);
 }
 
@@ -211,14 +212,14 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 			for (UActorComponent* Component : SelectedActor->GetComponents())
 			{
-				UPrimitiveComponent* PrimitiveComponent = Component->Cast<UPrimitiveComponent>();
+				UStaticMeshComponent* PrimitiveComponent = Component->Cast<UStaticMeshComponent>();
 				if (PrimitiveComponent)
 				{
 					// 선택된 액터의 AABB를 화면에 표시
 					FMatrix WorldMatrix = Transform.MakeMatrix();
 
-					TSharedPtr<FStaticMeshAsset> MeshAsset = PrimitiveComponent->GetMesh();
-					if (!MeshAsset.get()) continue;
+					UStaticMesh* MeshAsset = PrimitiveComponent->GetStaticMesh();
+					if (!MeshAsset) continue;
 
 					const FAABB& AABB = MeshAsset->GetLocalBoundingBox().ToWorld(WorldMatrix);
 

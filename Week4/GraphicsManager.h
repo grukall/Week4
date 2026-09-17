@@ -64,8 +64,6 @@ public:
 
 	// 표시 옵션은 FShowFlags가 들고 있다. 여기서 중계하지 않는다.
 
-	static FVector GetPrimitiveCenter(EPrimitive type);
-	static FVector GetPrimitiveHalfExtent(EPrimitive type);
 	void RenderHighLight(const FRenderInfo& RI);
 
 	// Projection ratio smoothing

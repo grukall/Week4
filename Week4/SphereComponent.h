@@ -1,10 +1,10 @@
 ﻿#pragma once
 
-#include "PrimitiveComponent.h"
+#include "UStaticMeshComponent.h"
 
-class USphereComponent : public UPrimitiveComponent
+class USphereComponent : public UStaticMeshComponent
 {
-	REFLECT_CLASS(USphereComponent, UPrimitiveComponent)
+	REFLECT_CLASS(USphereComponent, UStaticMeshComponent)
 public:
 	USphereComponent();
 	virtual ~USphereComponent();

@@ -6,6 +6,7 @@
 #include "Vector.h"
 #include "Rotator.h"
 #include "TMap.h"
+#include "FName.h"
 
 namespace json { class JSON; }
 
@@ -30,8 +31,7 @@ struct FObjectFactory
 		requires std::derived_from<TObject, UObject>
 	static TObject* LoadObject(const json::JSON& inJson);
 
-	static AActor* SpawnPrimitiveActor(EPrimitive primitiveType,
-		FVector3 Location, FRotator Rotation, FVector3 Scale
+	static AActor* SpawnPrimitiveActor(const FName& MeshAssetName, FVector3 Location, FRotator Rotation, FVector3 Scale
 	);
 
 	static const FClassInfo* GetClassInfoByName(const FString& className);

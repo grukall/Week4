@@ -19,7 +19,6 @@ struct FPrimitiveData
 	FVector Location;
 	FRotator Rotation;
 	FVector Scale;
-	EPrimitive PrimitiveType;
 
 	FPrimitiveData();
 	FPrimitiveData(json::JSON);
