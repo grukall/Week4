@@ -5,9 +5,9 @@ UAtlasAnimationComponent::UAtlasAnimationComponent()
 {
 }
 
-void UAtlasAnimationComponent::Initialize(EPrimitive PrimitiveType, const TSharedPtr<FSpriteAtlasAsset>& textureAsset)
+void UAtlasAnimationComponent::Initialize(USpriteAtlas* textureAsset)
 {
-	UPrimitiveComponent::Initialize(PrimitiveType);
+	UPlaneComponent::Initialize();
 
 	SetAtlas(textureAsset);
 
@@ -19,17 +19,18 @@ void UAtlasAnimationComponent::RestoreAtlasState()
 {
 	Asset = nullptr;
 
-	if (!mTextureAsset)
+	UTexture2D* Texture = GetTexture();
+	if (!Texture)
 	{
 		return;
 	}
 
-	if (mTextureAsset->GetAssetType() != EAssetType::SpriteAtlas)
+	// 스프라이트 아틀라스가 아니면 애니메이션 상태를 복원할 게 없다.
+	Asset = Texture->Cast<USpriteAtlas>();
+	if (!Asset)
 	{
 		return;
 	}
-
-	Asset = std::static_pointer_cast<FSpriteAtlasAsset>(mTextureAsset);
 
 	mBlendMode = ERenderBlendMode::Additive;
 
@@ -43,7 +44,7 @@ void UAtlasAnimationComponent::RestoreAtlasState()
 }
 
 
-void UAtlasAnimationComponent::SetAtlas(const TSharedPtr<FSpriteAtlasAsset>& InAtlas)
+void UAtlasAnimationComponent::SetAtlas(USpriteAtlas* InAtlas)
 {
 	Asset = InAtlas;
 	SetTexture(InAtlas);

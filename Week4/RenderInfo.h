@@ -21,12 +21,17 @@ enum class ERenderBlendMode
 
 struct FRenderInfo
 {
-	TSharedPtr<FStaticMeshAsset> StaticMesh;
-	TSharedPtr<FTexture2DAsset> Texture;
-	EPrimitive ePrimitive;
+	UStaticMesh* StaticMesh = nullptr;
+
+	// UMaterial이 들어오면 이 두 개가 머티리얼 포인터로 합쳐진다.
+	UTexture2D* Texture = nullptr;
+	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
+
 	FMatrix WorldTransformMatrix;
 	FObjectID ObejctID;
-	FVector4 Color;
+
+	// StaticMesh->GetSections()의 인덱스. 이 구간만 그린다.
+	uint32 SectionIndex = 0;
 };
 
 struct FRenderQuadInfo

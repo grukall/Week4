@@ -5,40 +5,62 @@
 #include "Renderer.h"
 #include "FFontManager.h"
 #include "MathUtility.h"
+#include "ObjectFactory.h"
 
 FString FFileAssetSource::ReadFileToString() const
 {
 	return FileManager.ReadFileToString(FilePath);
 }
 
-FStaticMeshAsset::FStaticMeshAsset(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount)
-	: FAsset(InAssetName, EAssetType::StaticMesh)
-	, VertexCount(InVertexCount)
+void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount)
 {
+	UAsset::Initialize(InAssetName);
+
+	VertexCount = InVertexCount;
 	VertexBuffer = InRenderer.CreateVertexBuffer(InVertices, InVertexCount);
 
+	Vertices.Reserve(InVertexCount);
 	for (uint32 i = 0; i < InVertexCount; ++i)
 	{
 		const FVertexSimple& Vertex = InVertices[i];
+		Vertices.Add(Vertex);
 		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
 	}
+
+	// 인덱스가 없는 메시라 섹션을 만들지 않는다. 섹션은 인덱스 구간을 가리키는 개념이다.
 }
 
-FStaticMeshAsset::FStaticMeshAsset(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount)
-	: FAsset(InAssetName, EAssetType::StaticMesh)
-	, VertexCount(InVertexCount)
-	, IndexCount(InIndexCount)
+void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount)
 {
+	UAsset::Initialize(InAssetName);
+
+	VertexCount = InVertexCount;
+	IndexCount = InIndexCount;
+
 	VertexBuffer = InRenderer.CreateVertexBuffer(InVertices, InVertexCount);
 	IndexBuffer = InRenderer.CreateIndexBuffer(InIndices, InIndexCount);
+
+	Vertices.Reserve(InVertexCount);
+	for (uint32 i = 0; i < InVertexCount; ++i)
+	{
+		Vertices.Add(InVertices[i]);
+	}
+
+	Indices.Reserve(InIndexCount);
 	for (uint32 i = 0; i < InIndexCount; ++i)
 	{
+		Indices.Add(InIndices[i]);
+
 		const FVertexSimple& Vertex = InVertices[InIndices[i]];
 		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
 	}
+
+	// 머티리얼이 하나뿐인 메시라 인덱스 전체를 덮는 섹션 하나로 시작한다.
+	// OBJ 로더가 usemtl 단위로 쪼갠 섹션을 넣어주면 이 자리가 여러 개가 된다.
+	Sections.Add({ 0, InIndexCount, 0 });
 }
 
-TSharedPtr<FAsset> FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
+UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
 	FString FileContent = FileSource.ReadFileToString();
@@ -66,7 +88,7 @@ TSharedPtr<FAsset> FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAss
 	TextureDesc.MipLevels = 1;
 
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture = Renderer.CreateTexture2D(TextureDesc, ImageData);
-	
+
 	D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 	SRVDesc.Format = TextureDesc.Format;
 	SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -77,19 +99,19 @@ TSharedPtr<FAsset> FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAss
 
 	stbi_image_free(ImageData);
 
-	return MakeShared<FTexture2DAsset>(AssetName, Texture, SRV);
+	return FObjectFactory::ConstructObject<UTexture2D>(AssetName, Texture, SRV);
 }
 
-void FTexture2DAssetLoader::UnloadAsset(TSharedPtr<FAsset> Asset)
+void FTexture2DAssetLoader::UnloadAsset(UAsset* Asset)
 {
 	// NOTE: Nothing to do for now
 }
 
-TSharedPtr<FAsset> FFontAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
+UAsset* FFontAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
 	FString FileContent = FileSource.ReadFileToString();
-	
+
 	FT_Library Library = FontManager.GetLibrary();
 
 	FT_Face Face;
@@ -108,17 +130,17 @@ TSharedPtr<FAsset> FFontAssetLoader::LoadAsset(const FName& AssetName, FAssetSou
 		return nullptr;
 	}
 
-	return MakeShared<FFontAsset>(AssetName, Face, std::move(FileContent));
+	return FObjectFactory::ConstructObject<UFont>(AssetName, Face, std::move(FileContent));
 }
 
-void FFontAssetLoader::UnloadAsset(TSharedPtr<FAsset> Asset)
+void FFontAssetLoader::UnloadAsset(UAsset* Asset)
 {
 	// Nothing to do for now
 }
 
-void FFontAtlasAsset::UpdateRegion(uint32 Left, uint32 Top, uint32 Right, uint32 Bottom, const void* Data, uint32 RowPitch)
+void UFontAtlas::UpdateRegion(uint32 Left, uint32 Top, uint32 Right, uint32 Bottom, const void* Data, uint32 RowPitch)
 {
-	if (!Texture || !Data)
+	if (!Renderer || !Texture || !Data)
 	{
 		return;
 	}
@@ -136,15 +158,31 @@ void FFontAtlasAsset::UpdateRegion(uint32 Left, uint32 Top, uint32 Right, uint32
 	DestBox.front = 0;
 	DestBox.back = 1;
 
-	Renderer.GetDeviceContext()->UpdateSubresource(Texture.Get(), 0, &DestBox, Data, RowPitch, 0);
+	Renderer->GetDeviceContext()->UpdateSubresource(Texture.Get(), 0, &DestBox, Data, RowPitch, 0);
 }
 
-FFontAtlasAsset::FFontAtlasAsset(const FName& InAssetName, URenderer& InRenderer, TSharedPtr<FFontAsset>& InFontAsset, uint32 InWidth, uint32 InHeight, uint32 InPaddingW, uint32 InPaddingH)
-	: FTexture2DAsset(InAssetName, EAssetType::FontAtlas, nullptr, nullptr)
-	, Renderer(InRenderer)
-	, FontAsset(InFontAsset)
-	, FontAtlas(MakeShared<FFontAtlas>(InFontAsset->GetFace(), InWidth, InHeight, InPaddingW, InPaddingH))
+UFontAtlas::~UFontAtlas()
 {
+	delete FontAtlas;
+	FontAtlas = nullptr;
+}
+
+void UFontAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, UFont* InFontAsset, uint32 InWidth, uint32 InHeight, uint32 InPaddingW, uint32 InPaddingH)
+{
+	UTexture2D::Initialize(InAssetName, nullptr, nullptr);
+
+	Renderer = &InRenderer;
+	FontAsset = InFontAsset;
+
+	if (!FontAsset)
+	{
+		UE_LOG_ERROR("Font atlas '%s' has no source font", InAssetName.ToString().CStr());
+		return;
+	}
+
+	delete FontAtlas;
+	FontAtlas = new FFontAtlas(FontAsset->GetFace(), InWidth, InHeight, InPaddingW, InPaddingH);
+
 	D3D11_TEXTURE2D_DESC TextureDesc = {};
 	TextureDesc.Width = InWidth;
 	TextureDesc.Height = InHeight;
@@ -157,7 +195,7 @@ FFontAtlasAsset::FFontAtlasAsset(const FName& InAssetName, URenderer& InRenderer
 	TextureDesc.CPUAccessFlags = 0;
 	TextureDesc.MiscFlags = 0;
 
-	Texture = Renderer.CreateTexture2D(TextureDesc);
+	Texture = Renderer->CreateTexture2D(TextureDesc);
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 	SRVDesc.Format = TextureDesc.Format;
@@ -165,7 +203,7 @@ FFontAtlasAsset::FFontAtlasAsset(const FName& InAssetName, URenderer& InRenderer
 	SRVDesc.Texture2D.MostDetailedMip = 0;
 	SRVDesc.Texture2D.MipLevels = 1;
 
-	SRV = Renderer.CreateShaderResourceView(Texture, &SRVDesc);
+	SRV = Renderer->CreateShaderResourceView(Texture, &SRVDesc);
 
 	Width = InWidth;
 	Height = InHeight;
@@ -174,19 +212,21 @@ FFontAtlasAsset::FFontAtlasAsset(const FName& InAssetName, URenderer& InRenderer
 	FontAtlas->SetAtlasHandler(*this);
 }
 
-bool FFontAtlasAsset::HandleAddGlyph(FFontAtlas& FontAtlas, const FFontGlyph& InGlyph, const FFontGlyphBitmap& InBitmap)
+bool UFontAtlas::HandleAddGlyph(FFontAtlas& FontAtlas, const FFontGlyph& InGlyph, const FFontGlyphBitmap& InBitmap)
 {
 	UpdateRegion(InBitmap.Left, InBitmap.Top, InBitmap.Right, InBitmap.Bottom, InBitmap.Buffer, static_cast<uint32>(InBitmap.Pitch));
 
 	return true;
 }
 
-FSpriteAtlasAsset::FSpriteAtlasAsset(const FName& InAssetName, URenderer& InRenderer, const TSharedPtr<FTexture2DAsset>& InSource, uint32 InCols, uint32 InRows, uint32 InFrameCount)
-	: FTexture2DAsset(InAssetName, EAssetType::SpriteAtlas,
-		InSource ? InSource->GetTexture() : Microsoft::WRL::ComPtr<ID3D11Texture2D>(),
-		InSource ? InSource->GetSRV() : Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>())
-	, Renderer(InRenderer)
+void USpriteAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, UTexture2D* InSource, uint32 InCols, uint32 InRows, uint32 InFrameCount)
 {
+	UTexture2D::Initialize(InAssetName,
+		InSource ? InSource->GetTexture() : Microsoft::WRL::ComPtr<ID3D11Texture2D>(),
+		InSource ? InSource->GetSRV() : Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>());
+
+	Renderer = &InRenderer;
+
 	if (!InSource)
 	{
 		UE_LOG_ERROR("Sprite atlas '%s' has no source texture", InAssetName.ToString().CStr());
@@ -215,16 +255,17 @@ FSpriteAtlasAsset::FSpriteAtlasAsset(const FName& InAssetName, URenderer& InRend
 	}
 }
 
-FSpriteAtlasAsset::FSpriteAtlasAsset(const FName& InAssetName, URenderer& InRenderer, const TSharedPtr<FTexture2DAsset>& InSource, const TArray<FVector4>& InFrameSubUVs)
-	: FTexture2DAsset(InAssetName, EAssetType::SpriteAtlas,
-		InSource ? InSource->GetTexture() : Microsoft::WRL::ComPtr<ID3D11Texture2D>(),
-		InSource ? InSource->GetSRV() : Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>())
-	, Renderer(InRenderer)
-	, FrameSubUVs(InFrameSubUVs)
+void USpriteAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, UTexture2D* InSource, const TArray<FVector4>& InFrameSubUVs)
 {
+	UTexture2D::Initialize(InAssetName,
+		InSource ? InSource->GetTexture() : Microsoft::WRL::ComPtr<ID3D11Texture2D>(),
+		InSource ? InSource->GetSRV() : Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>());
+
+	Renderer = &InRenderer;
+	FrameSubUVs = InFrameSubUVs;
 }
 
-const FVector4& FSpriteAtlasAsset::GetFrameSubUV(int32 FrameIndex) const
+const FVector4& USpriteAtlas::GetFrameSubUV(int32 FrameIndex) const
 {
 	static const FVector4 WholeTexture(0.f, 0.f, 1.f, 1.f);
 

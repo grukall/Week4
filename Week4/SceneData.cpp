@@ -8,13 +8,12 @@ FPrimitiveData::FPrimitiveData()
 	: Location(0.f, 0.f, 0.f)
 	, Rotation(0.f, 0.f, 0.f)
 	, Scale(1.f, 1.f, 1.f)
-	, PrimitiveType(EPrimitive::EP_Sphere)
 {
 }
 
 FPrimitiveData::FPrimitiveData(json::JSON json)
 {
-	if (!json.hasKey("Location") || !json.hasKey("Rotation") || !json.hasKey("Scale") || !json.hasKey("PrimitiveType"))
+	if (!json.hasKey("Location") || !json.hasKey("Rotation") || !json.hasKey("Scale"))
 	{
 		throw std::runtime_error("Invalid JSON format for FPrimitiveData");
 		return;
@@ -23,7 +22,6 @@ FPrimitiveData::FPrimitiveData(json::JSON json)
 	Location = FVectorFromJson(json["Location"]);
 	Rotation = FRotatorFromJson(json["Rotation"]);
 	Scale = FVectorFromJson(json["Scale"]);
-	PrimitiveType = EPrimitiveFromJson(json["PrimitiveType"]);
 }
 
 json::JSON FPrimitiveData::ToJson() const
@@ -32,7 +30,6 @@ json::JSON FPrimitiveData::ToJson() const
 	json["Location"] = FVectorToJson(Location);
 	json["Rotation"] = FRotatorToJson(Rotation);
 	json["Scale"] = FVectorToJson(Scale);
-	json["PrimitiveType"] = EPrimitiveToJson(PrimitiveType);
 	return json;
 }
 

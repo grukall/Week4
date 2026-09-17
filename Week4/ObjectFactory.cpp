@@ -5,6 +5,9 @@
 #include "Actor.h"
 #include "PrimitiveComponent.h"
 #include "UAtlasAnimationComponent.h"
+#include "UStaticMeshComponent.h"
+#include "FAssetManager.h"
+#include "Assets.h"
 
 UObject* FObjectFactory::ConstructUnInitializedObject(const FClassInfo* classInfo)
 {
@@ -32,14 +35,13 @@ UObject* FObjectFactory::LoadObject(const FClassInfo* classInfo, const json::JSO
 	return instance;
 }
 
-AActor* FObjectFactory::SpawnPrimitiveActor(
-	EPrimitive primitiveType,
-	FVector3 Location, FRotator Rotation, FVector3 Scale)
+AActor* FObjectFactory::SpawnPrimitiveActor(const FName& MeshAssetName, FVector3 Location, FRotator Rotation, FVector3 Scale)
 {
 	// Create a new actor
 	AActor* actor = ConstructObject<AActor>();
 
-	UPrimitiveComponent* component = ConstructObject<UPrimitiveComponent>(primitiveType, Location, Rotation, Scale);
+	UStaticMeshComponent* component = ConstructObject<UStaticMeshComponent>(Location, Rotation, Scale);
+	component->SetStaticMesh(FAssetManager::Get().GetAssetAs<UStaticMesh>(MeshAssetName, true));
 
 	actor->AddRootSceneComponent(component);
 
@@ -69,7 +71,10 @@ bool FObjectFactory::RegisterClassInfo(FString className, const FClassInfo* clas
 #include "SceneComponent.h"
 #include "CubeComponent.h"
 #include "SphereComponent.h"
-#include "UTextComponent.h"
+#include "UPlaneComponent.h"
+#include "USpotLightComponent.h"
+#include "ASpotLight.h"
+#include "UText3DComponent.h"
 #include "World.h"
 
 TMap<FString, std::function<const FClassInfo* ()>> FObjectFactory::mClassInfoMap = {

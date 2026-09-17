@@ -4,7 +4,7 @@
 #include "ActorComponent.h"
 #include "TMap.h"
 #include "Object.h"
-#include "UTextComponent.h"
+#include "USpotLightComponent.h"
 #include "EngineMathLibrary.h"
 
 class FComponentVisualizer

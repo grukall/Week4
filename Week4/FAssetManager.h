@@ -1,36 +1,40 @@
 #pragma once
 
 #include "Core.h"
-#include "FAsset.h"
+#include "UAsset.h"
 #include "TMap.h"
 #include "TArray.h"
 
 struct FAssetMetaInfo
 {
-	EAssetType AssetType;
 	FName AssetName;
-	TSharedPtr<FAssetLoader> AssetLoader;
-	TSharedPtr<FAssetSource> AssetSource;
+	FAssetLoader* AssetLoader = nullptr;
+	FAssetSource* AssetSource = nullptr;
 };
 
 class FAssetManager
 {
 public:
+	FAssetManager() = default;
+	~FAssetManager();
+
 	static FAssetManager& Get();
-	void RegisterAsset(const FName& AssetName, const TSharedPtr<FAssetLoader>& AssetLoader, const TSharedPtr<FAssetSource>& AssetSource);
-	void RegisterAsset(const TSharedPtr<FAsset>& Asset);
+
+	// 로더와 소스의 소유권은 에셋 매니저가 가져간다. 같은 로더를 여러 에셋에 넘겨도 된다.
+	void RegisterAsset(const FName& AssetName, FAssetLoader* AssetLoader, FAssetSource* AssetSource);
+	void RegisterAsset(UAsset* Asset);
 	void UnregisterAsset(const FName& AssetName);
 
-	TSharedPtr<FAsset> LoadAsset(const FName& AssetName);
-	TSharedPtr<FAsset> GetAsset(const FName& AssetName, bool loadIfNotLoaded = false);
+	UAsset* LoadAsset(const FName& AssetName);
+	UAsset* GetAsset(const FName& AssetName, bool loadIfNotLoaded = false);
 
 	template <typename T>
-	TSharedPtr<T> GetAssetAs(const FName& AssetName, bool loadIfNotLoaded = false)
+	T* GetAssetAs(const FName& AssetName, bool loadIfNotLoaded = false)
 	{
-		TSharedPtr<FAsset> asset = GetAsset(AssetName, loadIfNotLoaded);
+		UAsset* asset = GetAsset(AssetName, loadIfNotLoaded);
 		if (asset)
 		{
-			return std::static_pointer_cast<T>(asset);
+			return asset->Cast<T>();
 		}
 
 		return nullptr;
@@ -49,5 +53,9 @@ public:
 
 private:
 	TMap<FName, FAssetMetaInfo, FNameHasher> AssetMetaInfoMap;
-	TMap<FName, TSharedPtr<FAsset>, FNameHasher> LoadedAssets;
+	TMap<FName, UAsset*, FNameHasher> LoadedAssets;
+
+	// 등록된 로더와 소스를 중복 없이 모아 두고 소멸 시점에 정리한다.
+	TArray<FAssetLoader*> OwnedLoaders;
+	TArray<FAssetSource*> OwnedSources;
 };

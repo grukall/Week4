@@ -97,6 +97,8 @@ public:
 
 protected:
 	UObject();
+
+	//이 값이 변경되었다는 건, UObject 목록에 변경이 있었다는 것
 	inline static uint64 GUObjectRevision = 0;
 
 private:
