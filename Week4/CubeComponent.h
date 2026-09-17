@@ -1,17 +1,12 @@
 ﻿#pragma once
 
-#include "PrimitiveComponent.h"
+#include "UStaticMeshComponent.h"
 
-class UCubeComponent : public UPrimitiveComponent
+class UCubeComponent : public UStaticMeshComponent
 {
-	REFLECT_CLASS(UCubeComponent, UPrimitiveComponent)
+	REFLECT_CLASS(UCubeComponent, UStaticMeshComponent)
 public:
 	UCubeComponent();
-
-	/*
-	void Initialize(GraphicsManager* graphicsManager);
-	void Initialize(GraphicsManager* graphicsManager, FVector location, FRotator rotation, FVector scale3D);
-	*/
 
 	void Initialize();
 	void Initialize(FVector location, FRotator rotation, FVector scale3D);

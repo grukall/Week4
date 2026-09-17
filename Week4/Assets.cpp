@@ -14,32 +14,50 @@ FString FFileAssetSource::ReadFileToString() const
 
 void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount)
 {
-	UAsset::Initialize(InAssetName, EAssetType::StaticMesh);
+	UAsset::Initialize(InAssetName);
 
 	VertexCount = InVertexCount;
 	VertexBuffer = InRenderer.CreateVertexBuffer(InVertices, InVertexCount);
 
+	Vertices.Reserve(InVertexCount);
 	for (uint32 i = 0; i < InVertexCount; ++i)
 	{
 		const FVertexSimple& Vertex = InVertices[i];
+		Vertices.Add(Vertex);
 		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
 	}
+
+	// 인덱스가 없는 메시라 섹션을 만들지 않는다. 섹션은 인덱스 구간을 가리키는 개념이다.
 }
 
 void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount)
 {
-	UAsset::Initialize(InAssetName, EAssetType::StaticMesh);
+	UAsset::Initialize(InAssetName);
 
 	VertexCount = InVertexCount;
 	IndexCount = InIndexCount;
 
 	VertexBuffer = InRenderer.CreateVertexBuffer(InVertices, InVertexCount);
 	IndexBuffer = InRenderer.CreateIndexBuffer(InIndices, InIndexCount);
+
+	Vertices.Reserve(InVertexCount);
+	for (uint32 i = 0; i < InVertexCount; ++i)
+	{
+		Vertices.Add(InVertices[i]);
+	}
+
+	Indices.Reserve(InIndexCount);
 	for (uint32 i = 0; i < InIndexCount; ++i)
 	{
+		Indices.Add(InIndices[i]);
+
 		const FVertexSimple& Vertex = InVertices[InIndices[i]];
 		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
 	}
+
+	// 머티리얼이 하나뿐인 메시라 인덱스 전체를 덮는 섹션 하나로 시작한다.
+	// OBJ 로더가 usemtl 단위로 쪼갠 섹션을 넣어주면 이 자리가 여러 개가 된다.
+	Sections.Add({ 0, InIndexCount, 0 });
 }
 
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
@@ -151,7 +169,7 @@ UFontAtlas::~UFontAtlas()
 
 void UFontAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, UFont* InFontAsset, uint32 InWidth, uint32 InHeight, uint32 InPaddingW, uint32 InPaddingH)
 {
-	UTexture2D::Initialize(InAssetName, EAssetType::FontAtlas, nullptr, nullptr);
+	UTexture2D::Initialize(InAssetName, nullptr, nullptr);
 
 	Renderer = &InRenderer;
 	FontAsset = InFontAsset;
@@ -203,7 +221,7 @@ bool UFontAtlas::HandleAddGlyph(FFontAtlas& FontAtlas, const FFontGlyph& InGlyph
 
 void USpriteAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, UTexture2D* InSource, uint32 InCols, uint32 InRows, uint32 InFrameCount)
 {
-	UTexture2D::Initialize(InAssetName, EAssetType::SpriteAtlas,
+	UTexture2D::Initialize(InAssetName,
 		InSource ? InSource->GetTexture() : Microsoft::WRL::ComPtr<ID3D11Texture2D>(),
 		InSource ? InSource->GetSRV() : Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>());
 
@@ -239,7 +257,7 @@ void USpriteAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, U
 
 void USpriteAtlas::Initialize(const FName& InAssetName, URenderer& InRenderer, UTexture2D* InSource, const TArray<FVector4>& InFrameSubUVs)
 {
-	UTexture2D::Initialize(InAssetName, EAssetType::SpriteAtlas,
+	UTexture2D::Initialize(InAssetName,
 		InSource ? InSource->GetTexture() : Microsoft::WRL::ComPtr<ID3D11Texture2D>(),
 		InSource ? InSource->GetSRV() : Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>());
 

@@ -39,7 +39,6 @@ void FAssetManager::RegisterAsset(const FName& AssetName, FAssetLoader* AssetLoa
 	}
 
 	FAssetMetaInfo metaInfo;
-	metaInfo.AssetType = AssetLoader->GetAssetType();
 	metaInfo.AssetName = AssetName;
 	metaInfo.AssetLoader = AssetLoader;
 	metaInfo.AssetSource = AssetSource;
@@ -99,7 +98,6 @@ void FAssetManager::RegisterAsset(UAsset* Asset)
 	}
 
 	FAssetMetaInfo metaInfo;
-	metaInfo.AssetType = Asset->GetAssetType();
 	metaInfo.AssetName = AssetName;
 	metaInfo.AssetLoader = nullptr;
 	metaInfo.AssetSource = nullptr;

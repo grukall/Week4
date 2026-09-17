@@ -1,6 +1,6 @@
 #pragma once
 
-#include "UTextComponent.h"
+#include "UPlaneComponent.h"
 #include <wrl/client.h>
 #include "Assets.h"
 
@@ -11,8 +11,8 @@ class UAtlasAnimationComponent : public UPlaneComponent
 public:
 	UAtlasAnimationComponent();
 
-	using UPrimitiveComponent::Initialize;
-	void Initialize(EPrimitive PrimitiveType, USpriteAtlas* textureAsset);
+	using UPlaneComponent::Initialize;
+	void Initialize(USpriteAtlas* textureAsset);
 
 	void DeserializeClass(const json::JSON& inJson) override
 	{

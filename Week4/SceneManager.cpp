@@ -29,7 +29,10 @@
 
 #include "Cube.h"
 #include "Assets.h"
-#include "UTextComponent.h"
+#include "UPlaneComponent.h"
+#include "USpotLightComponent.h"
+#include "ASpotLight.h"
+#include "UText3DComponent.h"
 #include "ShowFlags.h"
 
 FSceneManager::FSceneManager()
@@ -176,36 +179,47 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::Text("FPS: %.1f  dt: %.4f", guiReference.FrameTimer.GetFPS(), guiReference.FrameTimer.GetDeltaTime());
 
 	/* Spawn Actor */
-	// NOTE: This name array must be edited when adding new primitive types to EPrimitive enum.
+	// NOTE: 세 배열은 같은 순서를 유지해야 한다. 메시 이름이 비어 있으면 아래에서 따로 조립하는 타입이다.
 	ImGui::SeparatorText("Spawn Actor");
 
-	const char* ActorTypeNames[] = { 
-		"Sphere", 
-		"Cube", 
-		"Triangle", 
-		"GizmoArrow", 
+	const char* ActorTypeNames[] = {
+		"Sphere",
+		"Cube",
+		"Triangle",
+		"GizmoArrow",
 		"Circle",
 		"SpotLight",
 		"Explosion"
 	};
 
+	const char* ActorMeshNames[] = {
+		"SphereMesh",
+		"CubeMesh",
+		"TriangleMesh",
+		"GizmoArrowMesh",
+		"CircleMesh",
+		"",
+		""
+	};
+
 	const FClassInfo* ActorClassInfo[] = {
-		UPrimitiveComponent::GetClass(),
-		UPrimitiveComponent::GetClass(),
-		UPrimitiveComponent::GetClass(),
-		UPrimitiveComponent::GetClass(),
-		UPrimitiveComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
 		ASpotLight::GetClass(),
 		UAtlasAnimationComponent::GetClass()
 	};
 
 	static_assert(IM_ARRAYSIZE(ActorTypeNames) == IM_ARRAYSIZE(ActorClassInfo), "ActorTypeNames and ActorClassInfo must stay the same length");
+	static_assert(IM_ARRAYSIZE(ActorTypeNames) == IM_ARRAYSIZE(ActorMeshNames), "ActorTypeNames and ActorMeshNames must stay the same length");
 
-	int32 ActorTypeIndex = static_cast<int32>(mGuiInputField.PrimitiveType);
+	int32 ActorTypeIndex = mGuiInputField.ActorTypeIndex;
 	int32 SpawnCount = mGuiInputField.SpawnCount;
 	if (ImGui::Combo("Actor Type", &ActorTypeIndex, ActorTypeNames, IM_ARRAYSIZE(ActorTypeNames)))
 	{
-		mGuiInputField.PrimitiveType = static_cast<EPrimitive>(ActorTypeIndex);
+		mGuiInputField.ActorTypeIndex = ActorTypeIndex;
 	}
 	if (ImGui::Button("Spawn"))
 	{
@@ -220,7 +234,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 				USpriteAtlas* ExplosionAtlas = FAssetManager::Get().GetAssetAs<USpriteAtlas>(FName("ExplosionSpriteAtlas"));
 
-				UAtlasAnimationComponent* AnimComponent = FObjectFactory::ConstructObject<UAtlasAnimationComponent>(EPrimitive::EP_Plane, ExplosionAtlas);
+				UAtlasAnimationComponent* AnimComponent = FObjectFactory::ConstructObject<UAtlasAnimationComponent>(ExplosionAtlas);
 				AnimComponent->SetRelativeLocation(FVector(0, 0, 0));
 				AnimComponent->SetRelativeRotation(FRotator(0, 0, 0));
 				AnimComponent->SetRelativeScale3D(FVector(1, 1, 1));
@@ -231,12 +245,9 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 				NewActor->AddRootSceneComponent(AnimComponent);
 			}
-			else if (ActorClass->IsChildOf(UPrimitiveComponent::GetClass()))
+			else if (ActorClass->IsChildOf(UStaticMeshComponent::GetClass()))
 			{
-				NewActor = FObjectFactory::SpawnPrimitiveActor(
-					mGuiInputField.PrimitiveType,
-					FVector(0, 0, 0), FRotator(0, 0, 0), FVector(1, 1, 1)
-				);
+				NewActor = FObjectFactory::SpawnPrimitiveActor(FName(ActorMeshNames[ActorTypeIndex]), FVector(0, 0, 0), FRotator(0, 0, 0), FVector(1, 1, 1));
 			}
 			else if (ActorClass->IsChildOf(ASpotLight::GetClass()))
 			{
@@ -717,9 +728,12 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 		{
 			ImGui::SeparatorText("Atlas Animation");
 
+			// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
 			TArray<FString> spriteAtlasAssetNames;
-			guiReference.AssetManager->ForEachMetaInfo([&spriteAtlasAssetNames](const FAssetMetaInfo& metaInfo) {
-				if (metaInfo.AssetType != EAssetType::SpriteAtlas)
+			FAssetManager* assetManager = guiReference.AssetManager;
+			assetManager->ForEachMetaInfo([&spriteAtlasAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
+				UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
+				if (!asset || !asset->IsA<USpriteAtlas>())
 				{
 					return;
 				}
@@ -781,17 +795,20 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 		}
 
 		USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
-		if (rootComponent && rootComponent->IsA<UPrimitiveComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
+		if (rootComponent && rootComponent->IsA<UMeshComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
 		{
-			UPrimitiveComponent* primitiveComponent = rootComponent->Cast<UPrimitiveComponent>();
+			UMeshComponent* primitiveComponent = rootComponent->Cast<UMeshComponent>();
 
+			// 아틀라스 파생이 아닌 순수 UTexture2D만 고른다.
 			TArray<FString> textureAssetNames;
-			guiReference.AssetManager->ForEachMetaInfo([&textureAssetNames](const FAssetMetaInfo& metaInfo) {
-				if (metaInfo.AssetType != EAssetType::Texture2D)
+			FAssetManager* assetManager = guiReference.AssetManager;
+			assetManager->ForEachMetaInfo([&textureAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
+				UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
+				if (!asset || asset->GetRuntimeClass() != UTexture2D::GetClass())
 				{
 					return;
 				}
-				textureAssetNames.Add(metaInfo.AssetName.ToString()); 
+				textureAssetNames.Add(metaInfo.AssetName.ToString());
 			});
 
 			UTexture2D* currentTexture = primitiveComponent->GetTexture();

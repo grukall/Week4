@@ -6,6 +6,7 @@
 #include "Console.h"
 #include "GraphicsManager.h"
 #include "CubeComponent.h"
+#include "UStaticMeshComponent.h"
 #include "ObjectFactory.h"
 #include "Cube.h"
 #include "Sphere.h"
@@ -211,13 +212,13 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 			for (UActorComponent* Component : SelectedActor->GetComponents())
 			{
-				UPrimitiveComponent* PrimitiveComponent = Component->Cast<UPrimitiveComponent>();
+				UStaticMeshComponent* PrimitiveComponent = Component->Cast<UStaticMeshComponent>();
 				if (PrimitiveComponent)
 				{
 					// 선택된 액터의 AABB를 화면에 표시
 					FMatrix WorldMatrix = Transform.MakeMatrix();
 
-					UStaticMesh* MeshAsset = PrimitiveComponent->GetMesh();
+					UStaticMesh* MeshAsset = PrimitiveComponent->GetStaticMesh();
 					if (!MeshAsset) continue;
 
 					const FAABB& AABB = MeshAsset->GetLocalBoundingBox().ToWorld(WorldMatrix);

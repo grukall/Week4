@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core.h"
-#include "FAsset.h"
+#include "UAsset.h"
 #include "FFontAtlas.h"
 #include "TArray.h"
 #include "Vector.h"
@@ -16,6 +16,7 @@
 class FFileManager;
 class FFontManager;
 class URenderer;
+class UTexture2D;
 
 class FFileAssetSource : public FAssetSource
 {
@@ -27,6 +28,13 @@ public:
 private:
 	FFileManager& FileManager;
 	std::filesystem::path FilePath;
+};
+
+struct FStaticMeshSection
+{
+	uint32 StartIndex;        // 인덱스 버퍼 내 시작 위치
+	uint32 IndexCount;        // 이 섹션이 쓰는 인덱스 개수
+	uint32 MaterialSlotIndex; // 아래 슬롯 배열의 인덱스
 };
 
 class UStaticMesh : public UAsset
@@ -45,14 +53,34 @@ public:
 	inline uint32 GetIndexCount() const { return IndexCount; }
 	inline const FAABB& GetLocalBoundingBox() const { return BoundingBox; }
 
+	// CPU 원본. 레이캐스트처럼 삼각형을 직접 훑어야 하는 쪽에서 쓴다.
+	inline const TArray<FVertexSimple>& GetVertices() const { return Vertices; }
+	inline const TArray<uint32>& GetIndices() const { return Indices; }
+	inline const TArray<FStaticMeshSection>& GetSections() const { return Sections; }
+
+	// UMaterial이 들어오기 전까지 쓰는 임시 표면 정보.
+	inline void SetTexture(UTexture2D* InTexture) { Texture = InTexture; }
+	inline UTexture2D* GetTexture() const { return Texture; }
+
+	inline void SetColor(const FVector4& InColor) { Color = InColor; }
+	inline const FVector4& GetColor() const { return Color; }
+
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
 	uint32 VertexCount = 0;
 
 	Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer;
 	uint32 IndexCount = 0;
-
 	FAABB BoundingBox;
+
+	//어디서부터 어디까지가 어떤 정점과 머테리얼로 이루어져 있는지 저장한다.
+	TArray<FStaticMeshSection> Sections;
+	TArray<FVertexSimple> Vertices;
+	TArray<uint32> Indices;
+
+	//TODO. UMaterial로 대체한다. 그때까지는 메시 전체가 텍스처 하나와 색 하나를 쓴다.
+	UTexture2D* Texture = nullptr;
+	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
 };
 
 class UTexture2D : public UAsset
@@ -64,21 +92,7 @@ public:
 	using UAsset::Initialize;
 	void Initialize(const FName& InAssetName, Microsoft::WRL::ComPtr<ID3D11Texture2D> InTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> InSRV)
 	{
-		Initialize(InAssetName, EAssetType::Texture2D, InTexture, InSRV);
-	}
-
-	inline Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture() const { return Texture; }
-	inline Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetSRV() const { return SRV; }
-
-	inline uint32 GetWidth() const { return Width; }
-	inline uint32 GetHeight() const { return Height; }
-
-	inline DXGI_FORMAT GetFormat() const { return Format; }
-
-protected:
-	void Initialize(const FName& InAssetName, EAssetType InAssetType, Microsoft::WRL::ComPtr<ID3D11Texture2D> InTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> InSRV)
-	{
-		UAsset::Initialize(InAssetName, InAssetType);
+		UAsset::Initialize(InAssetName);
 
 		Texture = InTexture;
 		SRV = InSRV;
@@ -93,6 +107,14 @@ protected:
 			Format = TextureDesc.Format;
 		}
 	}
+
+	inline Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture() const { return Texture; }
+	inline Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetSRV() const { return SRV; }
+
+	inline uint32 GetWidth() const { return Width; }
+	inline uint32 GetHeight() const { return Height; }
+
+	inline DXGI_FORMAT GetFormat() const { return Format; }
 
 protected:
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
@@ -111,7 +133,6 @@ public:
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
-	virtual EAssetType GetAssetType() const override { return EAssetType::Texture2D; }
 
 private:
 	URenderer& Renderer;
@@ -126,7 +147,7 @@ public:
 	using UAsset::Initialize;
 	void Initialize(const FName& InAssetName, FT_Face InFace, FString&& InFileContent)
 	{
-		UAsset::Initialize(InAssetName, EAssetType::Font);
+		UAsset::Initialize(InAssetName);
 
 		Face = InFace;
 		FileContent = std::move(InFileContent);
@@ -155,7 +176,6 @@ public:
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
-	virtual EAssetType GetAssetType() const override { return EAssetType::Font; }
 
 private:
 	FFontManager& FontManager;

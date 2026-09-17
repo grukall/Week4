@@ -6,7 +6,6 @@
 #include "FAssetManager.h"
 #include "Assets.h"
 #include "ObjectFactory.h"
-#include "UTextComponent.h"
 
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
@@ -103,6 +102,18 @@ void FGraphicsManager::Render()
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
 		UStaticMesh* Asset = renderInfo.StaticMesh;
+		if (!Asset)
+		{
+			continue;
+		}
+
+		// RenderInfo 하나가 섹션 하나다. 인덱스 버퍼의 해당 구간만 그린다.
+		const TArray<FStaticMeshSection>& Sections = Asset->GetSections();
+		if (renderInfo.SectionIndex >= Sections.Num())
+		{
+			continue;
+		}
+		const FStaticMeshSection& Section = Sections[renderInfo.SectionIndex];
 
 		mMeshPipeline->ClearShaderResource();
 		mMeshPipeline->ClearSamplerState();
@@ -111,7 +122,7 @@ void FGraphicsManager::Render()
 		{
 			FConstants Constants{};
 			Constants.Matrix = renderInfo.WorldTransformMatrix;
-			Constants.Color = FVector4(1, 1, 1, 1);
+			Constants.Color = renderInfo.Color;
 			Constants.UseVertexColor = 0;
 			Constants.HasTexture = 1;
 
@@ -121,11 +132,11 @@ void FGraphicsManager::Render()
 			mMeshPipeline->SetShaderResource(0, renderInfo.Texture->GetSRV());
 			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
 
-			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Asset->GetIndexCount());
+			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, Section.StartIndex);
 		}
 		else
 		{
-			mRenderer->RenderPrimitiveIndexed(Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Asset->GetIndexCount(), renderInfo.WorldTransformMatrix);
+			mRenderer->RenderPrimitiveIndexed(Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, renderInfo.WorldTransformMatrix, Section.StartIndex);
 		}
 	}
 
@@ -241,16 +252,6 @@ void FGraphicsManager::OnResize(UINT width, UINT height)
 	mRenderer->OnResize(width, height);
 }
 
-FVector FGraphicsManager::GetPrimitiveCenter(EPrimitive type)
-{
-	switch (type)
-	{
-	case EPrimitive::EP_Sphere:	return FVector(0, 0, 0);
-	case EPrimitive::EP_Cube:	return FVector(0, 0, 0);
-	default:					return FVector(0, 0, 0);
-	}
-}
-
 // 테두리가 화면에서 차지할 두께(픽셀). 물체 크기와 카메라 거리 어느 쪽에도 영향받지 않는다.
 static constexpr float OUTLINE_PIXELS = 3.0f;
 
@@ -265,16 +266,6 @@ static float GetOutlineAxisScale(float worldHalfExtent, float worldThickness)
 	return 1.0f + worldThickness / worldHalfExtent;
 }
 
-FVector FGraphicsManager::GetPrimitiveHalfExtent(EPrimitive type)
-{
-	switch (type)
-	{
-	case EPrimitive::EP_Sphere:	return FVector(1.0f, 1.0f, 1.0f);
-	case EPrimitive::EP_Cube:	return FVector(0.5f, 0.5f, 0.5f);
-	default:					return FVector(0.5f, 0.5f, 0.5f);
-	}
-}
-
 void FGraphicsManager::RenderHighLight(const FRenderInfo& RI)
 {
 	if (!RI.StaticMesh)
@@ -282,8 +273,10 @@ void FGraphicsManager::RenderHighLight(const FRenderInfo& RI)
 		return;
 	}
 
-	const FVector Center = GetPrimitiveCenter(RI.ePrimitive);
-	const FVector HalfExtent = GetPrimitiveHalfExtent(RI.ePrimitive);
+	// 프리미티브 종류별 하드코딩 대신 메시가 들고 있는 로컬 AABB를 쓴다.
+	const FAABB& LocalBounds = RI.StaticMesh->GetLocalBoundingBox();
+	const FVector Center = (LocalBounds.Min + LocalBounds.Max) * 0.5f;
+	const FVector HalfExtent = (LocalBounds.Max - LocalBounds.Min) * 0.5f;
 
 	// 화면에서 OUTLINE_PIXELS 만큼 보이려면 이 깊이에서 월드로 얼마여야 하는지 환산한다.
 	// 깊이 d에서 뷰포트가 담는 월드 높이가 2*d*tan(fov/2) 이므로, 그걸 픽셀 수로 나누면 픽셀당 월드 크기다.

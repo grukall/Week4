@@ -14,7 +14,6 @@
 #include "GraphicsManager.h"
 #include "Renderer.h"
 #include <cstdio>
-#include "UTextComponent.h"
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
 #include "RayCast.h"

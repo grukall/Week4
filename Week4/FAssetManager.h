@@ -1,13 +1,12 @@
 #pragma once
 
 #include "Core.h"
-#include "FAsset.h"
+#include "UAsset.h"
 #include "TMap.h"
 #include "TArray.h"
 
 struct FAssetMetaInfo
 {
-	EAssetType AssetType;
 	FName AssetName;
 	FAssetLoader* AssetLoader = nullptr;
 	FAssetSource* AssetSource = nullptr;
