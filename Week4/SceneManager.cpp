@@ -119,7 +119,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 			ImGui::DockBuilderDockWindow("Console Window", bottom);
 			ImGui::DockBuilderDockWindow("Jungle Control Panel", leftTop);
 			ImGui::DockBuilderDockWindow("Jungle Property Window", leftMiddle);
-			ImGui::DockBuilderDockWindow("Object List Panel", leftBottom);
+			ImGui::DockBuilderDockWindow("Outliner", leftBottom);
 
 			ImGui::DockBuilderFinish(dockspaceID);
 		}
@@ -154,7 +154,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
-	updateObjectListPanelGUI(guiReference);
+	updateOutlinerGUI(guiReference);
 
 	ConsoleWindow::Get().Process(mPanelWidth);
 }
@@ -218,7 +218,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			{
 				NewActor = FObjectFactory::ConstructObject<AActor>();
 
-				TSharedPtr<FSpriteAtlasAsset> ExplosionAtlas = FAssetManager::Get().GetAssetAs<FSpriteAtlasAsset>(FName("ExplosionSpriteAtlas"));
+				USpriteAtlas* ExplosionAtlas = FAssetManager::Get().GetAssetAs<USpriteAtlas>(FName("ExplosionSpriteAtlas"));
 
 				UAtlasAnimationComponent* AnimComponent = FObjectFactory::ConstructObject<UAtlasAnimationComponent>(EPrimitive::EP_Plane, ExplosionAtlas);
 				AnimComponent->SetRelativeLocation(FVector(0, 0, 0));
@@ -242,7 +242,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			{
 				NewActor = FObjectFactory::ConstructObject<ASpotLight>();
 
-				TSharedPtr<FTexture2DAsset> SpotLightTexture = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(FName("SpotLightIcon"), true);
+				UTexture2D* SpotLightTexture = FAssetManager::Get().GetAssetAs<UTexture2D>(FName("SpotLightIcon"), true);
 
 				UPlaneComponent* PlaneComponent = FObjectFactory::ConstructObject<UPlaneComponent>(FVector(0, 0, 0), FRotator(0, 0, 0), FVector(1, 1, 1));
 				PlaneComponent->SetBillboardCamera(guiReference.ViewportClient->GetCamera());
@@ -264,7 +264,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 				Text3DComponent->SetBillboardCamera(guiReference.ViewportClient->GetCamera());
 				Text3DComponent->SetBillboard(true);
 				Text3DComponent->SetText(Utf2Wide(std::format("UUID: {}", NewActor->UUID)));
-				Text3DComponent->SetFontAtlasAsset(FAssetManager::Get().GetAssetAs<FFontAtlasAsset>(FName("TestFontAtlas")));
+				Text3DComponent->SetFontAtlasAsset(FAssetManager::Get().GetAssetAs<UFontAtlas>(FName("TestFontAtlas")));
 				Text3DComponent->SetDepthState(false, false);
 				
 				NewActor->AddComponent(Text3DComponent);
@@ -726,7 +726,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
 			});
 
-			const TSharedPtr<FSpriteAtlasAsset>& currentAtlas = atlasAnimationComponent->GetAtlas();
+			USpriteAtlas* currentAtlas = atlasAnimationComponent->GetAtlas();
 			FString currentAtlasName = currentAtlas ? currentAtlas->GetAssetName().ToString() : "None";
 			if (ImGui::BeginCombo("Sprite Atlas", currentAtlasName.CStr()))
 			{
@@ -735,7 +735,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 					bool isSelected = (currentAtlasName == assetName);
 					if (ImGui::Selectable(assetName.CStr(), isSelected))
 					{
-						atlasAnimationComponent->SetAtlas(guiReference.AssetManager->GetAssetAs<FSpriteAtlasAsset>(FName(assetName), true));
+						atlasAnimationComponent->SetAtlas(guiReference.AssetManager->GetAssetAs<USpriteAtlas>(FName(assetName), true));
 					}
 					if (isSelected)
 					{
@@ -794,7 +794,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				textureAssetNames.Add(metaInfo.AssetName.ToString()); 
 			});
 
-			const TSharedPtr<FTexture2DAsset>& currentTexture = primitiveComponent->GetTexture();
+			UTexture2D* currentTexture = primitiveComponent->GetTexture();
 			FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
 			if (ImGui::BeginCombo("Texture", currentTextureName.CStr()))
 			{
@@ -803,7 +803,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 					bool isSelected = (currentTextureName == assetName);
 					if (ImGui::Selectable(assetName.CStr(), isSelected))
 					{
-						TSharedPtr<FTexture2DAsset> textureAsset = guiReference.AssetManager->GetAssetAs<FTexture2DAsset>(FName(assetName), true);
+						UTexture2D* textureAsset = guiReference.AssetManager->GetAssetAs<UTexture2D>(FName(assetName), true);
 						primitiveComponent->SetTexture(textureAsset);
 					}
 					if (isSelected)
@@ -818,7 +818,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	ImGui::End();
 }
 
-void FSceneManager::updateObjectListPanelGUI(const FGuiReference& guiReference)
+void FSceneManager::updateOutlinerGUI(const FGuiReference& guiReference)
 {
 	ImGuiIO& io = ImGui::GetIO();
 
@@ -830,21 +830,26 @@ void FSceneManager::updateObjectListPanelGUI(const FGuiReference& guiReference)
 
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
 
-	ImGui::Begin("Object List Panel", nullptr, flags);
+	ImGui::Begin("Outliner", nullptr, flags);
 	{
-		/* Object Lists */
-		ImGui::SeparatorText("Object Lists");
 		if (ImGui::BeginChild("ObjectList", ImVec2(0, 0),
 			ImGuiChildFlags_Borders))
 		{
+			// 월드에 스폰된 액터를 나열한다.
 			if (mGuiInputField.LastGUObjectRevision != UObject::GetGObjectRevision())
 			{
-				mGuiInputField.SortedObjectLists = UObject::GetGObjectArray().ToTArray();
-				mGuiInputField.LastGUObjectRevision = UObject::GetGObjectRevision();
+				mGuiInputField.SortedActorLists.Empty();
 
-				// Sort the objects by UUID
-				std::sort(mGuiInputField.SortedObjectLists.begin(), mGuiInputField.SortedObjectLists.end(),
-					[](UObject* a, UObject* b) { return a->UUID < b->UUID; });
+				if (mCurrentWorld != nullptr)
+				{
+					mGuiInputField.SortedActorLists = mCurrentWorld->GetActors();
+
+					// Sort the actors by UUID
+					std::sort(mGuiInputField.SortedActorLists.begin(), mGuiInputField.SortedActorLists.end(),
+						[](AActor* a, AActor* b) { return a->UUID < b->UUID; });
+				}
+
+				mGuiInputField.LastGUObjectRevision = UObject::GetGObjectRevision();
 			}
 
 			int32 selectedActorUUID = mSelectedActor
@@ -852,18 +857,18 @@ void FSceneManager::updateObjectListPanelGUI(const FGuiReference& guiReference)
 				: -1;
 
 			// Todo: rbegin()
-			//for (UObject* object : mGuiInputField.SortedObjectLists)
+			//for (AActor* actor : mGuiInputField.SortedActorLists)
 
-			UObject* bDeleteActorOrNull = nullptr;
-			for (unsigned int objectsIndex = 0; objectsIndex < mGuiInputField.SortedObjectLists.Num(); ++objectsIndex)
+			AActor* bDeleteActorOrNull = nullptr;
+			for (unsigned int actorsIndex = 0; actorsIndex < mGuiInputField.SortedActorLists.Num(); ++actorsIndex)
 			{
-				UObject* object = mGuiInputField.SortedObjectLists[objectsIndex];
+				AActor* actor = mGuiInputField.SortedActorLists[actorsIndex];
 
 				bool bSelected = false;
-				ImGui::PushID(object->UUID); // Ensure unique ID for each child
+				ImGui::PushID(actor->UUID); // Ensure unique ID for each child
 
 				// Highlight the frame if this object is the clicked actor
-				if (object->UUID == selectedActorUUID)
+				if (actor->UUID == selectedActorUUID)
 				{
 					bSelected = true;
 					ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(255, 255, 0, 50)); // Light yellow background
@@ -871,28 +876,21 @@ void FSceneManager::updateObjectListPanelGUI(const FGuiReference& guiReference)
 
 				if (ImGui::BeginChild("ObjectFrame", ImVec2(0, 0), ImGuiChildFlags_FrameStyle | ImGuiChildFlags_AutoResizeY))
 				{
-					ImGui::Text("Class: %s", object->GetRuntimeClass()->Name.CStr());
-					ImGui::Text("UUID: %d", object->UUID);
+					ImGui::Text("Class: %s", actor->GetRuntimeClass()->Name.CStr());
+					ImGui::Text("UUID: %d", actor->UUID);
 
 					// TODO: Move implement delete to where?
-					if (object->IsA<AActor>())
+					if (ImGui::Button("Select"))
 					{
-						AActor* actor = object->Cast<AActor>();
-
-						if (ImGui::Button("Select"))
+						SetSelectedActor(actor);
+					}
+					else
+					{
+						ImGui::SameLine();
+						if (ImGui::Button("Delete"))
 						{
-							SetSelectedActor(actor);
+							bDeleteActorOrNull = actor;
 						}
-						else
-						{
-							ImGui::SameLine();
-							if (ImGui::Button("Delete"))
-							{
-								bDeleteActorOrNull = object;
-							}
-						}
-
-						
 					}
 				}
 				ImGui::EndChild();
@@ -908,7 +906,7 @@ void FSceneManager::updateObjectListPanelGUI(const FGuiReference& guiReference)
 
 			if (bDeleteActorOrNull != nullptr)
 			{
-				AActor* deleteActor = bDeleteActorOrNull->Cast<AActor>();
+				AActor* deleteActor = bDeleteActorOrNull;
 
 				if (mSelectedActor != nullptr && mSelectedActor->UUID == deleteActor->UUID)
 				{

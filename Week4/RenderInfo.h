@@ -21,8 +21,8 @@ enum class ERenderBlendMode
 
 struct FRenderInfo
 {
-	TSharedPtr<FStaticMeshAsset> StaticMesh;
-	TSharedPtr<FTexture2DAsset> Texture;
+	UStaticMesh* StaticMesh = nullptr;
+	UTexture2D* Texture = nullptr;
 	EPrimitive ePrimitive;
 	FMatrix WorldTransformMatrix;
 	FObjectID ObejctID;

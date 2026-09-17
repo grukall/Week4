@@ -12,7 +12,7 @@ public:
 	UAtlasAnimationComponent();
 
 	using UPrimitiveComponent::Initialize;
-	void Initialize(EPrimitive PrimitiveType, const TSharedPtr<FSpriteAtlasAsset>& textureAsset);
+	void Initialize(EPrimitive PrimitiveType, USpriteAtlas* textureAsset);
 
 	void DeserializeClass(const json::JSON& inJson) override
 	{
@@ -30,8 +30,8 @@ public:
 	{
 		SetBillboardCamera(Camera);
 	}
-	void SetAtlas(const TSharedPtr<FSpriteAtlasAsset>& InAtlas);
-	inline const TSharedPtr<FSpriteAtlasAsset>& GetAtlas() const { return Asset; }
+	void SetAtlas(USpriteAtlas* InAtlas);
+	inline USpriteAtlas* GetAtlas() const { return Asset; }
 
 	void Play(int32 StartFrame = 0, bool bIsLooping = true, bool bBackwardAnimate = false);
 	void Pause();
@@ -50,7 +50,7 @@ public:
 	virtual void Tick(float deltaTime) override;
 private:
 	void RestoreAtlasState();
-	TSharedPtr<FSpriteAtlasAsset> Asset;
+	USpriteAtlas* Asset = nullptr;
 	bool bPlaying = false;
 	bool bLooping = true;
 	bool bBackward = false;

@@ -5,7 +5,7 @@ UAtlasAnimationComponent::UAtlasAnimationComponent()
 {
 }
 
-void UAtlasAnimationComponent::Initialize(EPrimitive PrimitiveType, const TSharedPtr<FSpriteAtlasAsset>& textureAsset)
+void UAtlasAnimationComponent::Initialize(EPrimitive PrimitiveType, USpriteAtlas* textureAsset)
 {
 	UPrimitiveComponent::Initialize(PrimitiveType);
 
@@ -29,7 +29,7 @@ void UAtlasAnimationComponent::RestoreAtlasState()
 		return;
 	}
 
-	Asset = std::static_pointer_cast<FSpriteAtlasAsset>(mTextureAsset);
+	Asset = mTextureAsset->Cast<USpriteAtlas>();
 
 	mBlendMode = ERenderBlendMode::Additive;
 
@@ -43,7 +43,7 @@ void UAtlasAnimationComponent::RestoreAtlasState()
 }
 
 
-void UAtlasAnimationComponent::SetAtlas(const TSharedPtr<FSpriteAtlasAsset>& InAtlas)
+void UAtlasAnimationComponent::SetAtlas(USpriteAtlas* InAtlas)
 {
 	Asset = InAtlas;
 	SetTexture(InAtlas);

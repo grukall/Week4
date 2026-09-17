@@ -37,10 +37,10 @@ public:
 	// 다른 충돌 모양이 필요한 컴포넌트는 이 함수를 재정의한다.
 	virtual bool RayCastComponent(const FPickingRay& PickingRay, float& OutHitT) const;
 
-	inline const TSharedPtr<FStaticMeshAsset>& GetMesh() const { return mMeshAsset; }
+	inline UStaticMesh* GetMesh() const { return mMeshAsset; }
 
-	inline void SetTexture(const TSharedPtr<FTexture2DAsset>& textureAsset) { mTextureAsset = textureAsset; }
-	inline const TSharedPtr<FTexture2DAsset>& GetTexture() const { return mTextureAsset; }
+	inline void SetTexture(UTexture2D* textureAsset) { mTextureAsset = textureAsset; }
+	inline UTexture2D* GetTexture() const { return mTextureAsset; }
 
 	inline EPrimitive GetPrimitiveType() const { return mePrimitive; }
 
@@ -50,8 +50,8 @@ protected:
 protected:
 	//GraphicsManager* mGraphicsManager;
 	EPrimitive mePrimitive;
-	TSharedPtr<FStaticMeshAsset> mMeshAsset;
-	TSharedPtr<FTexture2DAsset> mTextureAsset;
+	UStaticMesh* mMeshAsset = nullptr;
+	UTexture2D* mTextureAsset = nullptr;
 };
 
 

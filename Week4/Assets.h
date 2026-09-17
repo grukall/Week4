@@ -29,12 +29,15 @@ private:
 	std::filesystem::path FilePath;
 };
 
-class FStaticMeshAsset : public FAsset
+class UStaticMesh : public UAsset
 {
+	REFLECT_CLASS(UStaticMesh, UAsset)
 public:
-	FStaticMeshAsset() = default;
-	FStaticMeshAsset(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount);
-	FStaticMeshAsset(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount);
+	UStaticMesh() = default;
+
+	using UAsset::Initialize;
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount);
 
 	inline Microsoft::WRL::ComPtr<ID3D11Buffer> GetVertexBuffer() const { return VertexBuffer; }
 	inline uint32 GetVertexCount() const { return VertexCount; }
@@ -44,21 +47,24 @@ public:
 
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
-	uint32 VertexCount;
+	uint32 VertexCount = 0;
 
 	Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer;
-	uint32 IndexCount;
+	uint32 IndexCount = 0;
 
 	FAABB BoundingBox;
 };
 
-class FTexture2DAsset : public FAsset
+class UTexture2D : public UAsset
 {
+	REFLECT_CLASS(UTexture2D, UAsset)
 public:
-	FTexture2DAsset() = default;
-	FTexture2DAsset(const FName& InAssetName, Microsoft::WRL::ComPtr<ID3D11Texture2D> InTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> InSRV)
-		: FTexture2DAsset(InAssetName, EAssetType::Texture2D, InTexture, InSRV)
+	UTexture2D() = default;
+
+	using UAsset::Initialize;
+	void Initialize(const FName& InAssetName, Microsoft::WRL::ComPtr<ID3D11Texture2D> InTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> InSRV)
 	{
+		Initialize(InAssetName, EAssetType::Texture2D, InTexture, InSRV);
 	}
 
 	inline Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture() const { return Texture; }
@@ -70,11 +76,13 @@ public:
 	inline DXGI_FORMAT GetFormat() const { return Format; }
 
 protected:
-	FTexture2DAsset(const FName& InAssetName, EAssetType InAssetType, Microsoft::WRL::ComPtr<ID3D11Texture2D> InTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> InSRV)
-		: FAsset(InAssetName, InAssetType)
-		, Texture(InTexture)
-		, SRV(InSRV)
+	void Initialize(const FName& InAssetName, EAssetType InAssetType, Microsoft::WRL::ComPtr<ID3D11Texture2D> InTexture, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> InSRV)
 	{
+		UAsset::Initialize(InAssetName, InAssetType);
+
+		Texture = InTexture;
+		SRV = InSRV;
+
 		if (Texture)
 		{
 			D3D11_TEXTURE2D_DESC TextureDesc = {};
@@ -101,26 +109,30 @@ public:
 	FTexture2DAssetLoader(URenderer& InRenderer) : Renderer(InRenderer) {}
 	~FTexture2DAssetLoader() = default;
 
-	virtual TSharedPtr<FAsset> LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
-	virtual void UnloadAsset(TSharedPtr<FAsset> Asset) override;
+	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
+	virtual void UnloadAsset(UAsset* Asset) override;
 	virtual EAssetType GetAssetType() const override { return EAssetType::Texture2D; }
 
 private:
 	URenderer& Renderer;
 };
 
-class FFontAsset : public FAsset
+class UFont : public UAsset
 {
+	REFLECT_CLASS(UFont, UAsset)
 public:
-	FFontAsset() = default;
-	FFontAsset(const FName& InAssetName, FT_Face InFace, FString&& InFileContent)
-		: FAsset(InAssetName, EAssetType::Font)
-		, Face(InFace)
-		, FileContent(std::move(InFileContent))
+	UFont() = default;
+
+	using UAsset::Initialize;
+	void Initialize(const FName& InAssetName, FT_Face InFace, FString&& InFileContent)
 	{
+		UAsset::Initialize(InAssetName, EAssetType::Font);
+
+		Face = InFace;
+		FileContent = std::move(InFileContent);
 	}
 
-	~FFontAsset()
+	~UFont()
 	{
 		if (Face)
 		{
@@ -132,7 +144,7 @@ public:
 
 private:
 	FString FileContent;
-	FT_Face Face;
+	FT_Face Face = nullptr;
 };
 
 class FFontAssetLoader : public FAssetLoader
@@ -141,47 +153,55 @@ public:
 	FFontAssetLoader(FFontManager& InFontManager) : FontManager(InFontManager) {}
 	~FFontAssetLoader() = default;
 
-	virtual TSharedPtr<FAsset> LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
-	virtual void UnloadAsset(TSharedPtr<FAsset> Asset) override;
+	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
+	virtual void UnloadAsset(UAsset* Asset) override;
 	virtual EAssetType GetAssetType() const override { return EAssetType::Font; }
 
 private:
 	FFontManager& FontManager;
 };
 
-class FFontAtlasAsset : public FTexture2DAsset, private FFontAtlasHandler
+class UFontAtlas : public UTexture2D, private FFontAtlasHandler
 {
+	REFLECT_CLASS(UFontAtlas, UTexture2D)
 public:
-	FFontAtlasAsset(const FName& InAssetName, URenderer& InRenderer, TSharedPtr<FFontAsset>& InFontAsset, uint32 InWidth, uint32 InHeight, uint32 InPaddingW, uint32 InPaddingH);
+	UFontAtlas() = default;
+	~UFontAtlas();
 
-	inline TSharedPtr<FFontAtlas> GetFontAtlas() const { return FontAtlas; }
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, UFont* InFontAsset, uint32 InWidth, uint32 InHeight, uint32 InPaddingW, uint32 InPaddingH);
+
+	inline FFontAtlas* GetFontAtlas() const { return FontAtlas; }
 	void UpdateRegion(uint32 Left, uint32 Top, uint32 Right, uint32 Bottom, const void* Data, uint32 RowPitch);
 
 protected:
-	URenderer& Renderer;
+	URenderer* Renderer = nullptr;
 private:
 	bool HandleAddGlyph(FFontAtlas& FontAtlas, const FFontGlyph& InGlyph, const FFontGlyphBitmap& InBitmap) override;
 
 private:
-	TSharedPtr<FFontAsset> FontAsset;
-	TSharedPtr<FFontAtlas> FontAtlas;
+	UFont* FontAsset = nullptr;
+	FFontAtlas* FontAtlas = nullptr;
 };
 
 //Texture2DAsset을 받아 UV를 계산 후 저장하는 에셋
-class FSpriteAtlasAsset : public FTexture2DAsset
+class USpriteAtlas : public UTexture2D
 {
+	REFLECT_CLASS(USpriteAtlas, UTexture2D)
 public:
+	USpriteAtlas() = default;
+
+
 	//Cols. Rows : 아틀라스 텍스쳐에 들어가있는 스프라이트 col x row
-	FSpriteAtlasAsset(const FName& InAssetName, URenderer& InRenderer, const TSharedPtr<FTexture2DAsset>& InSource, uint32 InCols, uint32 InRows, uint32 InFrameCount = 0);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, UTexture2D* InSource, uint32 InCols, uint32 InRows, uint32 InFrameCount = 0);
 
 	//FrameSUbUV : (시작 UV.x, 시작 UV.y, width, height)
-	FSpriteAtlasAsset(const FName& InAssetName, URenderer& InRenderer, const TSharedPtr<FTexture2DAsset>& InSource, const TArray<FVector4>& InFrameSubUVs);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, UTexture2D* InSource, const TArray<FVector4>& InFrameSubUVs);
 
 	inline int32 GetFrameCount() const { return FrameSubUVs.Num(); }
 	const FVector4& GetFrameSubUV(int32 FrameIndex) const;
 
 protected:
-	URenderer& Renderer;
+	URenderer* Renderer = nullptr;
 private:
 	TArray<FVector4> FrameSubUVs;
 };

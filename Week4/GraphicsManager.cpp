@@ -102,7 +102,7 @@ void FGraphicsManager::Render()
 
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
-		TSharedPtr<FStaticMeshAsset> Asset = renderInfo.StaticMesh;
+		UStaticMesh* Asset = renderInfo.StaticMesh;
 
 		mMeshPipeline->ClearShaderResource();
 		mMeshPipeline->ClearSamplerState();

@@ -18,7 +18,7 @@ public:
 	UPlaneComponent()
 	{
 		mePrimitive = EPrimitive::EP_Plane;
-		mMeshAsset = FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(FName("PlaneMesh"), true);
+		mMeshAsset = FAssetManager::Get().GetAssetAs<UStaticMesh>(FName("PlaneMesh"), true);
 	}
 
 	void Tick(float DeltaTime) override
@@ -211,7 +211,7 @@ public:
 		SetBillboard(true);
 
 		SetFontAtlasAsset(
-			FAssetManager::Get().GetAssetAs<FFontAtlasAsset>(
+			FAssetManager::Get().GetAssetAs<UFontAtlas>(
 				FName("TestFontAtlas"),
 				true
 			)
@@ -251,7 +251,7 @@ public:
 			return;
 		}
 
-		const TSharedPtr<FFontAtlas>& fontAtlas = mFontAtlasAsset->GetFontAtlas();
+		FFontAtlas* fontAtlas = mFontAtlasAsset->GetFontAtlas();
 		if (!fontAtlas)
 		{
 			return;
@@ -347,7 +347,7 @@ public:
 	inline void SetText(const std::wstring& text) { mText = text; }
 	inline const std::wstring& GetText() const { return mText; }
 
-	inline void SetFontAtlasAsset(const TSharedPtr<FFontAtlasAsset>& fontAtlasAsset) { mFontAtlasAsset = fontAtlasAsset; }
+	inline void SetFontAtlasAsset(UFontAtlas* fontAtlasAsset) { mFontAtlasAsset = fontAtlasAsset; }
 
 	inline void SetColor(const FVector4& color) { mColor = color; }
 	inline void SetDepthState(bool enableDepthTest, bool enableDepthWrite) { mEnableDepthTest = enableDepthTest; mEnableDepthWrite = enableDepthWrite; }
@@ -356,7 +356,7 @@ private:
 	FCamera* mBillboardCamera = nullptr;
 	bool mbBillboard = false;
 	std::wstring mText;
-	TSharedPtr<FFontAtlasAsset> mFontAtlasAsset;
+	UFontAtlas* mFontAtlasAsset = nullptr;
 	FVector4 mColor = FVector4(1, 1, 1, 1);
 	bool mEnableDepthTest = true;
 	bool mEnableDepthWrite = true;

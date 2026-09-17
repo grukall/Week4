@@ -2,6 +2,7 @@
 
 #include "Core.h"
 #include "FName.h"
+#include "Object.h"
 
 enum class EAssetType
 {
@@ -12,24 +13,28 @@ enum class EAssetType
 	SpriteAtlas
 };
 
-class FAsset
+class UAsset : public UObject
 {
+	REFLECT_CLASS(UAsset, UObject)
 public:
-	FAsset() = default;
-	FAsset(const FName& InAssetName, EAssetType InAssetType)
-		: AssetName(InAssetName)
-		, AssetType(InAssetType)	
-	{
-	}
+	UAsset() = default;
+	virtual ~UAsset() = default;
 
-	virtual ~FAsset() = default;
+	using UObject::Initialize;
+	void Initialize(const FName& InAssetName, EAssetType InAssetType)
+	{
+		UObject::Initialize();
+
+		AssetName = InAssetName;
+		AssetType = InAssetType;
+	}
 
 	inline const FName& GetAssetName() const { return AssetName; }
 	inline EAssetType GetAssetType() const { return AssetType; }
 
 protected:
 	FName AssetName;
-	EAssetType AssetType;
+	EAssetType AssetType = EAssetType::StaticMesh;
 };
 
 class FAssetSource
@@ -43,7 +48,7 @@ class FAssetLoader
 public:
 	virtual ~FAssetLoader() = default;
 
-	virtual TSharedPtr<FAsset> LoadAsset(const FName& AssetName, FAssetSource& AssetSource) = 0;
-	virtual void UnloadAsset(TSharedPtr<FAsset> Asset) = 0;
+	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) = 0;
+	virtual void UnloadAsset(UAsset* Asset) = 0;
 	virtual EAssetType GetAssetType() const = 0;
 };

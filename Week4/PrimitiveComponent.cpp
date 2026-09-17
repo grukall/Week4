@@ -102,7 +102,7 @@ void UPrimitiveComponent::Initialize(EPrimitive ePrimitive, FVector location, FR
 		case EPrimitive::EP_Plane:		MeshAssetName = "PlaneMesh"; break;
 	}
 
-	mMeshAsset = FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(MeshAssetName);
+	mMeshAsset = FAssetManager::Get().GetAssetAs<UStaticMesh>(MeshAssetName);
 }
 
 UPrimitiveComponent::~UPrimitiveComponent()
@@ -138,7 +138,7 @@ void UPrimitiveComponent::DeserializeClass(const json::JSON& inJson)
 
 		if (AssetName.Len() > 0)
 		{
-			mTextureAsset = FAssetManager::Get().GetAssetAs<FTexture2DAsset>(FName(AssetName), true);
+			mTextureAsset = FAssetManager::Get().GetAssetAs<UTexture2D>(FName(AssetName), true);
 		}
 		else
 		{
@@ -178,7 +178,7 @@ void UPrimitiveComponent::RestoreMeshAsset()
 		break;
 	}
 
-	mMeshAsset = FAssetManager::Get().GetAssetAs<FStaticMeshAsset>(MeshAssetName, true);
+	mMeshAsset = FAssetManager::Get().GetAssetAs<UStaticMesh>(MeshAssetName, true);
 }
 
 
