@@ -1,0 +1,102 @@
+﻿#pragma once
+
+#include <string_view>
+#include <filesystem>
+#include "SceneData.h"
+#include "TArray.h"
+#include "RenderInfo.h"
+#include "enum.h"
+#include "FAssetManager.h"
+
+inline constexpr std::string_view kSceneDataDir = "SceneData\\";
+inline constexpr std::string_view kSceneDataSuffix = ".Scene";
+
+class FFileManager;
+class FFrameTimer;
+class FEditorViewportClient;
+class FGraphicsManager;
+class UWorld;
+
+struct FGuiReference
+{
+	const FFrameTimer& FrameTimer;
+	FGraphicsManager* GraphicsManager;
+	FEditorViewportClient* ViewportClient;
+	const FFileManager* FileManager;
+	FAssetManager* AssetManager;
+};
+
+struct FGuiInputField
+{
+	/* Spawn Actor */
+	EPrimitive PrimitiveType = EPrimitive::EP_Cube;
+	int32 SpawnCount = 1;
+
+	/* Scene Control */
+	char SceneName[512] = "Default";
+
+	/* Object Lists */
+	TArray<UObject*> SortedObjectLists;
+	uint64 LastGUObjectRevision = -1;
+};
+
+class FSceneManager
+{
+public:
+	FSceneManager();
+	~FSceneManager();
+
+	void Tick(float deltaTime);
+	void Update(float deltaTime, FRenderCollector& outCollector);
+	void UpdateGUI(const FGuiReference& guiReference);
+
+
+	const TArray<FRenderInfo> GetAxisRenderInfos();
+
+	// Clear world
+	void NewScene();
+	void DeleteScene();
+
+	// 파일 탐색기용 오버로드
+	void SaveScene(const std::filesystem::path& scenePath, const FFileManager& fileManager);
+	void LoadScene(const std::filesystem::path& scenePath, const FFileManager& fileManager);
+
+	UWorld* GetCurrentWorld() const { return mCurrentWorld; }
+
+	AActor* GetSelectedActor() const { return mSelectedActor; }
+	bool IsActorSelected() const { return mSelectedActor != nullptr; }
+	void SetSelectedActor(AActor* actor);
+	void ResetSelectedActor() { mSelectedActor = nullptr; }
+
+	float GetPanelWidth() const;
+	float GetViewportX() const { return mViewportX; }
+	float GetViewportY() const { return mViewportY; }
+	float GetViewportWidth() const { return mViewportWidth; }
+	float GetViewportHeight() const { return mViewportHeight; }
+	bool IsViewportHovered() const { return mbViewportHovered; }
+
+private:
+	static constexpr float MIN_WIDTH_RATIO = 0.2f;
+	static constexpr float MAX_WIDTH_RATIO = 0.6f;
+
+	static constexpr float CONTROL_PANEL_HEIGHT_RATIO = 0.4f;
+	static constexpr float WINDOW_PROPERTY_HEIGHT_RATIO = 0.3f;
+
+	float mPanelWidth;
+	float mViewportX;
+	float mViewportY;
+	float mViewportWidth;
+	float mViewportHeight;
+	bool mbViewportHovered = false;
+
+	UWorld* mCurrentWorld = nullptr;
+	AActor* mSelectedActor = nullptr;
+	FGuiInputField mGuiInputField;
+
+	void updateControlPanelGUI(const FGuiReference& guiReference);
+
+	//TODO: PropertyWindow에 표시하는 정보를 다루는 구조체 및 시스템이 후에 필요하다.
+	//지금은 하드코딩
+	void updatePropertyWindowGUI(const FGuiReference& guiReference);
+	void updateObjectListPanelGUI(const FGuiReference& guiReference);
+};
