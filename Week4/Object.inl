@@ -21,6 +21,20 @@ public:																				\
 	}																				\
 private:
 
+// Property Reflection
+#define REFLECT_START(className)										\
+public:																	\
+	inline static void RegisterProperties(FClassInfo* InClass)				\
+	{
+
+#define PROPERTY(PropertyName)											\
+    InClass->AddProperty<decltype(ThisClass::PropertyName)>(#PropertyName, offsetof(ThisClass, PropertyName));
+
+#define REFLECT_END()													\
+	};																	\
+private:
+
+
 template<typename TObject>
 	requires std::derived_from<TObject, UObject>
 bool UObject::IsA() const
