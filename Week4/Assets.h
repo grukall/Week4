@@ -11,12 +11,14 @@
 #include <wrl/client.h>
 #include <filesystem>
 #include <ft2build.h>
+
 #include FT_FREETYPE_H
 
 class FFileManager;
 class FFontManager;
 class URenderer;
 class UTexture2D;
+class UMaterial;
 
 class FFileAssetSource : public FAssetSource
 {
@@ -59,11 +61,23 @@ public:
 	inline const TArray<FStaticMeshSection>& GetSections() const { return Sections; }
 
 	// UMaterial이 들어오기 전까지 쓰는 임시 표면 정보.
-	inline void SetTexture(UTexture2D* InTexture) { Texture = InTexture; }
-	inline UTexture2D* GetTexture() const { return Texture; }
+	void SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial);
 
-	inline void SetColor(const FVector4& InColor) { Color = InColor; }
-	inline const FVector4& GetColor() const { return Color; }
+	UMaterial* GetMaterial(uint32 MaterialSlotIndex) const;
+
+	inline uint32 GetMaterialCount() const {
+		return Materials.Num();
+	}
+
+	inline const TArray<UMaterial*>& GetMaterials() const {
+		return Materials;
+	}
+
+	void AddSection(const FStaticMeshSection& InSection);
+
+	inline uint32 GetSectionCount() const {
+		return Sections.Num();
+	}
 
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
@@ -73,14 +87,11 @@ private:
 	uint32 IndexCount = 0;
 	FAABB BoundingBox;
 
-	//어디서부터 어디까지가 어떤 정점과 머테리얼로 이루어져 있는지 저장한다.
-	TArray<FStaticMeshSection> Sections;
 	TArray<FVertexSimple> Vertices;
 	TArray<uint32> Indices;
 
-	//TODO. UMaterial로 대체한다. 그때까지는 메시 전체가 텍스처 하나와 색 하나를 쓴다.
-	UTexture2D* Texture = nullptr;
-	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
+	TArray<FStaticMeshSection> Sections;
+	TArray<UMaterial*> Materials;
 };
 
 class UTexture2D : public UAsset
@@ -115,7 +126,7 @@ public:
 	inline uint32 GetHeight() const { return Height; }
 
 	inline DXGI_FORMAT GetFormat() const { return Format; }
-
+	
 protected:
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;

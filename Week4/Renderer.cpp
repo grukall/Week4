@@ -49,6 +49,14 @@ void URenderer::Create(HWND hWindow)
 	PrimitivePipeline->AddConstantBuffer<FMatrix>();
 	PrimitivePipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
 
+	//staticMesh
+	MeshPipeline = CreateRenderPipeline();
+	MeshPipeline->SetRasterRizerState(D3D11_CULL_BACK, 0, { EViewModeIndex::VMI_Lit, EViewModeIndex::VMI_Wireframe });
+	MeshPipeline->SetShader("Assets/shaders/StaticMeshShader.hlsl");
+	MeshPipeline->AddConstantBuffer<FConstants>();
+	MeshPipeline->AddConstantBuffer<FMatrix>();
+	MeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+
 	StencilMarkPipeline = CreateRenderPipeline();
 	StencilMarkPipeline->SetRasterRizerState(D3D11_CULL_BACK);
 	StencilMarkPipeline->SetStencilState(false, false, D3D11_COMPARISON_ALWAYS, D3D11_STENCIL_OP_REPLACE, 1);

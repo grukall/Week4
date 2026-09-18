@@ -22,7 +22,7 @@
 #include "World.h"
 #include <FLogManager.h>
 #include "Assets.h"
-
+#include "Material.h"
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
 	// Initialize window infos
@@ -98,12 +98,17 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	mSceneManager->NewScene();
 
 	//test code
-	//{
-	//	UCubeComponent* cubeComonent = FObjectFactory::ConstructObject<UCubeComponent>(FVector(0), FRotator(), FVector(1));
-	//	AActor* cubeActor = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor->AddComponent(cubeComonent);
-	//	mSceneManager.GetCurrentWorld()->AddActor(cubeActor);
-	//}
+	{
+		/*UMaterial* Material0 = FObjectFactory::ConstructObject<UMaterial>();
+
+		UMaterial* Material1 = FObjectFactory::ConstructObject<UMaterial>();
+
+		Material0->SetDiffuseColor(FVector4(1.f, 0.f, 0.f, 1.f));
+
+		Material1->SetDiffuseColor(FVector4(0.f, 0.f, 1.f, 1.f));
+		StaticMesh->SetMaterial(0, Material0);
+		StaticMesh->SetMaterial(1, Material1);*/
+	}
 }
 
 void FEngineLoop::InitAssetManager()

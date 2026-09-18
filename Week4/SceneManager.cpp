@@ -35,6 +35,8 @@
 #include "UText3DComponent.h"
 #include "ShowFlags.h"
 
+#include "Material.h"
+
 FSceneManager::FSceneManager()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -811,7 +813,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				textureAssetNames.Add(metaInfo.AssetName.ToString());
 			});
 
-			UTexture2D* currentTexture = primitiveComponent->GetTexture();
+			const UTexture2D* currentTexture = primitiveComponent->GetTexture();
 			FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
 			if (ImGui::BeginCombo("Texture", currentTextureName.CStr()))
 			{

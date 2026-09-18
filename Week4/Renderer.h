@@ -484,6 +484,7 @@ private:
 	TSharedPtr<FRenderPipeline> WorldAxisPipeline;
 	TSharedPtr<FRenderPipeline> WorldGridPipeline;
 	TSharedPtr<FRenderPipeline> QuadPipeline;
+	TSharedPtr<FRenderPipeline> MeshPipeline;
 
 	UINT Width, Height;
     FLOAT ClearColor[4] = { 0.025f, 0.025f, 0.025f, 1.0f };

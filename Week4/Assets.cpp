@@ -6,7 +6,7 @@
 #include "FFontManager.h"
 #include "MathUtility.h"
 #include "ObjectFactory.h"
-
+#include "Material.h"
 FString FFileAssetSource::ReadFileToString() const
 {
 	return FileManager.ReadFileToString(FilePath);
@@ -58,6 +58,29 @@ void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, co
 	// 머티리얼이 하나뿐인 메시라 인덱스 전체를 덮는 섹션 하나로 시작한다.
 	// OBJ 로더가 usemtl 단위로 쪼갠 섹션을 넣어주면 이 자리가 여러 개가 된다.
 	Sections.Add({ 0, InIndexCount, 0 });
+}
+
+void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
+{
+	if (MaterialSlotIndex >= Materials.Num()) {
+		Materials.SetNum(MaterialSlotIndex + 1);
+	}
+
+	Materials[MaterialSlotIndex] = InMaterial;
+}
+
+UMaterial* UStaticMesh::GetMaterial(uint32 MaterialSlotIndex) const
+{
+	if (MaterialSlotIndex >= Materials.Num()) {
+		return nullptr;
+	}
+
+	return Materials[MaterialSlotIndex];
+}
+
+void UStaticMesh::AddSection(const FStaticMeshSection& InSection)
+{
+	Sections.Add(InSection);
 }
 
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)

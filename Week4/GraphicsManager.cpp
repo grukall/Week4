@@ -6,7 +6,7 @@
 #include "FAssetManager.h"
 #include "Assets.h"
 #include "ObjectFactory.h"
-
+#include "Material.h"
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
 
@@ -27,7 +27,7 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 	mMeshPipeline = mRenderer->CreateRenderPipeline();
 	mMeshPipeline->SetRasterRizerState(D3D11_CULL_BACK, 0, { EViewModeIndex::VMI_Lit, EViewModeIndex::VMI_Wireframe });
 	mMeshPipeline->SetDepthStencilState(true, true);
-	mMeshPipeline->SetShader("Assets/Shaders/Mesh.hlsl");
+	mMeshPipeline->SetShader("Assets/Shaders/StaticMeshShader.hlsl");
 	mMeshPipeline->AddConstantBuffer<FConstants>();
 	mMeshPipeline->AddConstantBuffer<FMatrix>();
 }
@@ -102,6 +102,10 @@ void FGraphicsManager::Render()
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
 		UStaticMesh* Asset = renderInfo.StaticMesh;
+		UMaterial* Material0 = FObjectFactory::ConstructObject<UMaterial>();
+		Material0->SetDiffuseColor(FVector4(1.f, 0.f, 0.f, 1.f));
+		Material0->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("TestTexture"), true));
+		Asset->SetMaterial(0, Material0);
 		if (!Asset)
 		{
 			continue;
@@ -118,20 +122,22 @@ void FGraphicsManager::Render()
 		mMeshPipeline->ClearShaderResource();
 		mMeshPipeline->ClearSamplerState();
 
-		if (renderInfo.Texture)
+		if (renderInfo.Material)
 		{
 			FConstants Constants{};
 			Constants.Matrix = renderInfo.WorldTransformMatrix;
-			Constants.Color = renderInfo.Color;
+			Constants.Color = renderInfo.Material->GetDiffuseColor();
 			Constants.UseVertexColor = 0;
-			Constants.HasTexture = 1;
+
+			const UTexture2D* DiffuseTexture = renderInfo.Material->GetDiffuseTexture();
+			Constants.HasTexture = DiffuseTexture ? 1 : 0;
 
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
 			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
-
-			mMeshPipeline->SetShaderResource(0, renderInfo.Texture->GetSRV());
-			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
-
+			if (DiffuseTexture) {
+				mMeshPipeline->SetShaderResource(0, DiffuseTexture->GetSRV());
+				mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+			}
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, Section.StartIndex);
 		}
 		else
