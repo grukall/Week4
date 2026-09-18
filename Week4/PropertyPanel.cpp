@@ -119,7 +119,6 @@ namespace
 		case EPropertyType::Vector:
 		{
 			FVector* Value = static_cast<FVector*>(ValuePtr);
-			// 만들어두신 고급 컨트롤러를 사용하도록 변경! (레이블 폭은 120.0f로 맞춤)
 			DrawVector3Controller(Property.Name, *Value, 0.0f, 120.0f);
 			break;
 		}
@@ -146,23 +145,18 @@ namespace
 			break;
 		}
 
-		// --- 새로 추가된 타입들 ---
-
 		case EPropertyType::WString:
 		{
 			std::wstring* Value = static_cast<std::wstring*>(ValuePtr);
 
-			// 1. wstring -> char (ImGui 표시용 변환)
 			char Buffer[256] = {};
 			size_t convertedChars = 0;
 			wcstombs_s(&convertedChars, Buffer, sizeof(Buffer), Value->c_str(), _TRUNCATE);
 
 			if (CustomFont) ImGui::PushFont(CustomFont);
 
-			// 2. ImGui 입력 처리
 			if (ImGui::InputText(Label.c_str(), Buffer, sizeof(Buffer)))
 			{
-				// 3. char -> wstring (실제 데이터 갱신용 변환)
 				wchar_t wBuffer[256] = {};
 				mbstowcs_s(&convertedChars, wBuffer, sizeof(wBuffer), Buffer, _TRUNCATE);
 				*Value = std::wstring(wBuffer);

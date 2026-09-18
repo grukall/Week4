@@ -18,6 +18,15 @@ struct TPropertyTypeTraits<TSharedPtr<T>>
     static constexpr EPropertyType Value = EPropertyType::Asset;
 };
 
+class UAset;
+template <typename T>
+struct TPropertyTypeTraits<T*>
+{
+    static_assert(std::is_base_of_v<UAset, T>,
+        "Raw pointer properties are only supported for UAsset-derived types.");
+    static constexpr EPropertyType Value = EPropertyType::Asset;
+};
+
 #define DEFINE_PROPERTY_TYPE(CppType, EnumValue)            \
     template <> struct TPropertyTypeTraits<CppType>         \
     {                                                       \
