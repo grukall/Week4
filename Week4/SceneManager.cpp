@@ -621,6 +621,95 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 
 	mPropertyPanel->OnRender();
 
+	if (mSelectedActor)
+	{
+		UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
+		for (UActorComponent* component : mSelectedActor->GetComponents())
+		{
+			if (component->IsA<UAtlasAnimationComponent>())
+			{
+				atlasAnimationComponent = component->Cast<UAtlasAnimationComponent>();
+				break;
+			}
+		}
+
+		if (atlasAnimationComponent)
+		{
+			// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
+			TArray<FString> spriteAtlasAssetNames;
+			FAssetManager* assetManager = guiReference.AssetManager;
+			assetManager->ForEachMetaInfo([&spriteAtlasAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
+				UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
+				if (!asset || !asset->IsA<USpriteAtlas>())
+				{
+					return;
+				}
+				spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
+				});
+
+			USpriteAtlas* currentAtlas = atlasAnimationComponent->GetAtlas();
+			FString currentAtlasName = currentAtlas ? currentAtlas->GetAssetName().ToString() : "None";
+
+			if (ImGui::BeginCombo("Sprite Atlas", currentAtlasName.CStr()))
+			{
+				for (const FString& assetName : spriteAtlasAssetNames)
+				{
+					bool isSelected = (currentAtlasName == assetName);
+					if (ImGui::Selectable(assetName.CStr(), isSelected))
+					{
+						atlasAnimationComponent->SetAtlas(guiReference.AssetManager->GetAssetAs<USpriteAtlas>(FName(assetName), true));
+					}
+					if (isSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+		}
+
+		// 메쉬 컴포넌트 처리
+		USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
+
+		if (rootComponent && rootComponent->IsA<UMeshComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
+		{
+			UMeshComponent* primitiveComponent = rootComponent->Cast<UMeshComponent>();
+
+			// 아틀라스 파생이 아닌 순수 UTexture2D만 고른다.
+			TArray<FString> textureAssetNames;
+			FAssetManager* assetManager = guiReference.AssetManager;
+			assetManager->ForEachMetaInfo([&textureAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
+				UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
+				if (!asset || asset->GetRuntimeClass() != UTexture2D::GetClass())
+				{
+					return;
+				}
+				textureAssetNames.Add(metaInfo.AssetName.ToString());
+				});
+
+			UTexture2D* currentTexture = primitiveComponent->GetTexture();
+			FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
+			if (ImGui::BeginCombo("Texture", currentTextureName.CStr()))
+			{
+				for (const FString& assetName : textureAssetNames)
+				{
+					bool isSelected = (currentTextureName == assetName);
+					if (ImGui::Selectable(assetName.CStr(), isSelected))
+					{
+						UTexture2D* textureAsset = guiReference.AssetManager->GetAssetAs<UTexture2D>(FName(assetName), true);
+						primitiveComponent->SetTexture(textureAsset);
+					}
+					if (isSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+		}
+	}
+	
+
 #pragma region Transform
 	//if (mSelectedActor)
 	//{
@@ -723,15 +812,6 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	//	}
 
 	//	///////////////////////////////////////////////////////////////////////////////////////AtlasAnimation
-			UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
-			for (UActorComponent* component : mSelectedActor->GetComponents())
-			{
-				if (component->IsA<UAtlasAnimationComponent>())
-				{
-					atlasAnimationComponent = component->Cast<UAtlasAnimationComponent>();
-					break;
-				}
-			}
 
 			//if (atlasAnimationComponent)
 			//{
@@ -746,37 +826,6 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 			//		spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
 			//		});
 			//}
-
-			// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
-			TArray<FString> spriteAtlasAssetNames;
-			FAssetManager* assetManager = guiReference.AssetManager;
-			assetManager->ForEachMetaInfo([&spriteAtlasAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
-				UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
-				if (!asset || !asset->IsA<USpriteAtlas>())
-				{
-					return;
-				}
-				spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
-			});
-
-			USpriteAtlas* currentAtlas = atlasAnimationComponent->GetAtlas();
-			FString currentAtlasName = currentAtlas ? currentAtlas->GetAssetName().ToString() : "None";
-			if (ImGui::BeginCombo("Sprite Atlas", currentAtlasName.CStr()))
-			{
-				for (const FString& assetName : spriteAtlasAssetNames)
-				{
-					bool isSelected = (currentAtlasName == assetName);
-					if (ImGui::Selectable(assetName.CStr(), isSelected))
-					{
-						atlasAnimationComponent->SetAtlas(guiReference.AssetManager->GetAssetAs<USpriteAtlas>(FName(assetName), true));
-					}
-					if (isSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				}
-				ImGui::EndCombo();
-			}
 
 	//		ImGui::Text(atlasAnimationComponent->IsPlaying() ? "State: Playing" : "State: Stopped");
 
@@ -794,44 +843,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	//	}
 
 	//	///////////////////////////////////////////////////////////////////////////////////////
-		USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
-
-		if (rootComponent && rootComponent->IsA<UMeshComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
-		{
-			UMeshComponent* primitiveComponent = rootComponent->Cast<UMeshComponent>();
-
-			// 아틀라스 파생이 아닌 순수 UTexture2D만 고른다.
-			TArray<FString> textureAssetNames;
-			FAssetManager* assetManager = guiReference.AssetManager;
-			assetManager->ForEachMetaInfo([&textureAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
-				UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
-				if (!asset || asset->GetRuntimeClass() != UTexture2D::GetClass())
-				{
-					return;
-				}
-				textureAssetNames.Add(metaInfo.AssetName.ToString());
-				});
-
-			UTexture2D* currentTexture = primitiveComponent->GetTexture();
-			FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
-			if (ImGui::BeginCombo("Texture", currentTextureName.CStr()))
-			{
-				for (const FString& assetName : textureAssetNames)
-				{
-					bool isSelected = (currentTextureName == assetName);
-					if (ImGui::Selectable(assetName.CStr(), isSelected))
-					{
-						UTexture2D* textureAsset = guiReference.AssetManager->GetAssetAs<UTexture2D>(FName(assetName), true);
-						primitiveComponent->SetTexture(textureAsset);
-					}
-					if (isSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				}
-				ImGui::EndCombo();
-			}
-		}
+#pragma endregion Transform
 
 	ImGui::End();
 }

@@ -15,7 +15,7 @@ class UText3DComponent : public USceneComponent
 {
 	REFLECT_CLASS(UText3DComponent, USceneComponent)
 	REFLECT_START(className)
-		PROPERTY(mFontAtlasAsset)
+		//PROPERTY(mFontAtlasAsset)
 		PROPERTY(mColor)
 		PROPERTY(mbBillboard)
 		PROPERTY(mEnableDepthTest)
@@ -206,7 +206,7 @@ private:
 	FCamera* mBillboardCamera = nullptr;
 	bool mbBillboard = false;
 	std::wstring mText;
-	UFontAtlas* mFontAtlasAsset = nullptr;
+	UFontAtlas* mFontAtlasAsset = nullptr;  // @error
 	FVector4 mColor = FVector4(1, 1, 1, 1);
 	bool mEnableDepthTest = true;
 	bool mEnableDepthWrite = true;
