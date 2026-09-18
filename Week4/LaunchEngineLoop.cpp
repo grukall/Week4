@@ -136,6 +136,7 @@ void FEngineLoop::InitAssetManager()
 	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(PlaneAsset);
 
+
 	FTexture2DAssetLoader* TextureLoader = new FTexture2DAssetLoader(*renderer);
 	FFontAssetLoader* FontLoader = new FFontAssetLoader(*mFontManager);
 

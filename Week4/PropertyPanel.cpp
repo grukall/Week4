@@ -235,8 +235,8 @@ bool FPropertyPanel::Init()
 	float fontSize = 15.0f;
 	const ImWchar* koreanRanges = io.Fonts->GetGlyphRangesKorean();
 
-	CustomFont = io.Fonts->AddFontFromFileTTF(fontPath, fontSize, nullptr, koreanRanges);
-	assert(CustomFont != nullptr);
+	//CustomFont = io.Fonts->AddFontFromFileTTF(fontPath, fontSize, nullptr, koreanRanges);
+	//assert(CustomFont != nullptr);
 
 	return true;
 }

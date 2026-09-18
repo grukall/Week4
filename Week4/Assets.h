@@ -59,7 +59,7 @@ public:
 	inline const TArray<FVertexSimple>& GetVertices() const { return Vertices; }
 	inline const TArray<uint32>& GetIndices() const { return Indices; }
 	inline const TArray<FStaticMeshSection>& GetSections() const { return Sections; }
-
+	TArray<FStaticMeshSection>& GetSection(){ return Sections; }
 	// UMaterial이 들어오기 전까지 쓰는 임시 표면 정보.
 	void SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial);
 

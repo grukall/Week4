@@ -106,6 +106,17 @@ void FGraphicsManager::Render()
 		Material0->SetDiffuseColor(FVector4(1.f, 0.f, 0.f, 1.f));
 		Material0->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("TestTexture"), true));
 		Asset->SetMaterial(0, Material0);
+		Asset->GetSection()[0].IndexCount = 1200;
+		UMaterial* Material1 = FObjectFactory::ConstructObject<UMaterial>();
+		Material1->SetDiffuseColor(FVector4(0.f, 0.f, 1.f, 1.f));
+		Material1->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("SpotLightIcon"), true));
+		Asset->SetMaterial(1, Material1);
+		FStaticMeshSection Section1;
+		Section1.StartIndex = 1200;
+		Section1.IndexCount = 1200;
+		Section1.MaterialSlotIndex = 1;
+		if(Asset->GetSectionCount() < 2)
+			Asset->AddSection(Section1);
 		if (!Asset)
 		{
 			continue;

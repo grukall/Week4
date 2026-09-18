@@ -193,7 +193,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"GizmoArrow",
 		"Circle",
 		"SpotLight",
-		"Explosion"
+		"Explosion",
 	};
 
 	const char* ActorMeshNames[] = {
