@@ -708,7 +708,6 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 			}
 		}
 	}
-	//		ImGui::Text(atlasAnimationComponent->IsPlaying() ? "State: Playing" : "State: Stopped");
 
 	ImGui::End();
 }
