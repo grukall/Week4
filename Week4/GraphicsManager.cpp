@@ -102,9 +102,11 @@ void FGraphicsManager::Render()
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
 		UStaticMesh* Asset = renderInfo.StaticMesh;
-		UMaterial* Material0 = FObjectFactory::ConstructObject<UMaterial>();
+		/*UMaterial* Material0 = FObjectFactory::ConstructObject<UMaterial>();
 		Material0->SetDiffuseColor(FVector4(1.f, 0.f, 0.f, 1.f));
 		Material0->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("TestTexture"), true));
+		Material0->SetUVSpeed(0.01f);
+		Material0->UpdateUVScroll();
 		Asset->SetMaterial(0, Material0);
 		Asset->GetSection()[0].IndexCount = 1200;
 		UMaterial* Material1 = FObjectFactory::ConstructObject<UMaterial>();
@@ -116,7 +118,7 @@ void FGraphicsManager::Render()
 		Section1.IndexCount = 1200;
 		Section1.MaterialSlotIndex = 1;
 		if(Asset->GetSectionCount() < 2)
-			Asset->AddSection(Section1);
+			Asset->AddSection(Section1);*/
 		if (!Asset)
 		{
 			continue;
@@ -142,12 +144,13 @@ void FGraphicsManager::Render()
 
 			const UTexture2D* DiffuseTexture = renderInfo.Material->GetDiffuseTexture();
 			Constants.HasTexture = DiffuseTexture ? 1 : 0;
-
+			renderInfo.Material->UpdateUVScroll();
+			Constants.UVScroll = renderInfo.Material->GetUVScroll();
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
 			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
 			if (DiffuseTexture) {
 				mMeshPipeline->SetShaderResource(0, DiffuseTexture->GetSRV());
-				mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+				mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
 			}
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, Section.StartIndex);
 		}

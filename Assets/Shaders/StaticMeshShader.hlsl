@@ -5,12 +5,18 @@ cbuffer modelConstants : register(b0) // FConstants
 
     int UseVertexColor;
     int HasTexture;
-    int padding[2];
+    float2 UVScroll;
 }
 
 cbuffer viewConstants : register(b1) // FMatrix
 {
     row_major matrix View;
+}
+
+cbuffer globalConstants : register(b2)
+{
+    float Time;
+    float3 GlobalPadding;
 }
 
 struct VS_INPUT
@@ -63,9 +69,10 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
 
     if (HasTexture != 0)
     {
+        float2 scrolledUV = input.uv + UVScroll;
         final_color *= main_texture.Sample(
 			default_sampler,
-			input.uv
+			scrolledUV
 		);
     }
 

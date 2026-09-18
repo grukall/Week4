@@ -22,7 +22,7 @@ struct FConstants
 	FVector4 Color;
 	int32 UseVertexColor;
 	int32 HasTexture;
-	int32 Padding[2];
+	FVector2 UVScroll;
 };
 
 struct FLine2DConstants

@@ -42,8 +42,19 @@ public:
 		return DiffuseTexture != nullptr;
 	}
 
+	const FVector2 GetUVScroll() const { return UVScroll; }
+
+	void UpdateUVScroll() {
+		UVScroll.X += UVSpeed.X;
+		UVScroll.Y += UVSpeed.Y;
+	}
+
+	void SetUVSpeed(FVector2 inSpeed) { UVSpeed = inSpeed; }
 private:
 	FVector4 DiffuseColor;
 	FString DiffuseTexturePath;
 	UTexture2D* DiffuseTexture;
+	FVector2 UVScroll{ 0,0 };
+	FVector2 UVSpeed{ 0.01f, 0.01f };
+
 };
