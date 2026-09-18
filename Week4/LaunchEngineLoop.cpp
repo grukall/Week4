@@ -77,7 +77,19 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	console.Init(clientWidth);
 
 	FrameTimer = new FFrameTimer(120);
-	ViewportClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer()); // Todo: cChange to class
+
+	ViewportClients.Empty();
+	for (int i = 0; i < 4; ++i)
+	{
+		FEditorViewportClient* NewClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer());
+
+		// @TODO : 해상도 관련 문제
+		NewClient->mRenderTarget = mGraphicsManager->GetRenderer()->CreateRenderTarget2D(800, 600, DXGI_FORMAT_R8G8B8A8_UNORM);
+		NewClient->mDepthStencil = mGraphicsManager->GetRenderer()->CreateDepthStencil(800, 600);
+
+		ViewportClients.Add(NewClient);
+	}
+	
 
 	const FVector4 NearTint(1.0f, 0.65f, 0.15f, 0.85f); // 주황 = 가까운 쪽
 	const FVector4 FarTint(0.25f, 0.55f, 1.0f, 0.85f); // 파랑 = 먼 쪽
@@ -165,92 +177,78 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	ConsoleWindow& console = ConsoleWindow::Get();
 
 	FRenderCollector& RenderCollector = mGraphicsManager->GetRenderCollector();
-	RenderCollector.Camera = &ViewportClient->GetCamera();
 
-	//Input Threads
+	// 피킹/컬링 등의 기준은 일단 0번 뷰포트의 카메라로 고정
+	RenderCollector.Camera = &ViewportClients[0]->GetCamera();
+
+	// Input Threads
 	{
 		WindowApplication.ProcessDeferredEvents();
 
 		mGraphicsManager->UpdateProjectionTransition(deltaTime);
-		ViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+
+		for (int i = 0; i < 4; ++i)
+		{
+			ViewportClients[i]->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+		}
 	}
 
-	//Physics Threads
-	{
-
-	}
-
-	//Game Threads
+	// Physics / Game Threads (씬 로직은 화면 갯수와 무관하게 1번만)
 	{
 		mSceneManager->Tick(deltaTime);
 		mSceneManager->Update(deltaTime, RenderCollector);
 	}
 
-	//mouse picking
+	// Mouse Picking & Gizmo (0번 뷰포트 기준으로 고정)
 	{
 		const FInputState& Input = WindowApplication.Input;
 
-		// 뷰포트가 ImGui 창이 되면서 그 위에서는 io.WantCaptureMouse 가 항상 true 다.
-		// 그대로 두면 씬을 클릭해도 선택이 되지 않는다. 카메라/기즈모와 같은 기준을 쓴다.
-		AActor* HitActor = ViewportClient->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
-		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) && !ViewportClient->mGizmo.IsDragging() && !ViewportClient->mGizmo.IsMouseOverHandle())
+		// 모든 ViewportClient를 ViewportClients[0]으로 변경
+		AActor* HitActor = ViewportClients[0]->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
+		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) && !ViewportClients[0]->mGizmo.IsDragging() && !ViewportClients[0]->mGizmo.IsMouseOverHandle())
 		{
-			if (HitActor)
-			{
-				mSceneManager->SetSelectedActor(HitActor);
-			}
-			else
-			{
-				mSceneManager->ResetSelectedActor();
-			}
+			if (HitActor) mSceneManager->SetSelectedActor(HitActor);
+			else          mSceneManager->ResetSelectedActor();
 		}
 
 		AActor* SelectedActor = mSceneManager->GetSelectedActor();
 		if (SelectedActor)
 		{
 			FTransform Transform = SelectedActor->GetTransform();
-
 			for (UActorComponent* Component : SelectedActor->GetComponents())
 			{
 				UStaticMeshComponent* PrimitiveComponent = Component->Cast<UStaticMeshComponent>();
 				if (PrimitiveComponent)
 				{
-					// 선택된 액터의 AABB를 화면에 표시
 					FMatrix WorldMatrix = Transform.MakeMatrix();
-
 					UStaticMesh* MeshAsset = PrimitiveComponent->GetStaticMesh();
 					if (!MeshAsset) continue;
 
 					const FAABB& AABB = MeshAsset->GetLocalBoundingBox().ToWorld(WorldMatrix);
-
 					AABB.ForEachCornerLines([&RenderCollector](const FVector& Start, const FVector& End)
-					{
-						FVector4 WorldStart = FVector4(Start, 1.f);
-						FVector4 WorldEnd = FVector4(End, 1.f);
+						{
+							FVector4 WorldStart = FVector4(Start, 1.f);
+							FVector4 WorldEnd = FVector4(End, 1.f);
 
-						FRenderLineInfo LineInfo;
-						LineInfo.Start = WorldStart.ToVec3();
-						LineInfo.End = WorldEnd.ToVec3();
-						LineInfo.Color = FVector4(1.f, 0.f, 0.f, 1.f); // 빨간색
-						LineInfo.Thickness = 5.0f;
+							FRenderLineInfo LineInfo;
+							LineInfo.Start = WorldStart.ToVec3();
+							LineInfo.End = WorldEnd.ToVec3();
+							LineInfo.Color = FVector4(1.f, 0.f, 0.f, 1.f);
+							LineInfo.Thickness = 5.0f;
 
-						RenderCollector.LineInfos.Add(LineInfo);
-					});
+							RenderCollector.LineInfos.Add(LineInfo);
+						});
 				}
 
-				// 선택된 액터의 컴포넌트 시각화
 				FComponentVisualizer* Visualizer = mComponentVisualizerManager->FindVisualizer(Component->GetRuntimeClass());
-				if (Visualizer)
-				{
-					Visualizer->VisualizeComponent(Component, RenderCollector);
-				}
+				if (Visualizer) Visualizer->VisualizeComponent(Component, RenderCollector);
 			}
 		}
 
-		ViewportClient->mGizmo.Update(mSceneManager, mGraphicsManager->GetViewProjectionMatrix());
+		ViewportClients[0]->mGizmo.Update(mSceneManager, mGraphicsManager->GetViewProjectionMatrix());
 	}
 
-	//Render Threads
+	// Render Threads
 	{
 		if (WindowApplication.bPendingResize)
 		{
@@ -259,24 +257,46 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		}
 
 		mGraphicsManager->Update(deltaTime);
-		mGraphicsManager->Prepare(&ViewportClient->mCamera, mSceneManager->GetViewportWidth(), mSceneManager->GetViewportHeight());
-		mGraphicsManager->FlushLines();
-		mGraphicsManager->Render();
-		
-		//강조
-		if (mSceneManager->GetSelectedActor())
+
+		// 4번의 드로우콜
+		for (int i = 0; i < 4; ++i)
 		{
-			FRenderInfo clickedRenderInfo;
-			mSceneManager->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
-			mGraphicsManager->RenderHighLight(clickedRenderInfo);
+			FEditorViewportClient* CurrentClient = ViewportClients[i];
+
+			// @TODO : 해상도 변경 등
+			// CurrentClient->ResizeRenderTargetIfNeeded(mGraphicsManager);
+
+			// 현재 클라이언트 전용 렌더 타겟(RT) 바인딩 및 Clear
+			mGraphicsManager->GetRenderer()->BindRenderTarget(
+				CurrentClient->mRenderTarget,
+				CurrentClient->mDepthStencil,
+				true
+			);
+
+			// TODO : 각 뷰포트의 실제 분할된 해상도 크기를 가져와야 함 (현재는 전체 크기 고정)
+			float currentWidth = mSceneManager->GetViewportWidth();   // 추후 스플리터 영역 크기로 변경
+			float currentHeight = mSceneManager->GetViewportHeight(); // 추후 스플리터 영역 크기로 변경
+
+			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
+			mGraphicsManager->FlushLines();
+			mGraphicsManager->Render();
+
+			if (mSceneManager->GetSelectedActor())
+			{
+				FRenderInfo clickedRenderInfo;
+				mSceneManager->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
+				mGraphicsManager->RenderHighLight(clickedRenderInfo);
+			}
+
+			// 기즈모 렌더링 (4개 화면 모두에서 기즈모가 보이도록 CurrentClient 기준 렌더링)
+			// mGraphicsManager->GetViewProjectionMatrix() 도 현재 Prepare된 행렬을 반환해야 정상 출력됨
+			CurrentClient->mGizmo.Render(mSceneManager, CurrentClient->mCamera.Transform.Location, mGraphicsManager->GetViewProjectionMatrix());
 		}
+		mGraphicsManager->GetRenderCollector().Clear();
 
-		ViewportClient->mGizmo.Render(mSceneManager, ViewportClient->mCamera.Transform.Location, mGraphicsManager->GetViewProjectionMatrix());
-
-		//ImGui
+		// ImGui
 		{
-			//ImGui Input
-			mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, ViewportClient, mFileManager, mAssetManager });
+			mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, &ViewportClients, ViewportClients[0], mFileManager, mAssetManager });
 
 			mGraphicsManager->GetRenderer()->BindFrameBuffer();
 
@@ -288,13 +308,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	}
 
 	FrameTimer->EndFrame();
-
 	GInTick = false;
 }
 
 void FEngineLoop::End()
 {
-	const std::string Value = std::format("{:.6f}", ViewportClient->GetCamera().Sensitivity);
+	const std::string Value = std::format("{:.6f}", ViewportClients[0]->GetCamera().Sensitivity);
 
 	if (!WritePrivateProfileStringA("Camera", "Sensitivity", Value.c_str(), ".\\editor.ini"))
 	{
@@ -314,7 +333,11 @@ void FEngineLoop::End()
 	ImGui::DestroyContext();
 
 	delete mComponentVisualizerManager;
-	delete ViewportClient;
+	for (FEditorViewportClient* Client : ViewportClients)
+	{
+		delete Client;
+	}
+	ViewportClients.Empty();
 	delete FrameTimer;
 	delete mSceneManager;
 	delete mFileManager;

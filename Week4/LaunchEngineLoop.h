@@ -37,7 +37,7 @@ private:
 	// Todo: Make as pointer
 	FFrameTimer* FrameTimer;
 	bool GInTick = false;
-	FEditorViewportClient* ViewportClient;
+	TArray<FEditorViewportClient*> ViewportClients;
 
 	FGraphicsManager* mGraphicsManager;
 	FSceneManager* mSceneManager;

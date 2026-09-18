@@ -269,14 +269,7 @@ void URenderer::SwapBuffer()
 
 void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
 {
-	DeviceContext->ClearRenderTargetView(FrameBufferRTV, ClearColor);
-	DeviceContext->ClearDepthStencilView(DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-
 	DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	DeviceContext->RSSetViewports(1, &ViewportInfo);
-
-	DeviceContext->OMSetRenderTargets(1, &FrameBufferRTV, DepthStencilView);
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 
 	FCameraConstants CameraConstants;

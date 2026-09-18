@@ -12,7 +12,7 @@
 #include "ShowFlags.h"
 
 class FAssetManager;
-
+struct FRenderTarget2D;
 struct FBuffer
 {
 	ID3D11Buffer* Buffer;

@@ -23,7 +23,8 @@ struct FGuiReference
 {
 	const FFrameTimer& FrameTimer;
 	FGraphicsManager* GraphicsManager;
-	FEditorViewportClient* ViewportClient;
+	const TArray<FEditorViewportClient*>* ViewportClients;
+	FEditorViewportClient* ActiveViewport;
 	const FFileManager* FileManager;
 	FAssetManager* AssetManager;
 };

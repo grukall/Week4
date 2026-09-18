@@ -139,22 +139,6 @@ public:
     void OnMouseDown(const FPoint& MousePos)
     {
         DragMode = HitTestSplitter(MousePos);
-
-        switch (DragMode)
-        {
-        case ESplitterDragMode::CenterCross:
-            UE_LOG("Hit: Center Cross (정중앙 교차점 클릭)");
-            break;
-        case ESplitterDragMode::VerticalLine:
-            UE_LOG("Hit: Vertical Line (세로선 클릭 - 좌우 드래그 가능)");
-            break;
-        case ESplitterDragMode::HorizontalLine:
-            UE_LOG("Hit: Horizontal Line (가로선 클릭 - 상하 드래그 가능)");
-            break;
-        case ESplitterDragMode::None:
-            UE_LOG("Hit: None (선 밖의 영역 클릭)"); 
-            break;
-        }
     }
 
     // 마우스 드래그 중 (비율 갱신 및 재렌더링)

@@ -167,36 +167,42 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 				mViewportWidth = size.x;
 				mViewportHeight = size.y;
 
-				// 투명 버튼으로 전체 뷰포트 영역의 마우스 입력(Hover/Click)을 확보
-				// (이걸 하지 않으면 작아진 TopLeft 이미지 밖에서는 드래그가 먹히지 않음)
 				ImGui::InvisibleButton("ViewportArea", size);
 				mbViewportHovered = ImGui::IsItemHovered();
 
-				// 스플리터 리사이즈 및 렌더링 로직
 				if (mRootWindow != nullptr)
 				{
-					// 전체 창 크기를 바탕으로 내부 분할기 영역 재계산
-					mRootWindow->Resize({ 0.0f, 0.0f, mViewportWidth, mViewportHeight });
-
+					mRootWindow->Resize({ 0.0f, 0.0f, size.x, size.y });
 					SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mRootWindow);
+
 					if (QuadSplitter != nullptr)
 					{
-						// ==============================================================
-						// 좌상단(TopLeft) 영역에만 렌더 타겟(SRV) 그리기
-						if (QuadSplitter->TopLeft)
-						{
-							// 스플리터가 계산한 TopLeft의 Rect 가져오기
-							FRect tlRect = QuadSplitter->TopLeft->Rect;
-							ImVec2 tlSize(tlRect.GetWidth(), tlRect.GetHeight());
+						// 4개의 화면 렌더링
+						const TArray<FEditorViewportClient*>& Clients = *guiReference.ViewportClients;
 
-							// ImGui 그리기 커서를 TopLeft 시작 위치로 이동
-							ImGui::SetCursorPos(ImVec2(startCursorPos.x + tlRect.Left, startCursorPos.y + tlRect.Top));
+						// 람다 함수 하나 만들어두면 그리기 편합니다.
+						auto DrawViewport = [&](SWindow* Area, int ClientIndex) {
+							if (Area && Clients[ClientIndex]->mRenderTarget)
+							{
+								FRect rect = Area->Rect;
 
-							// 해당 크기만큼 씬 텍스처 렌더링
-							const TSharedPtr<FRenderTarget2D>& sceneRenderTarget = guiReference.GraphicsManager->GetSceneRenderTarget();
-							ImGui::Image((ImTextureID)(intptr_t)sceneRenderTarget->SRV.Get(), tlSize);
-						}
-						// ==============================================================
+								// 1. 해당 뷰포트 클라이언트에게 이번 프레임의 해상도 통보 (다음 프레임에 맞춰서 렌더타겟 재생성됨)
+								//Clients[ClientIndex]->SetTargetSize(rect.GetWidth(), rect.GetHeight());
+
+								// 2. ImGui 그리기 위치를 스플리터 영역의 시작점(Left, Top)으로 이동
+								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + rect.Top));
+
+								// 3. 해당 클라이언트의 SRV 텍스처를 영역 크기만큼 그림
+								ImTextureID srv = (ImTextureID)(intptr_t)Clients[ClientIndex]->mRenderTarget->SRV.Get();
+								ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
+							}
+						};
+
+						// 4개의 구역에 각각 0, 1, 2, 3번 클라이언트의 화면을 출력
+						DrawViewport(QuadSplitter->TopLeft, 0);
+						DrawViewport(QuadSplitter->TopRight, 1);
+						DrawViewport(QuadSplitter->BottomLeft, 2);
+						DrawViewport(QuadSplitter->BottomRight, 3);
 
 						// 마우스 드래그 로직
 						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
@@ -324,7 +330,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 				AnimComponent->SetRelativeLocation(FVector(0, 0, 0));
 				AnimComponent->SetRelativeRotation(FRotator(0, 0, 0));
 				AnimComponent->SetRelativeScale3D(FVector(1, 1, 1));
-				AnimComponent->SetBillboardCamera(guiReference.ViewportClient->GetCamera());
+				AnimComponent->SetBillboardCamera(guiReference.ActiveViewport->GetCamera());
 				AnimComponent->SetBillboard(true);
 				AnimComponent->SetDepthState(true, false);
 				AnimComponent->Play();
@@ -342,7 +348,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 				UTexture2D* SpotLightTexture = FAssetManager::Get().GetAssetAs<UTexture2D>(FName("SpotLightIcon"), true);
 
 				UPlaneComponent* PlaneComponent = FObjectFactory::ConstructObject<UPlaneComponent>(FVector(0, 0, 0), FRotator(0, 0, 0), FVector(1, 1, 1));
-				PlaneComponent->SetBillboardCamera(guiReference.ViewportClient->GetCamera());
+				PlaneComponent->SetBillboardCamera(guiReference.ActiveViewport->GetCamera());
 				PlaneComponent->SetBillboard(true);
 				PlaneComponent->SetTexture(SpotLightTexture);
 				PlaneComponent->SetBlendState(ERenderBlendMode::Transparent);
@@ -362,7 +368,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			if (NewActor)
 			{
 				UText3DComponent* Text3DComponent = FObjectFactory::ConstructObject<UText3DComponent>(FVector(0, 0, 1), FRotator(0, 0, 0), FVector(1, 1, 1));
-				Text3DComponent->SetBillboardCamera(guiReference.ViewportClient->GetCamera());
+				Text3DComponent->SetBillboardCamera(guiReference.ActiveViewport->GetCamera());
 				Text3DComponent->SetBillboard(true);
 				Text3DComponent->SetText(Utf2Wide(std::format("UUID: {}", NewActor->UUID)));
 				Text3DComponent->SetFontAtlasAsset(FAssetManager::Get().GetAssetAs<UFontAtlas>(FName("TestFontAtlas")));
@@ -393,7 +399,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 	if (ImGui::Button("New scene"))
 	{
-		guiReference.ViewportClient->Reset();
+		guiReference.ActiveViewport->Reset();
 		NewScene();
 	}
 
@@ -448,11 +454,11 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 					*guiReference.FileManager);
 
 				// 파일 로드가 실행된 뒤에만 카메라를 초기화한다.
-				guiReference.ViewportClient->Reset();
+				guiReference.ActiveViewport->Reset();
 
 				// 여기부터 런타임 카메라 재연결
 				FCamera& Camera =
-					guiReference.ViewportClient->GetCamera();
+					guiReference.ActiveViewport->GetCamera();
 
 				for (AActor* Actor : mCurrentWorld->GetActors())
 				{
@@ -512,7 +518,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	/* Camera Control */
 	ImGui::SeparatorText("Camera Control");
 
-	FCamera& camera = guiReference.ViewportClient->GetCamera();
+	FCamera& camera = guiReference.ActiveViewport->GetCamera();
 	URenderer* renderer = guiReference.GraphicsManager->GetRenderer();
 
 	const char* viewModeNames[] = { "Lit", "Unlit", "Wireframe" };
@@ -665,26 +671,26 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	// Display the current gizmo mode dropdown
 	const char* gizmoModeNames[] = { "Translate", "Rotate", "Scale" };
 
-	EGIZMO_TYPE currentGizmoType = guiReference.ViewportClient->mGizmo.GetOperation();
+	EGIZMO_TYPE currentGizmoType = guiReference.ActiveViewport->mGizmo.GetOperation();
 	int32 currentGizmoIndex = static_cast<int32>(currentGizmoType);
 	if (ImGui::Combo("Gizmo Mode", &currentGizmoIndex, gizmoModeNames, IM_ARRAYSIZE(gizmoModeNames)))
 	{
 		if (currentGizmoIndex == 0)
 		{
-			guiReference.ViewportClient->mGizmo.SetOperation(EGIZMO_TYPE::TRANSLATE);
+			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::TRANSLATE);
 		}
 		else if (currentGizmoIndex == 1)
 		{
-			guiReference.ViewportClient->mGizmo.SetOperation(EGIZMO_TYPE::ROTATE);
+			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::ROTATE);
 		}
 		else if (currentGizmoIndex == 2)
 		{
-			guiReference.ViewportClient->mGizmo.SetOperation(EGIZMO_TYPE::SCALE);
+			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::SCALE);
 		}
 	}
 	if (ImGui::Button("Next Gizmo Mode"))
 	{
-		guiReference.ViewportClient->mGizmo.SetOperation(static_cast<EGIZMO_TYPE>((currentGizmoIndex + 1) % 3));
+		guiReference.ActiveViewport->mGizmo.SetOperation(static_cast<EGIZMO_TYPE>((currentGizmoIndex + 1) % 3));
 	}
 
 

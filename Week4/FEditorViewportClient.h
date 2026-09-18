@@ -10,6 +10,8 @@
 class AActor;
 class FSceneManager;
 class URenderer;
+struct FRenderTarget2D;
+struct FDepthStencil;
 
 struct FEditorViewportClient
 {
@@ -30,6 +32,8 @@ public:
 
 	FCamera mCamera;
 	FGizmo mGizmo;
+	TSharedPtr<FRenderTarget2D> mRenderTarget;
+	TSharedPtr<FDepthStencil> mDepthStencil;
 
 private:
 	// 선택된 액터의 RenderInfo는 캐시하지 않는다. 필요할 때 ClickedActor->GetRenderInfos()로 그때그때 뽑는다.

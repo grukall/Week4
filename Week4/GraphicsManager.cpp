@@ -87,7 +87,9 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// NearCube(주황)가 앞에 남고, 꺼져 있으면 FarCube(파랑)가 그 위를 덮어쓴다.
 	//mRenderer->UpdateConstantViewProjection(viewProjection);
 
-	mRenderer->BindRenderTarget(mSceneRenderTarget, mSceneDepthStencil);
+	// The caller selects the render target.  Rebinding the legacy scene target here
+	// would make every viewport render into the same texture instead of the
+	// FEditorViewportClient render target that was bound for this draw.
 }
 
 void FGraphicsManager::GizmoPrepare()
@@ -95,6 +97,7 @@ void FGraphicsManager::GizmoPrepare()
 	mRenderer->RSUpdateState();
 
 }
+
 void FGraphicsManager::Render()
 {
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
@@ -162,7 +165,7 @@ void FGraphicsManager::Render()
 		mRenderer->RenderQuad(QuadInfo);
 	}
 
-	mRenderCollector.Clear();
+	//mRenderCollector.Clear();
 }
 
 void FGraphicsManager::DrawLine(const FVector& start, const FVector& end, const FVector4& color)

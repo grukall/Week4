@@ -398,7 +398,8 @@ public:
 
 	TSharedPtr<FRenderTarget2D> CreateRenderTarget2D(uint32 Width, uint32 Height, DXGI_FORMAT Format);
 	TSharedPtr<FDepthStencil> CreateDepthStencil(uint32 Width, uint32 Height);
-	
+	void ClearRenderTarget(ID3D11RenderTargetView* RTV, ID3D11DepthStencilView* DSV, const float ClearColor[4]);
+
 	//Update
 	void RSUpdateState();
 
