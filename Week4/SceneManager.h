@@ -8,6 +8,7 @@
 #include "enum.h"
 #include "FAssetManager.h"
 #include "PropertyPanel.h"
+#include "SWindow.h"
 
 inline constexpr std::string_view kSceneDataDir = "SceneData\\";
 inline constexpr std::string_view kSceneDataSuffix = ".Scene";
@@ -95,6 +96,8 @@ private:
 	FGuiInputField mGuiInputField;
 
 	FPropertyPanel* mPropertyPanel = nullptr;
+
+	SWindow* mRootWindow;
 
 	void updateControlPanelGUI(const FGuiReference& guiReference);
 

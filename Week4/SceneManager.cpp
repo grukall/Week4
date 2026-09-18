@@ -48,6 +48,23 @@ FSceneManager::FSceneManager()
 
 	mPropertyPanel = new FPropertyPanel();
 	mPropertyPanel->Init();
+
+	// 4개의 리프 노드(뷰포트) 생성
+	SWindow* VP_LeftTop = new SWindow();
+	SWindow* VP_LeftBottom = new SWindow();
+	SWindow* VP_RightTop = new SWindow();
+	SWindow* VP_RightBottom = new SWindow();
+
+	// 4분할 루트 스플리터 생성 및 조립
+	SSplitterQuad* RootSplitter = new SSplitterQuad();
+	RootSplitter->TopLeft = VP_LeftTop;
+	RootSplitter->BottomLeft = VP_LeftBottom;
+	RootSplitter->TopRight = VP_RightTop;
+	RootSplitter->BottomRight = VP_RightBottom;
+
+	// SceneManager의 루트 윈도우로 등록
+	mRootWindow = RootSplitter;
+
 	//mCurrentWorld = FObjectFactory::ConstructObject<UWorld>();
 
 	// Todo: Test code, move to other function
@@ -141,17 +158,79 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 			if (size.x > 0 && size.y > 0)
 			{
-				const TSharedPtr<FRenderTarget2D>& sceneRenderTarget = guiReference.GraphicsManager->GetSceneRenderTarget();
-				ImGui::Image((ImTextureID)(intptr_t)sceneRenderTarget->SRV.Get(), size);
-				mbViewportHovered = ImGui::IsItemHovered();
+				// 전체 영역의 기준점 캡처 (상대 좌표 및 절대 좌표)
+				ImVec2 startCursorPos = ImGui::GetCursorPos();
+				ImVec2 screenCursorPos = ImGui::GetCursorScreenPos();
 
-				const ImVec2 imageMin = ImGui::GetItemRectMin();
-				const ImVec2 imageMax = ImGui::GetItemRectMax();
-
-				mViewportX = imageMin.x;
-				mViewportY = imageMin.y;
+				mViewportX = screenCursorPos.x;
+				mViewportY = screenCursorPos.y;
 				mViewportWidth = size.x;
 				mViewportHeight = size.y;
+
+				// 투명 버튼으로 전체 뷰포트 영역의 마우스 입력(Hover/Click)을 확보
+				// (이걸 하지 않으면 작아진 TopLeft 이미지 밖에서는 드래그가 먹히지 않음)
+				ImGui::InvisibleButton("ViewportArea", size);
+				mbViewportHovered = ImGui::IsItemHovered();
+
+				// 스플리터 리사이즈 및 렌더링 로직
+				if (mRootWindow != nullptr)
+				{
+					// 전체 창 크기를 바탕으로 내부 분할기 영역 재계산
+					mRootWindow->Resize({ 0.0f, 0.0f, mViewportWidth, mViewportHeight });
+
+					SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mRootWindow);
+					if (QuadSplitter != nullptr)
+					{
+						// ==============================================================
+						// 좌상단(TopLeft) 영역에만 렌더 타겟(SRV) 그리기
+						if (QuadSplitter->TopLeft)
+						{
+							// 스플리터가 계산한 TopLeft의 Rect 가져오기
+							FRect tlRect = QuadSplitter->TopLeft->Rect;
+							ImVec2 tlSize(tlRect.GetWidth(), tlRect.GetHeight());
+
+							// ImGui 그리기 커서를 TopLeft 시작 위치로 이동
+							ImGui::SetCursorPos(ImVec2(startCursorPos.x + tlRect.Left, startCursorPos.y + tlRect.Top));
+
+							// 해당 크기만큼 씬 텍스처 렌더링
+							const TSharedPtr<FRenderTarget2D>& sceneRenderTarget = guiReference.GraphicsManager->GetSceneRenderTarget();
+							ImGui::Image((ImTextureID)(intptr_t)sceneRenderTarget->SRV.Get(), tlSize);
+						}
+						// ==============================================================
+
+						// 마우스 드래그 로직
+						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
+						const float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - mViewportY;
+						const FPoint LocalMousePos = { MouseXInViewport, MouseYInViewport };
+
+						if (mbViewportHovered && QuadSplitter->DragMode == ESplitterDragMode::None)
+						{
+							ESplitterDragMode HoverMode = QuadSplitter->HitTestSplitter(LocalMousePos);
+							if (HoverMode == ESplitterDragMode::VerticalLine)       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+							else if (HoverMode == ESplitterDragMode::HorizontalLine) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+							else if (HoverMode == ESplitterDragMode::CenterCross)    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+						}
+
+						if (mbViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+						{
+							QuadSplitter->OnMouseDown(LocalMousePos);
+						}
+
+						if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+						{
+							QuadSplitter->OnMouseMove(LocalMousePos);
+
+							if (QuadSplitter->DragMode == ESplitterDragMode::VerticalLine)       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+							else if (QuadSplitter->DragMode == ESplitterDragMode::HorizontalLine) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+							else if (QuadSplitter->DragMode == ESplitterDragMode::CenterCross)    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+						}
+
+						if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+						{
+							QuadSplitter->OnMouseUp();
+						}
+					}
+				}
 			}
 		}
 		ImGui::End();
