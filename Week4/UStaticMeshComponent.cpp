@@ -42,10 +42,9 @@ void UStaticMeshComponent::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMa
 
 UMaterial* UStaticMeshComponent::GetMaterial(uint32 MaterialSlotIndex) const
 {
-	UMaterial* OverrideMaterial = UMeshComponent::GetMaterial(MaterialSlotIndex);
 
-	if (OverrideMaterial) {
-		return OverrideMaterial;
+	if (OverrideMaterials.Num() > MaterialSlotIndex && OverrideMaterials[MaterialSlotIndex] != nullptr) {
+		return OverrideMaterials[MaterialSlotIndex];
 	}
 
 	if (!StaticMesh)	return nullptr;

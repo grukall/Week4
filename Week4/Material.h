@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Object.h"
+#include "UAsset.h"
 
 class UTexture2D;
-class UMaterial : public UObject {
-	REFLECT_CLASS(UMaterial, UObject)
+class UMaterial : public UAsset {
+	REFLECT_CLASS(UMaterial, UAsset);
 public:
-	UMaterial();
+	UMaterial() = default;
+	using UAsset::Initialize;
 	virtual ~UMaterial() = default;
 
 	virtual void SerializeClass(json::JSON& outJson) const override;
@@ -50,11 +51,12 @@ public:
 	}
 
 	void SetUVSpeed(FVector2 inSpeed) { UVSpeed = inSpeed; }
+	const FVector2 GetUVSpeed() const { return UVSpeed; }
 private:
-	FVector4 DiffuseColor;
-	FString DiffuseTexturePath;
-	UTexture2D* DiffuseTexture;
-	FVector2 UVScroll{ 0,0 };
-	FVector2 UVSpeed{ 0.01f, 0.01f };
+	FVector4 DiffuseColor{ 1.0f,1.0f,1.0f,1.0f };
+	FString DiffuseTexturePath{ "" };
+	UTexture2D* DiffuseTexture{ nullptr };
+	FVector2 UVScroll{ 0.0f,0.0f };
+	FVector2 UVSpeed{ 0.0f, 0.0f };
 
 };

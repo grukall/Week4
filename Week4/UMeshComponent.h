@@ -23,6 +23,8 @@ public:
 
 	void SetTexture(UTexture2D* InTexture);
 	UTexture2D* GetTexture() const;
+
+	UMaterial* GetOverrideMaterial(uint32 MaterialSlotIndex) const;
 protected:
 	TArray<UMaterial*> OverrideMaterials;
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UMeshComponent.h"
+#include "Material.h"
 
 class UStaticMesh;
 
@@ -38,7 +39,5 @@ public:
 protected:
 	UStaticMesh* StaticMesh = nullptr;
 	
-	TArray
-		
-		<UMaterial*> OverrideMaterials;
+	TArray<UMaterial*> OverrideMaterials;
 };

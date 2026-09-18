@@ -34,7 +34,7 @@ struct FClassInfo
 	template <typename T>
 	void AddProperty(const FString& InName, uint64 InOffset)
 	{
-		Properties.Add({ InName, GetPropertyType<T>(), InOffset, sizeof(T), GetPropertyClassInfo<T>() });
+		Properties.Add({ InName,GetPropertyType<T>(),InOffset,sizeof(T),GetPropertyClassInfo<T>(),GetPropertyElementType<T>(),GetPropertyElementClassInfo<T>() });
 	}
 
 private:

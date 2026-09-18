@@ -79,6 +79,11 @@ public:
 		return Sections.Num();
 	}
 
+	uint32 AddMaterial(UMaterial* InMaterial);
+	int32 FindMaterialSlot(UMaterial* InMaterial) const;
+
+	void SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial);
+
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
 	uint32 VertexCount = 0;

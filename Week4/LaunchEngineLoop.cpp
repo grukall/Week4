@@ -150,7 +150,7 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager->RegisterAsset(FName("ExplosionTexture"), TextureLoader, ExplosionTextureSource);
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
-	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas>(FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
+	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
 	mAssetManager->RegisterAsset(ExplosionSpriteAtlasAsset);
 
 	FFileAssetSource* FontAssetSource = new FFileAssetSource(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
@@ -159,7 +159,17 @@ void FEngineLoop::InitAssetManager()
 	UFont* TestFontAsset = mAssetManager->GetAssetAs<UFont>(FName("TestFont"), true);
 	UFontAtlas* FontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("TestFontAtlas"), *renderer, TestFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(FontAtlasAsset);
-}
+
+	UMaterial* TestMaterial1 = FObjectFactory::ConstructObject<UMaterial>(FName("TestMaterial1"));
+	TestMaterial1->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("TestTexture"), true));
+	mAssetManager->RegisterAsset(TestMaterial1);
+	UMaterial* TestMaterial2 = FObjectFactory::ConstructObject<UMaterial>(FName("TestMaterial2"));
+	TestMaterial2->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("SpotLightIcon"), true));
+	mAssetManager->RegisterAsset(TestMaterial2);
+	UMaterial* TestMaterial3 = FObjectFactory::ConstructObject<UMaterial>(FName("TestMaterial3"));
+	TestMaterial3->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("ExplosionTexture"), true));
+	mAssetManager->RegisterAsset(TestMaterial3);
+}       
 
 void FEngineLoop::Tick(bool bPumpMessages)
 {

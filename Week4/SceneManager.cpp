@@ -1005,6 +1005,24 @@ const TArray<FRenderInfo> FSceneManager::GetAxisRenderInfos()
 	return TArray<FRenderInfo>();
 }
 
+void FSceneManager::updateContentBrowserGUI(const FGuiReference& guiReference)
+{
+	ImGuiIO& io = ImGui::GetIO();
+
+	float controlPanelHeight = io.DisplaySize.y * CONTROL_PANEL_HEIGHT_RATIO;
+	float propertyHeight = io.DisplaySize.y * WINDOW_PROPERTY_HEIGHT_RATIO;
+
+	ImGui::SetNextWindowPos(ImVec2(0.0f, controlPanelHeight), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(mPanelWidth, propertyHeight), ImGuiCond_FirstUseEver);
+
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
+
+	ImGui::Begin("Jungle Content Browser", nullptr, flags);
+
+	
+	ImGui::End();
+}
+
 
 //
 //FSceneData FSceneManager::ReadSceneData(

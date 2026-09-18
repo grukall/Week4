@@ -5,6 +5,8 @@
 #include "UAsset.h"
 #include "UObjectIterator.h"
 #include "FLogManager.h"
+#include "Material.h"
+#include "UStaticMeshComponent.h"
 
 namespace
 {
@@ -213,7 +215,90 @@ namespace
 			}
 			break;
 		}
+		case EPropertyType::Array:
+		{
+			if (Property.ElementType != EPropertyType::Asset ||
+				Property.ElementClassInfo == nullptr)
+			{
+				ImGui::TextDisabled("(Unsupported array type)");
+				break;
+			}
 
+			// 현재 우리가 지원하는 배열은 TArray<UMaterial*>.
+			TArray<UMaterial*>* Materials =
+				static_cast<TArray<UMaterial*>*>(ValuePtr);
+
+			for (uint32 Index = 0; Index < Materials->Num(); ++Index)
+			{
+				ImGui::PushID(static_cast<int>(Index));
+
+				ImGui::Text("Slot %u", Index);
+				ImGui::SameLine(120.0f);
+				ImGui::SetNextItemWidth(-1.0f);
+
+				UMaterial* CurrentMaterial = (*Materials)[Index];
+
+				FString CurrentName =CurrentMaterial? CurrentMaterial->GetAssetName().ToString(): FString("None");
+
+				if (ImGui::BeginCombo("##Material",CurrentName.c_str()))
+				{
+					// None
+					if (ImGui::Selectable(
+						"None",
+						CurrentMaterial == nullptr))
+					{
+						(*Materials)[Index] = nullptr;
+					}
+
+					// Material Asset 목록
+					for (TObjectIterator<UAsset> It(Property.ElementClassInfo); It; ++It)
+					{
+						UAsset* Asset = *It;
+
+						if (!Asset)
+						{
+							continue;
+						}
+
+						UMaterial* Material = Asset->Cast<UMaterial>();
+
+						if (!Material)
+						{
+							continue;
+						}
+
+						const bool bSelected =
+							(Material == CurrentMaterial);
+
+						FString AssetName =
+							Material->GetAssetName().ToString();
+
+						if (ImGui::Selectable(
+							AssetName.c_str(),
+							bSelected))
+						{
+							(*Materials)[Index] = Material;
+						}
+
+						if (bSelected)
+						{
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+
+					ImGui::EndCombo();
+				}
+
+				ImGui::PopID();
+			}
+
+			if (ImGui::Button("Add Material Slot"))
+			{
+				Materials->Add(nullptr);
+			}
+
+			break;
+		}
 		default:
 			ImGui::TextDisabled("(Unsupported)");
 			break;
@@ -251,6 +336,107 @@ namespace
 					DrawProperty(Object, Property, CustomFont);
 				}
 			}
+			ImGui::PopID();
+		}
+	}
+	void DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
+		if (!Component) {
+			return;
+		}
+
+		UStaticMesh* StaticMesh = Component->GetStaticMesh();
+
+		if (!StaticMesh) {
+			return;
+		}
+
+		const TArray<FStaticMeshSection>& Sections = StaticMesh->GetSections();
+
+		if (Sections.IsEmpty()) {
+			return;
+		}
+
+		ImGui::Separator();
+
+		if (!ImGui::CollapsingHeader("Static Mesh Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+			return;
+		}
+
+		for (uint32 SectionIndex = 0;SectionIndex < Sections.Num();++SectionIndex) {
+			const FStaticMeshSection& Section = Sections[SectionIndex];
+
+			ImGui::PushID(static_cast<int>(SectionIndex));
+
+			ImGui::Text("Section %u", SectionIndex);
+
+			ImGui::Text("Start Index : %u", Section.StartIndex);
+
+			ImGui::Text("Index Count : %u", Section.IndexCount);
+
+			ImGui::Text("Material Slot : %u", Section.MaterialSlotIndex);
+
+			UMaterial* CurrentMaterial = Component->GetMaterial(Section.MaterialSlotIndex);
+
+			FString CurrentMaterialName = CurrentMaterial ? CurrentMaterial->GetAssetName().ToString() : FString("None");
+
+			ImGui::Text("Material");
+			ImGui::SameLine(120.0f);
+			ImGui::SetNextItemWidth(-1.0f);
+
+			if (ImGui::BeginCombo("##Material", CurrentMaterialName.c_str())) {
+				const bool bNoneSelected = (CurrentMaterial == nullptr);
+				if (ImGui::Selectable("None", bNoneSelected)) {
+					Component->SetMaterial(SectionIndex, nullptr);
+				}
+
+				if (bNoneSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+
+				for (TObjectIterator<UAsset> It(UMaterial::GetClass());It;++It) {
+					UAsset* Asset = *It;
+
+					if (!Asset) {
+						continue;
+					}
+
+					UMaterial* Material = Asset->Cast<UMaterial>();
+
+					if (!Material) {
+						continue;
+					}
+
+					const bool bSelected = (Material == CurrentMaterial);
+
+					FString MaterialName = Material->GetAssetName().ToString();
+
+					if (ImGui::Selectable(MaterialName.c_str(), bSelected)) {
+						Component->SetMaterial(SectionIndex, Material);
+					}
+
+					if (bSelected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			if (CurrentMaterial)
+			{
+				ImGui::Spacing();
+
+				// Get 함수를 사용해 현재 UV Speed 값을 가져옴
+				FVector2 CurrentSpeed = CurrentMaterial->GetUVSpeed();
+				float Speed[2] = { static_cast<float>(CurrentSpeed.X), static_cast<float>(CurrentSpeed.Y) };
+
+				// ImGui에서 드래그로 값 수정 시 Set 함수 호출
+				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f))
+				{
+					CurrentMaterial->SetUVSpeed(FVector2(Speed[0], Speed[1]));
+				}
+			}
+
+			ImGui::Separator();
 			ImGui::PopID();
 		}
 	}
@@ -308,6 +494,13 @@ void FPropertyPanel::OnRender()
 			for (UActorComponent* Component : Components)
 			{
 				DrawProperties(Component, CustomFont);
+
+				UStaticMeshComponent* StaticMeshComponent = Component->Cast<UStaticMeshComponent>();
+
+				if (StaticMeshComponent)
+				{
+					DrawStaticMeshMaterials(StaticMeshComponent);
+				}
 			}
 		}
 	}

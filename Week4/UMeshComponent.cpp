@@ -56,3 +56,13 @@ UTexture2D* UMeshComponent::GetTexture() const
 	UTexture2D* Texture = Material->GetDiffuseTexture();
 	return Texture;
 }
+
+UMaterial* UMeshComponent::GetOverrideMaterial(uint32 MaterialSlotIndex) const
+{
+	if (MaterialSlotIndex >= OverrideMaterials.Num())
+	{
+		return nullptr;
+	}
+
+	return OverrideMaterials[MaterialSlotIndex];
+}

@@ -1,12 +1,6 @@
 #include "Material.h"
 #include "Json/json.hpp"
 
-UMaterial::UMaterial() : DiffuseColor(1.f, 1.f, 1.f, 1.f)
-{
-	DiffuseTexturePath = FString("");
-	DiffuseTexture = nullptr;
-}
-
 void UMaterial::SerializeClass(json::JSON& outJson) const
 {
 	//Super::SerializeClass(outJson);
