@@ -78,7 +78,7 @@ void FSceneManager::Update(float deltaTime, FRenderCollector& outCollector)
 	{
 
 	}
-
+	mPropertyPanel->SetTarget(mSelectedActor);
 	mCurrentWorld->Update(deltaTime, outCollector);
 }
 
@@ -969,7 +969,6 @@ void  FSceneManager::SetSelectedActor(AActor* actor)
 
 	UE_LOG_WARN("SetSelectedActor: Actor with UUID %d is now selected.", actor->UUID);
 	mSelectedActor = actor;
-	mPropertyPanel->SetTarget(actor);
 }
 
 float FSceneManager::GetPanelWidth() const
