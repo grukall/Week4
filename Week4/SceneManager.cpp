@@ -46,6 +46,8 @@ FSceneManager::FSceneManager()
 	mViewportWidth = WindowApplication.PendingWidth;
 	mViewportHeight = WindowApplication.PendingHeight;
 
+	mPropertyPanel = new FPropertyPanel();
+	mPropertyPanel->Init();
 	//mCurrentWorld = FObjectFactory::ConstructObject<UWorld>();
 
 	// Todo: Test code, move to other function
@@ -78,7 +80,7 @@ void FSceneManager::Update(float deltaTime, FRenderCollector& outCollector)
 	{
 
 	}
-
+	mPropertyPanel->SetTarget(mSelectedActor);
 	mCurrentWorld->Update(deltaTime, outCollector);
 }
 
@@ -619,103 +621,10 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 
 	mPanelWidth = ImGui::GetWindowWidth();
 
+	mPropertyPanel->OnRender();
+
 	if (mSelectedActor)
 	{
-		// Temporary variables to hold the values for ImGui input fields
-		const FTransform& originalTransform = mSelectedActor->GetTransform();
-
-		// Get the current transform of the clicked actor
-		FVector translationInput = originalTransform.Location;
-		FVector rotationInput = {
-			originalTransform.Rotation.Roll,
-			originalTransform.Rotation.Pitch,
-			originalTransform.Rotation.Yaw
-		};
-		FVector scaleInput = originalTransform.Scale;
-
-		// Display and edit the transform properties using ImGui input fields
-		if (ImGui::DragFloat3("Translation", &translationInput.x, 0.1f))
-		{
-			mSelectedActor->SetLocation(translationInput);
-		}
-		if (ImGui::DragFloat3("Rotation", &rotationInput.x, 0.1f))
-		{
-			mSelectedActor->SetRotation({
-				rotationInput.y, // Pitch
-				rotationInput.z, // Yaw
-				rotationInput.x  // Roll
-				});
-
-		}
-		if (ImGui::DragFloat3("Scale", &scaleInput.x, 0.1f, MIN_SCALE, FLT_MAX, "%.3f", ImGuiSliderFlags_AlwaysClamp))
-		{
-			mSelectedActor->SetScale(scaleInput);
-		}
-
-		UText3DComponent* text3DComponent = nullptr;
-		for (UActorComponent* component : mSelectedActor->GetComponents())
-		{
-			if (component->IsA<UText3DComponent>())
-			{
-				text3DComponent = component->Cast<UText3DComponent>();
-				break;
-			}
-		}
-
-		if (text3DComponent)
-		{
-			ImGui::SeparatorText("Text");
-
-			char textBuffer[256] = {};
-			const FString currentText = Wide2Utf(text3DComponent->GetText());
-			strncpy_s(textBuffer, currentText.CStr(), sizeof(textBuffer) - 1);
-
-			if (ImGui::InputText("Display Text", textBuffer, sizeof(textBuffer)))
-			{
-				try
-				{
-					text3DComponent->SetText(Utf2Wide(FString(textBuffer)));
-				}
-				catch (const std::runtime_error&)
-				{
-				}
-			}
-		}
-
-		USpotLightComponent* spotLightComponent = nullptr;
-		for (UActorComponent* component : mSelectedActor->GetComponents())
-		{
-			if (component->IsA<USpotLightComponent>())
-			{
-				spotLightComponent = component->Cast<USpotLightComponent>();
-				break;
-			}
-		}
-
-		if (spotLightComponent)
-		{
-			ImGui::SeparatorText("Spot Light");
-
-			FVector4 colorInput = spotLightComponent->GetColor();
-			if (ImGui::ColorPicker3("Color", &colorInput.x,
-				ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_DisplayHex))
-			{
-				spotLightComponent->SetColor(colorInput);
-			}
-
-			float innerAngleInput = spotLightComponent->GetInnerConeAngle();
-			if (ImGui::DragFloat("InnerAngle", &innerAngleInput, 0.1f, 0.f, spotLightComponent->GetOuterConeAngle(), "%.3f", ImGuiSliderFlags_AlwaysClamp))
-			{
-				spotLightComponent->SetInnerConeAngle(innerAngleInput);
-			}
-
-			float outerAngleInput = spotLightComponent->GetOuterConeAngle();
-			if (ImGui::DragFloat("OuterAngle", &outerAngleInput, 0.1f, 0.f, 89.f, "%.3f", ImGuiSliderFlags_AlwaysClamp))
-			{
-				spotLightComponent->SetOuterConeAngle(outerAngleInput);
-			}
-		}
-
 		UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
 		for (UActorComponent* component : mSelectedActor->GetComponents())
 		{
@@ -728,8 +637,6 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 
 		if (atlasAnimationComponent)
 		{
-			ImGui::SeparatorText("Atlas Animation");
-
 			// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
 			TArray<FString> spriteAtlasAssetNames;
 			FAssetManager* assetManager = guiReference.AssetManager;
@@ -740,10 +647,11 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 					return;
 				}
 				spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
-			});
+				});
 
 			USpriteAtlas* currentAtlas = atlasAnimationComponent->GetAtlas();
 			FString currentAtlasName = currentAtlas ? currentAtlas->GetAssetName().ToString() : "None";
+
 			if (ImGui::BeginCombo("Sprite Atlas", currentAtlasName.CStr()))
 			{
 				for (const FString& assetName : spriteAtlasAssetNames)
@@ -760,43 +668,11 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 				}
 				ImGui::EndCombo();
 			}
-
-			if (ImGui::Button("Play"))
-			{
-				atlasAnimationComponent->Play(0, atlasAnimationComponent->IsLooping(), atlasAnimationComponent->IsBackward());
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Pause"))
-			{
-				atlasAnimationComponent->Pause();
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Resume"))
-			{
-				atlasAnimationComponent->Resume();
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Reset"))
-			{
-				atlasAnimationComponent->Reset();
-			}
-
-			ImGui::Text(atlasAnimationComponent->IsPlaying() ? "State: Playing" : "State: Stopped");
-
-			bool loopInput = atlasAnimationComponent->IsLooping();
-			if (ImGui::Checkbox("bLoop", &loopInput))
-			{
-				atlasAnimationComponent->SetLooping(loopInput);
-			}
-
-			int32 frameRateInput = atlasAnimationComponent->GetFrameRate();
-			if (ImGui::DragInt("FrameRate", &frameRateInput, 1.f, 1, 240, "%d", ImGuiSliderFlags_AlwaysClamp))
-			{
-				atlasAnimationComponent->SetFrameRate(frameRateInput);
-			}
 		}
 
+		// 메쉬 컴포넌트 처리
 		USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
+
 		if (rootComponent && rootComponent->IsA<UMeshComponent>() && !rootComponent->IsA<UAtlasAnimationComponent>())
 		{
 			UMeshComponent* primitiveComponent = rootComponent->Cast<UMeshComponent>();
@@ -811,7 +687,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 					return;
 				}
 				textureAssetNames.Add(metaInfo.AssetName.ToString());
-			});
+				});
 
 			const UTexture2D* currentTexture = primitiveComponent->GetTexture();
 			FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
@@ -834,8 +710,10 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 			}
 		}
 	}
+
 	ImGui::End();
 }
+
 
 void FSceneManager::updateOutlinerGUI(const FGuiReference& guiReference)
 {
@@ -954,6 +832,7 @@ void FSceneManager::NewScene()
 	UEngineStatics::SetNextUUID(0);
 	ResetSelectedActor();
 	mCurrentWorld = FObjectFactory::ConstructObject<UWorld>();
+	mPropertyPanel->SetWorld(mCurrentWorld);
 }
 
 void FSceneManager::DeleteScene()
@@ -1071,7 +950,7 @@ void FSceneManager::LoadScene(
 	// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
 	delete mCurrentWorld;
 	mCurrentWorld = newWorld;
-
+	mPropertyPanel->SetWorld(mCurrentWorld);
 	UEngineStatics::SetNextUUID(nextUUID);
 	ResetSelectedActor();
 }

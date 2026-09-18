@@ -12,6 +12,7 @@ class FRenderCollector;
 class AActor : public UObject
 {
 	REFLECT_CLASS(AActor, UObject)
+
 public:
 	AActor() = default;
 	virtual ~AActor();

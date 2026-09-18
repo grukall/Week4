@@ -7,12 +7,20 @@
 #include "FAssetManager.h"
 #include "ShowFlags.h"
 #include "MathUtility.h"
-#include "RenderInfo.h"
+#include "Json/json.hpp"
+#include "Property.h"
+
 
 class UText3DComponent : public USceneComponent
 {
 	REFLECT_CLASS(UText3DComponent, USceneComponent)
-
+	REFLECT_START(className)
+		//PROPERTY(mFontAtlasAsset) // @error
+		PROPERTY(mColor)
+		PROPERTY(mbBillboard)
+		PROPERTY(mEnableDepthTest)
+		PROPERTY(mEnableDepthWrite)
+	REFLECT_END()
 public:
 	UText3DComponent() = default;
 

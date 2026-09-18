@@ -7,6 +7,7 @@
 #include "RenderInfo.h"
 #include "enum.h"
 #include "FAssetManager.h"
+#include "PropertyPanel.h"
 
 inline constexpr std::string_view kSceneDataDir = "SceneData\\";
 inline constexpr std::string_view kSceneDataSuffix = ".Scene";
@@ -92,6 +93,8 @@ private:
 	UWorld* mCurrentWorld = nullptr;
 	AActor* mSelectedActor = nullptr;
 	FGuiInputField mGuiInputField;
+
+	FPropertyPanel* mPropertyPanel = nullptr;
 
 	void updateControlPanelGUI(const FGuiReference& guiReference);
 
