@@ -6,6 +6,7 @@
 #include "TArray.h"
 #include "TSparseArray.h"
 #include "ObjectFactory.h"
+#include "Property.h"
 
 namespace json { class JSON; }
 
@@ -19,6 +20,9 @@ struct FClassInfo
 	const FClassInfo* SuperClass;
 	std::function<UObject* ()> Constructor;
 
+	TArray<FProperty> Properties;
+	inline const TArray<FProperty>& GetProperties() const { return Properties; }
+
 	FClassInfo(FString name, const FClassInfo* superClass, std::function<UObject* ()> constructor)
 		: Name(std::move(name)), SuperClass(superClass), Constructor(constructor) {
 	}
@@ -26,6 +30,12 @@ struct FClassInfo
 	UObject* CreateInstance() const;
 
 	bool IsChildOf(const FClassInfo* other) const;
+
+	template <typename T>
+	void AddProperty(const FString& InName, uint64 InOffset)
+	{
+		Properties.Add({ InName, GetPropertyType<T>(), InOffset, sizeof(T) });
+	}
 
 private:
 };
@@ -52,8 +62,8 @@ public:
 	static const FClassInfo* GetClass();
 
 	// GetClass() in Unreal Engine
-	inline const FClassInfo* GetRuntimeClass() const { return mClassInfo; }
-
+	inline virtual const FClassInfo* GetRuntimeClass() const { return mClassInfo; }
+	 
 	// TODO?: Replace json type with a more generic type, such as a variant or a map
 	virtual void SerializeClass(json::JSON& outJson) const;
 	virtual void DeserializeClass(const json::JSON& inJson);
