@@ -21,7 +21,7 @@ UPrimitiveComponent::UPrimitiveComponent()
 
 void UPrimitiveComponent::Initialize()
 {
-	Initialize(FVector(0.f, 0.f, 0.f), FRotator(0.f, 0.f, 0.f), FVector(0.f, 0.f, 0.f));
+	Initialize(FVector(0.f, 0.f, 0.f), FRotator(0.f, 0.f, 0.f), FVector(1.f, 1.f, 1.f));
 }
 
 void UPrimitiveComponent::Initialize(FVector location, FRotator rotation, FVector scale3D)

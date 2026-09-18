@@ -34,7 +34,7 @@ struct FClassInfo
 	template <typename T>
 	void AddProperty(const FString& InName, uint64 InOffset)
 	{
-		Properties.Add({ InName, GetPropertyType<T>(), InOffset, sizeof(T) });
+		Properties.Add({ InName, GetPropertyType<T>(), InOffset, sizeof(T), GetPropertyClassInfo<T>() });
 	}
 
 private:
@@ -89,7 +89,6 @@ public:
 		requires std::derived_from<TObject, UObject>
 	static TObject* GetObjectByInternalIndex(uint32 internalIndex);
 
-	static TSparseArray<UObject*>& GetGObjectArray() { return GUObjectArray; }
 	inline static uint64 GetGObjectRevision() { return GUObjectRevision; }
 
 public:
@@ -104,7 +103,7 @@ protected:
 private:
 
 	friend struct FObjectFactory;
-	const FClassInfo* mClassInfo;
+	const FClassInfo* mClassInfo = nullptr;
 };
 
 

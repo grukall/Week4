@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <vector>
+#include <utility>
 
 #include "Core.h"
 
@@ -34,9 +35,19 @@ public:
 	void SetNum(int32 NewNum, bool bAllowShrinking = true);
 
 	uint32 Add(const T& data);
-	uint32 Emplace(const T& data);
+
+	// 인자를 그대로 전달해 원소를 제자리에서 만든다. 임시 객체 하나를 아낀다.
+	template<typename... ArgTypes>
+	uint32 Emplace(ArgTypes&&... args);
+
 	uint32 Insert(const T& data, uint32 index);
 	void Reserve(uint32 Number);
+
+	void Append(const TArray<T>& other);
+
+	// begin()/end()를 가진 컨테이너면 무엇이든 이어붙인다. (TSet 등)
+	template<typename RangeType>
+	void Append(const RangeType& range);
 
 	int32 Num() const;
 	int32 Max() const;
@@ -166,11 +177,25 @@ inline uint32 TArray<T>::Add(const T& data)
 }
 
 template<typename T>
-inline uint32 TArray<T>::Emplace(const T& data)
+template<typename... ArgTypes>
+inline uint32 TArray<T>::Emplace(ArgTypes&&... args)
 {
-	mDatas.emplace_back(data);
+	mDatas.emplace_back(std::forward<ArgTypes>(args)...);
 
-	return mDatas.size() - 1;
+	return static_cast<uint32>(mDatas.size()) - 1;
+}
+
+template<typename T>
+inline void TArray<T>::Append(const TArray<T>& other)
+{
+	mDatas.insert(mDatas.end(), other.begin(), other.end());
+}
+
+template<typename T>
+template<typename RangeType>
+inline void TArray<T>::Append(const RangeType& range)
+{
+	mDatas.insert(mDatas.end(), range.begin(), range.end());
 }
 
 template<typename T>

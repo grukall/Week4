@@ -38,6 +38,9 @@ struct FObjectFactory
 
 	static bool RegisterClassInfo(FString className, const FClassInfo* classInfo);
 
+	// UObjectHash에 등록한다. 헤더 순환 참조를 피하려고 정의를 cpp에 둔다.
+	static void RegisterToHash(UObject* instance);
+
 private:
 	// TODO: Automate the registration of class info for all UObject-derived classes.
 	static TMap<FString, std::function<const FClassInfo* ()>> mClassInfoMap;

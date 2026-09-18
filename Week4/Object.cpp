@@ -2,6 +2,7 @@
 #include "Object.h"
 #include "EngineStatics.h"
 #include "Json/json.hpp"
+#include "UObjectHash.h"
 
 TSparseArray<UObject*> UObject::GUObjectArray;
 
@@ -44,6 +45,11 @@ UObject::~UObject()
 		return;
 	}
 	*/
+
+	if (mClassInfo)
+	{
+		FUObjectHashTables::Get().Remove(this);
+	}
 
 	GUObjectArray.RemoveAt(InternalIndex);
 	GUObjectRevision++;

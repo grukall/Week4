@@ -78,13 +78,17 @@ public:
 			SetRelativeRotation(mBillboardCamera->Transform.Rotation);
 		}
 		
-		FVector Location = mOwner->GetRootComponent()->GetRelativeLocation();
-		// Place billboard labels above the actor along the camera's screen-up axis.
-		const FVector LabelUp = (mBillboardCamera && mbBillboard)
-			? mBillboardCamera->GetUpVector()
-			: FVector(0.f, 0.f, 1.f);
-		Location += LabelUp * 1.0f;
-		SetRelativeLocation(Location);
+		USceneComponent* RootComponent = mOwner->GetRootComponent();
+		if (RootComponent)
+		{
+			FVector Location = RootComponent->GetRelativeLocation();
+			// Place billboard labels above the actor along the camera's screen-up axis.
+			const FVector LabelUp = (mBillboardCamera && mbBillboard)
+				? mBillboardCamera->GetUpVector()
+				: FVector(0.f, 0.f, 1.f);
+			Location += LabelUp * 1.0f;
+			SetRelativeLocation(Location);
+		}
 	}
 
 	void Render(FRenderCollector& RenderCollector) override
