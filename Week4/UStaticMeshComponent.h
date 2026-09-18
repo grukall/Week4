@@ -7,6 +7,10 @@ class UStaticMesh;
 class UStaticMeshComponent : public UMeshComponent
 {
 	REFLECT_CLASS(UStaticMeshComponent, UMeshComponent);
+
+	REFLECT_START(className)
+	PROPERTY(StaticMesh)
+	REFLECT_END()
 public:
 
 	UStaticMeshComponent();

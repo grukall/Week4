@@ -2,9 +2,15 @@
 template <typename T>
 inline void RegisterClassProperties(FClassInfo* InClass)
 {
-	if constexpr (requires { T::RegisterProperties(InClass); })
+	// RegisterProperties는 static 멤버라 자식 클래스에도 그대로 상속된다.
+	// 그냥 호출하면 부모의 프로퍼티가 자식 FClassInfo에도 중복 등록되므로,
+	// REFLECT_START가 남긴 PropertyOwnerClass로 "자기가 선언한 것"인지 확인한다.
+	if constexpr (requires { typename T::PropertyOwnerClass; })
 	{
-		T::RegisterProperties(InClass);
+		if constexpr (std::is_same_v<typename T::PropertyOwnerClass, T>)
+		{
+			T::RegisterProperties(InClass);
+		}
 	}
 }
 
@@ -44,6 +50,7 @@ private:
 // Property Reflection
 #define REFLECT_START(className)										\
 public:																	\
+	using PropertyOwnerClass = ThisClass;								\
 	inline static void RegisterProperties(FClassInfo* InClass)				\
 	{
 

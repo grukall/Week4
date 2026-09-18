@@ -8,6 +8,12 @@
 #include "UStaticMeshComponent.h"
 #include "FAssetManager.h"
 #include "Assets.h"
+#include "UObjectHash.h"
+
+void FObjectFactory::RegisterToHash(UObject* instance)
+{
+	FUObjectHashTables::Get().Add(instance);
+}
 
 UObject* FObjectFactory::ConstructUnInitializedObject(const FClassInfo* classInfo)
 {
@@ -20,6 +26,7 @@ UObject* FObjectFactory::ConstructUnInitializedObject(const FClassInfo* classInf
 	if (instance)
 	{
 		instance->mClassInfo = classInfo;
+		RegisterToHash(instance);
 	}
 	return instance;
 }

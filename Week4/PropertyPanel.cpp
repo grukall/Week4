@@ -2,6 +2,9 @@
 #include "PropertyPanel.h"
 #include "core.h"
 #include "Transform.h"
+#include "UAsset.h"
+#include "UObjectIterator.h"
+#include "FLogManager.h"
 
 namespace
 {
@@ -168,17 +171,46 @@ namespace
 
 		case EPropertyType::Asset:
 		{
-			// TSharedPtr 구조이므로 단순 값 복사가 불가능함.
-			// 실제 구현 시에는 Content Browser나 Asset Manager와 연동하여 
-			// 드래그 앤 드롭이나 콤보 박스(선택창)로 구현해야 합니다.
-
-			// 당장은 UI 레이아웃 유지를 위해 자리표시자(Placeholder) 버튼 생성
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-			if (ImGui::Button(std::string("Select Asset" + (std::string)Label).c_str(), ImVec2(-1.0f, 0.0f)))
+			// 이 프로퍼티가 어떤 에셋 클래스를 가리키는지는 등록 시점에 FProperty에 담아 뒀다.
+			if (!Property.ClassInfo)
 			{
-				// TODO: 에셋 브라우저 팝업 열기 로직
+				ImGui::TextDisabled("(Unknown asset class)");
+				break;
 			}
-			ImGui::PopStyleColor();
+
+			// 슬롯은 실제로 UStaticMesh* 같은 파생 포인터지만,
+			// 단일 상속이라 UAsset* 과 표현이 같아 이렇게 읽고 쓴다.
+			UAsset** AssetSlot = static_cast<UAsset**>(ValuePtr);
+			UAsset* CurrentAsset = *AssetSlot;
+
+			// FName::ToString()이 임시 객체를 돌려주므로 반드시 붙잡아 둔다.
+			FString CurrentName = CurrentAsset ? CurrentAsset->GetAssetName().ToString() : FString("None");
+
+			if (ImGui::BeginCombo(Label.c_str(), CurrentName.c_str()))
+			{
+				if (ImGui::Selectable("None", CurrentAsset == nullptr))
+				{
+					*AssetSlot = nullptr;
+				}
+
+				// 해당 클래스와 그 파생만 나열된다.
+				for (TObjectIterator<UAsset> It(Property.ClassInfo); It; ++It)
+				{
+					UAsset* Asset = *It;
+					const bool bSelected = (Asset == CurrentAsset);
+
+					FString AssetName = Asset->GetAssetName().ToString();
+					if (ImGui::Selectable(AssetName.c_str(), bSelected))
+					{
+						*AssetSlot = Asset;
+					}
+					if (bSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
 			break;
 		}
 
@@ -231,12 +263,18 @@ bool FPropertyPanel::Init()
 
 	io.Fonts->AddFontDefault();
 
-	const char* fontPath = "HMKMRHD.ttf";
+	const char* fontPath = "Assets/Fonts/BMKkubulimTTF.ttf";
 	float fontSize = 15.0f;
 	const ImWchar* koreanRanges = io.Fonts->GetGlyphRangesKorean();
 
-	//CustomFont = io.Fonts->AddFontFromFileTTF(fontPath, fontSize, nullptr, koreanRanges);
-	//assert(CustomFont != nullptr);
+	//assert는 게임 빌드(나중에 추가되면) 작동 안하므로, 기본 폰트 설정으로 변경
+	CustomFont = io.Fonts->AddFontFromFileTTF(fontPath, fontSize, nullptr, koreanRanges);
+	if (!CustomFont)
+	{
+		UE_LOG_ERROR("Failed to load font: %s", fontPath);
+		CustomFont = io.Fonts->AddFontDefault();
+		return false;
+	}
 
 	return true;
 }
