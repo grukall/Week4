@@ -50,4 +50,6 @@ public:
 	virtual void UnloadAsset(UAsset* Asset) override;
 private:
 	URenderer& Renderer;
+
+	bool ShouldImport(const FName AssetName, const std::filesystem::path& SourcePath, const std::filesystem::path& BinaryPath);
 };
