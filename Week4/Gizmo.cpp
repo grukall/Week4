@@ -20,6 +20,11 @@ void FGizmo::Reset()
     HandleScreenSegments.Empty();
 }
 
+void FGizmo::BuildHandleSegments(const FVector& CameraLocation, const FMatrix& ViewProjection, float ViewportWidth, float ViewportHeight)
+{
+
+}
+
 void FGizmo::SetWorldMode(bool bInWorldMode)
 {
 	if (bWorldMode != bInWorldMode)
@@ -50,7 +55,7 @@ bool FGizmo::IsMouseOverHandle() const
 	return bIsHoveredAxis; 
 }
 
-void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection)
+void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection, float ViewportAbsX, float ViewportAbsY, float ViewportWidth, float ViewportHeight)
 {
     AActor* TargetActor = SceneManager->GetSelectedActor();
 
@@ -68,12 +73,22 @@ void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection)
 
     const FInputState& Input = WindowApplication.Input;
 
+    //HandleScreenSegments.Empty();
+    //for (const auto& Axis : Gizmo3DAxes) // 3D 기즈모 축 정보
+    //{
+    //    // 월드 좌표 3D 축을 넘겨받은 Active 카메라의 ViewProj를 사용해 2D 스크린으로 투영
+    //    FVector2 ScreenStart = WorldToScreen(Axis.WorldStart, ViewProjection, ViewportWidth, ViewportHeight);
+    //    FVector2 ScreenEnd = WorldToScreen(Axis.WorldEnd, ViewProjection, ViewportWidth, ViewportHeight);
+
+    //    HandleScreenSegments.Add({ ScreenStart, ScreenEnd, Axis.Direction, Axis.Type });
+    //}
+
     FVector2 MousePosInScreen = Map(
         FVector2(Input.CursorX, Input.CursorY),
-        FVector2(SceneManager->GetViewportX(), SceneManager->GetViewportY()),
-        FVector2(SceneManager->GetViewportX() + SceneManager->GetViewportWidth(), SceneManager->GetViewportY() + SceneManager->GetViewportHeight()),
+        FVector2(ViewportAbsX, ViewportAbsY),
+        FVector2(ViewportAbsX + ViewportWidth, ViewportAbsY + ViewportHeight),
         FVector2(0.f, 0.f),
-        FVector2(Renderer.GetWidth(), Renderer.GetHeight())
+        FVector2(ViewportWidth, ViewportHeight)
     );
 
     const bool bAllowMouse = SceneManager->IsViewportHovered();
@@ -131,8 +146,8 @@ void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection)
 
         // Ray
         FMatrix ViewProjectionInverse = ViewProjection.Inverse();
-        FVector NearPoint = ScreenToWorld(ProjectedPoint, ViewProjectionInverse, Renderer.GetWidth(), Renderer.GetHeight(), 0.1f);
-        FVector FarPoint = ScreenToWorld(ProjectedPoint, ViewProjectionInverse, Renderer.GetWidth(), Renderer.GetHeight(), 1.0f);
+        FVector NearPoint = ScreenToWorld(ProjectedPoint, ViewProjectionInverse, ViewportWidth, ViewportHeight, 0.1f);
+        FVector FarPoint = ScreenToWorld(ProjectedPoint, ViewProjectionInverse, ViewportWidth, ViewportHeight, 1.0f);
 
         FRay Ray;
         Ray.Origin = NearPoint;
@@ -186,7 +201,7 @@ void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection)
     PrevMousePos = MousePosInScreen;
 }
 
-void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, const FMatrix& ViewProjection)
+void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, const FMatrix& ViewProjection, float ViewportWidth, float ViewportHeight)
 {
     AActor* TargetActor = SceneManager->GetSelectedActor();
 
@@ -207,8 +222,8 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
     const FTransform Transform = TargetActor->GetTransform();
     const FVector CenterToCamera = CameraPosition - Transform.Location;
     const float AxisLength = 0.1f * CenterToCamera.Length();
-    const int32 ScreenWidth = static_cast<int32>(Renderer.GetWidth());
-    const int32 ScreenHeight = static_cast<int32>(Renderer.GetHeight());
+    const float ScreenWidth = ViewportWidth;    // 기존: Renderer.GetWidth()
+    const float ScreenHeight = ViewportHeight;   // 기존: Renderer.GetHeight()
     const FVector4 Clip = FVector4(Transform.Location, 1.f) * ViewProjection;
     const bool bDrawGizmo = !(Clip.w <= 0.00001f || Clip.z < 0.f || Clip.z > Clip.w || Clip.x < -Clip.w || Clip.x > Clip.w || Clip.y < -Clip.w || Clip.y > Clip.w);
 	
@@ -224,6 +239,9 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
     };
 
     const FVector2 Center = WorldToScreen(Transform.Location, ViewProjection, ScreenWidth, ScreenHeight);
+    const float ScaleX = static_cast<float>(Renderer.GetWidth()) / static_cast<float>(ScreenWidth);
+    const float ScaleY = static_cast<float>(Renderer.GetHeight()) / static_cast<float>(ScreenHeight);
+    auto ToRenderer = [&](const FVector2& P) { return FVector2(P.X * ScaleX, P.Y * ScaleY); };
     auto AxisColor = [&](EAxisNumber Axis, const FVector4& Color)
     {
         return Axis == (bIsSelected ? SelectedAxis : HoveredAxis) ? FVector4(1,1,0,1) : Color;
@@ -241,16 +259,20 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
 
         HandleScreenSegments.Add({ Center, End, ApplyAxis, Axis });
         
+        const FVector2 RCenter = ToRenderer(Center);
+        const FVector2 REnd = ToRenderer(End);
+        const FVector2 RAxis = REnd - RCenter;
+
 		const FVector4 Highlight = AxisColor(Axis, Color);
-        Renderer.RenderLine2D(Center, End, Highlight, 5.f);
+        Renderer.RenderLine2D(RCenter, REnd, Highlight, 5.f);
         
 		if (Style == EAxisEndPointStyle::Arrow)
 		{
-            Renderer.RenderTriangle2D(End, Highlight, 20.f, atan2f(ScreenAxis.Y, ScreenAxis.X));
+            Renderer.RenderTriangle2D(REnd, Highlight, 20.f, atan2f(RAxis.Y, RAxis.X));
 		}
 		else if (Style == EAxisEndPointStyle::Circle)
 		{
-            Renderer.RenderCircle2D(End, Highlight, 8.f);
+            Renderer.RenderCircle2D(REnd, Highlight, 8.f);
 		}
     };
 
@@ -280,7 +302,7 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
 			}
 
             HandleScreenSegments.Add({ Start, End, FVector::cross(U,V), Axis });
-            Renderer.RenderLine2D(Start, End, AxisColor(Axis, Color), 2.f);
+            Renderer.RenderLine2D(ToRenderer(Start), ToRenderer(End), AxisColor(Axis, Color), 2.f);
         }
     };
 
@@ -320,10 +342,10 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
     }
     else if (CurrentOperation == EGIZMO_TYPE::SCALE)
     {
-        DrawLineAxis(ForwardAxis, Front, FVector4(1, 0, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::X);
-        DrawLineAxis(RightAxis, Right, FVector4(0, 1, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::Y);
-        DrawLineAxis(UpAxis, Up, FVector4(0, 0, 1, 1), EAxisEndPointStyle::Circle, EAxisNumber::Z);
+        DrawLineAxis(ForwardAxis, ForwardAxis, FVector4(1, 0, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::X);
+        DrawLineAxis(RightAxis, RightAxis, FVector4(0, 1, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::Y);
+        DrawLineAxis(UpAxis, UpAxis, FVector4(0, 0, 1, 1), EAxisEndPointStyle::Circle, EAxisNumber::Z);
     }
 
-    Renderer.RenderCircle2D(Center, FVector4(0.8f, 0.8f, 0.8f, 1), 5.f);
+    Renderer.RenderCircle2D(ToRenderer(Center), FVector4(0.8f, 0.8f, 0.8f, 1), 5.f);
 }

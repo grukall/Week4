@@ -47,15 +47,18 @@ AActor* FEditorViewportClient::PerformMousePicking(float perspectiveRatio, const
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
 	// 커서를 이미지 좌상단 기준으로 옮기고, 화면 크기도 이미지 크기를 쓴다.
-	const float ViewportWidth = SceneManager.GetViewportWidth();
-	const float ViewportHeight = SceneManager.GetViewportHeight();
+	const float ViewportWidth = static_cast<float>(mWidth);
+	const float ViewportHeight = static_cast<float>(mHeight);
 	if (ViewportWidth <= 0.f || ViewportHeight <= 0.f)
 	{
 		return nullptr;
 	}
 
-	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(SceneManager.GetViewportX());
-	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(SceneManager.GetViewportY());
+	const float AbsoluteStartX = SceneManager.GetViewportX() + mViewportLeft;
+	const float AbsoluteStartY = SceneManager.GetViewportY() + mViewportTop;
+
+	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(AbsoluteStartX);
+	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(AbsoluteStartY);
 
 	// 투영 방식에 따라 광선을 만드는 법만 다르다. 두 점을 구하고 나면 이후 판정은 완전히 같다
 	FVector NearPoint, FarPoint;
@@ -729,4 +732,25 @@ void FEditorViewportClient::Reset()
 {
 	bMouseHit = false;
 	mGizmo.Reset();
+}
+
+void FEditorViewportClient::SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight)
+{
+	mViewportLeft = InLeft;
+	mViewportTop = InTop;
+	mWidth = std::max<uint32>(1, static_cast<uint32>(InWidth));
+	mHeight = std::max<uint32>(1, static_cast<uint32>(InHeight));
+}
+
+void FEditorViewportClient::ResizeRenderTarget(FGraphicsManager* GraphicsManager)
+{
+	if (mRenderTarget == nullptr ||
+		mRenderTarget->Width != mWidth ||
+		mRenderTarget->Height != mHeight)
+	{
+		URenderer* Renderer = GraphicsManager->GetRenderer();
+
+		mRenderTarget = Renderer->CreateRenderTarget2D(mWidth, mHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
+		mDepthStencil = Renderer->CreateDepthStencil(mWidth, mHeight);
+	}
 }
