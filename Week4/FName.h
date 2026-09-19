@@ -2,6 +2,8 @@
 
 #include "Core.h"
 
+class FArchive;
+
 struct FName
 {
 	FName();
@@ -29,3 +31,5 @@ struct FNameHasher
 		return std::hash<int32>()(Name.ComparisonIndex) ^ std::hash<uint32>()(Name.Number);
 	}
 };
+
+FArchive& operator<<(FArchive& Ar, FName& Name);

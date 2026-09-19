@@ -3,6 +3,7 @@
 #include "TMap.h"
 #include <format>
 #include <limits>
+#include "Archive.h"
 
 struct FNamePool
 {
@@ -229,4 +230,23 @@ FString FName::ToString() const
 	const FNamePool::FNameBlock& DisplayBlock = Entry.DisplayBlocks[DisplayIndex];
 
 	return std::format("{}{}", &NamePool.NameStream[DisplayBlock.StartIndex], Number > 0 ? std::to_string(Number - 1) : "");
+}
+
+FArchive& operator<<(FArchive& Ar, FName& Name)
+{
+	FString NameStr;
+
+	if (Ar.IsSaving())
+	{
+		NameStr = Name.ToString();
+	}
+
+	Ar << NameStr;
+
+	if (Ar.IsLoading())
+	{
+		Name = FName(NameStr);
+	}
+
+	return Ar;
 }
