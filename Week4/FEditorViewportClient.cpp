@@ -256,3 +256,22 @@ void FEditorViewportClient::Reset()
 	bMouseHit = false;
 	mGizmo.Reset();
 }
+
+void FEditorViewportClient::SetTargetSize(float InWidth, float InHeight)
+{
+	mWidth = std::max<uint32>(1, static_cast<uint32>(InWidth));
+	mHeight = std::max<uint32>(1, static_cast<uint32>(InHeight));
+}
+
+void FEditorViewportClient::ResizeRenderTarget(FGraphicsManager* GraphicsManager)
+{
+	if (mRenderTarget == nullptr ||
+		mRenderTarget->Width != mWidth ||
+		mRenderTarget->Height != mHeight)
+	{
+		URenderer* Renderer = GraphicsManager->GetRenderer();
+
+		mRenderTarget = Renderer->CreateRenderTarget2D(mWidth, mHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
+		mDepthStencil = Renderer->CreateDepthStencil(mWidth, mHeight);
+	}
+}

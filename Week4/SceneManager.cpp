@@ -177,36 +177,50 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 					if (QuadSplitter != nullptr)
 					{
-						// 4개의 화면 렌더링
-						const TArray<FEditorViewportClient*>& Clients = *guiReference.ViewportClients;
-
-						// 람다 함수 하나 만들어두면 그리기 편합니다.
-						auto DrawViewport = [&](SWindow* Area, int ClientIndex) {
-							if (Area && Clients[ClientIndex]->mRenderTarget)
-							{
-								FRect rect = Area->Rect;
-
-								// 1. 해당 뷰포트 클라이언트에게 이번 프레임의 해상도 통보 (다음 프레임에 맞춰서 렌더타겟 재생성됨)
-								//Clients[ClientIndex]->SetTargetSize(rect.GetWidth(), rect.GetHeight());
-
-								// 2. ImGui 그리기 위치를 스플리터 영역의 시작점(Left, Top)으로 이동
-								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + rect.Top));
-
-								// 3. 해당 클라이언트의 SRV 텍스처를 영역 크기만큼 그림
-								ImTextureID srv = (ImTextureID)(intptr_t)Clients[ClientIndex]->mRenderTarget->SRV.Get();
-								ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
-							}
+						SWindow* SplitWindows[4] = {
+							QuadSplitter->TopLeft,
+							QuadSplitter->TopRight,
+							QuadSplitter->BottomLeft,
+							QuadSplitter->BottomRight
 						};
 
-						// 4개의 구역에 각각 0, 1, 2, 3번 클라이언트의 화면을 출력
-						DrawViewport(QuadSplitter->TopLeft, 0);
-						DrawViewport(QuadSplitter->TopRight, 1);
-						DrawViewport(QuadSplitter->BottomLeft, 2);
-						DrawViewport(QuadSplitter->BottomRight, 3);
+						const TArray<FEditorViewportClient*>& Clients = *guiReference.ViewportClients;
 
-						// 마우스 드래그 로직
 						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
 						const float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - mViewportY;
+
+						for (int i = 0; i < 4; ++i)
+						{
+							SWindow* SplitArea = SplitWindows[i];
+
+							if (SplitArea)
+							{
+								FEditorViewportClient* Client = Clients[i];
+								FRect rect = SplitArea->Rect;
+
+								// 1. 이번 프레임의 UI 영역 크기를 클라이언트에게 통보
+								Client->SetTargetSize(rect.GetWidth(), rect.GetHeight());
+
+								if (Client->mRenderTarget && Client->mRenderTarget->SRV)
+								{
+									// 그리기 커서를 해당 분할 구역의 시작점(Left, Top)으로 이동
+									ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + rect.Top));
+
+									// 텍스처 그리기
+									ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
+									ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
+
+									// ActiveViewport
+									if (MouseXInViewport >= rect.Left && MouseXInViewport <= (rect.Left + rect.GetWidth()) &&
+										MouseYInViewport >= rect.Top && MouseYInViewport <= (rect.Top + rect.GetHeight()))
+									{
+										guiReference.ActiveViewport = Client;
+									}
+								}
+							}
+						}
+
+						// 마우스 드래그 로직
 						const FPoint LocalMousePos = { MouseXInViewport, MouseYInViewport };
 
 						if (mbViewportHovered && QuadSplitter->DragMode == ESplitterDragMode::None)

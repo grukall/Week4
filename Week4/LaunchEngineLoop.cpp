@@ -178,8 +178,38 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	FRenderCollector& RenderCollector = mGraphicsManager->GetRenderCollector();
 
-	// 피킹/컬링 등의 기준은 일단 0번 뷰포트의 카메라로 고정
-	RenderCollector.Camera = &ViewportClients[0]->GetCamera();
+	
+	// 이전 프레임의 뷰포트 위치를 기준으로 로컬 마우스 좌표 계산
+	float vpX = mSceneManager->GetViewportX();
+	float vpY = mSceneManager->GetViewportY();
+
+	float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - vpX;
+	float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - vpY;
+
+	SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mSceneManager->GetRootWindow());
+	if (QuadSplitter != nullptr && ViewportClients.Num() == 4)
+	{
+		SWindow* SplitWindows[4] = {
+			QuadSplitter->TopLeft, QuadSplitter->TopRight,
+			QuadSplitter->BottomLeft, QuadSplitter->BottomRight
+		};
+
+		for (int i = 0; i < 4; ++i)
+		{
+			if (SplitWindows[i])
+			{
+				FRect rect = SplitWindows[i]->Rect;
+				if (MouseXInViewport >= rect.Left && MouseXInViewport <= (rect.Left + rect.GetWidth()) &&
+					MouseYInViewport >= rect.Top && MouseYInViewport <= (rect.Top + rect.GetHeight()))
+				{
+					ActiveViewportClient = ViewportClients[i];
+					break;
+				}
+			}
+		}
+	}
+
+	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
 	// Input Threads
 	{
@@ -189,7 +219,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		for (int i = 0; i < 4; ++i)
 		{
-			ViewportClients[i]->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+			ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
 		}
 	}
 
@@ -199,13 +229,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		mSceneManager->Update(deltaTime, RenderCollector);
 	}
 
-	// Mouse Picking & Gizmo (0번 뷰포트 기준으로 고정)
+	// Mouse Picking & Gizmo
 	{
 		const FInputState& Input = WindowApplication.Input;
 
-		// 모든 ViewportClient를 ViewportClients[0]으로 변경
-		AActor* HitActor = ViewportClients[0]->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
-		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) && !ViewportClients[0]->mGizmo.IsDragging() && !ViewportClients[0]->mGizmo.IsMouseOverHandle())
+		AActor* HitActor = ActiveViewportClient->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
+		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) && !ActiveViewportClient->mGizmo.IsDragging() && !ActiveViewportClient->mGizmo.IsMouseOverHandle())
 		{
 			if (HitActor) mSceneManager->SetSelectedActor(HitActor);
 			else          mSceneManager->ResetSelectedActor();
@@ -245,7 +274,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			}
 		}
 
-		ViewportClients[0]->mGizmo.Update(mSceneManager, mGraphicsManager->GetViewProjectionMatrix());
+		ActiveViewportClient->mGizmo.Update(mSceneManager, mGraphicsManager->GetViewProjectionMatrix());
 	}
 
 	// Render Threads
@@ -263,19 +292,17 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		{
 			FEditorViewportClient* CurrentClient = ViewportClients[i];
 
-			// @TODO : 해상도 변경 등
-			// CurrentClient->ResizeRenderTargetIfNeeded(mGraphicsManager);
+			CurrentClient->ResizeRenderTarget(mGraphicsManager);
 
-			// 현재 클라이언트 전용 렌더 타겟(RT) 바인딩 및 Clear
+			// 현재 클라이언트 전용 렌더 타겟 바인딩 및 Clear
 			mGraphicsManager->GetRenderer()->BindRenderTarget(
 				CurrentClient->mRenderTarget,
 				CurrentClient->mDepthStencil,
 				true
 			);
 
-			// TODO : 각 뷰포트의 실제 분할된 해상도 크기를 가져와야 함 (현재는 전체 크기 고정)
-			float currentWidth = mSceneManager->GetViewportWidth();   // 추후 스플리터 영역 크기로 변경
-			float currentHeight = mSceneManager->GetViewportHeight(); // 추후 스플리터 영역 크기로 변경
+			float currentWidth = static_cast<float>(CurrentClient->mWidth);
+			float currentHeight = static_cast<float>(CurrentClient->mHeight);
 
 			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
 			mGraphicsManager->FlushLines();
@@ -296,7 +323,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		// ImGui
 		{
-			mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, &ViewportClients, ViewportClients[0], mFileManager, mAssetManager });
+			mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, &ViewportClients, ActiveViewportClient, mFileManager, mAssetManager });
 
 			mGraphicsManager->GetRenderer()->BindFrameBuffer();
 
@@ -313,7 +340,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 void FEngineLoop::End()
 {
-	const std::string Value = std::format("{:.6f}", ViewportClients[0]->GetCamera().Sensitivity);
+	const std::string Value = std::format("{:.6f}", ActiveViewportClient->GetCamera().Sensitivity);
 
 	if (!WritePrivateProfileStringA("Camera", "Sensitivity", Value.c_str(), ".\\editor.ini"))
 	{

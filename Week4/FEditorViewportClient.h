@@ -12,6 +12,7 @@ class FSceneManager;
 class URenderer;
 struct FRenderTarget2D;
 struct FDepthStencil;
+class FGraphicsManager;
 
 struct FEditorViewportClient
 {
@@ -30,10 +31,17 @@ public:
 
 	FCamera& GetCamera() { return mCamera; }
 
+	void SetTargetSize(float InWidth, float InHeight);
+	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
+
 	FCamera mCamera;
 	FGizmo mGizmo;
 	TSharedPtr<FRenderTarget2D> mRenderTarget;
 	TSharedPtr<FDepthStencil> mDepthStencil;
+	uint32 mWidth = 800;
+	uint32 mHeight = 600;
+	float ViewportX = 0.0f;
+	float ViewportY = 0.0f;
 
 private:
 	// 선택된 액터의 RenderInfo는 캐시하지 않는다. 필요할 때 ClickedActor->GetRenderInfos()로 그때그때 뽑는다.

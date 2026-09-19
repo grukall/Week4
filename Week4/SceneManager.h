@@ -24,7 +24,7 @@ struct FGuiReference
 	const FFrameTimer& FrameTimer;
 	FGraphicsManager* GraphicsManager;
 	const TArray<FEditorViewportClient*>* ViewportClients;
-	FEditorViewportClient* ActiveViewport;
+	FEditorViewportClient*& ActiveViewport;
 	const FFileManager* FileManager;
 	FAssetManager* AssetManager;
 };
@@ -77,6 +77,7 @@ public:
 	float GetViewportWidth() const { return mViewportWidth; }
 	float GetViewportHeight() const { return mViewportHeight; }
 	bool IsViewportHovered() const { return mbViewportHovered; }
+	SWindow* GetRootWindow() const { return mRootWindow; }
 
 private:
 	static constexpr float MIN_WIDTH_RATIO = 0.2f;
