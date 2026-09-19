@@ -21,6 +21,13 @@ public:
 
 	inline const FName& GetAssetName() const { return AssetName; }
 
+	virtual void Serialize(FArchive& Ar) override
+	{
+		UObject::Serialize(Ar);
+		Ar << AssetName;
+		Ar << AssetPath;
+	}
+
 protected:
 	FName AssetName;
 	FString AssetPath;

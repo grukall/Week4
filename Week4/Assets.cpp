@@ -91,6 +91,15 @@ void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, co
 	}
 }
 
+void UStaticMesh::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	Ar << Vertices;
+	Ar << Indices;
+	Ar << Sections;
+}
+
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);

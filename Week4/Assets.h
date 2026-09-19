@@ -64,6 +64,8 @@ public:
 	inline void SetColor(const FVector4& InColor) { Color = InColor; }
 	inline const FVector4& GetColor() const { return Color; }
 
+	void Serialize(FArchive& Ar) override;
+
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
 	uint32 VertexCount = 0;
