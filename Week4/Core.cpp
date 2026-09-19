@@ -367,3 +367,8 @@ const char* FString::c_str() const noexcept
 {
 	return mData->c_str();
 }
+
+const bool FString::empty() const noexcept
+{
+	return mData->empty();
+}

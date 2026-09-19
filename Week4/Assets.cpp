@@ -6,7 +6,7 @@
 #include "FFontManager.h"
 #include "MathUtility.h"
 #include "ObjectFactory.h"
-
+#include "Material.h"
 FString FFileAssetSource::ReadFileToString() const
 {
 	return FileManager.ReadFileToString(FilePath);
@@ -30,7 +30,7 @@ void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, co
 	// 인덱스가 없는 메시라 섹션을 만들지 않는다. 섹션은 인덱스 구간을 가리키는 개념이다.
 }
 
-void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount)
+void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, int32 InVertexCount, const uint32* InIndices, int32 InIndexCount)
 {
 	UAsset::Initialize(InAssetName);
 
@@ -57,7 +57,121 @@ void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, co
 
 	// 머티리얼이 하나뿐인 메시라 인덱스 전체를 덮는 섹션 하나로 시작한다.
 	// OBJ 로더가 usemtl 단위로 쪼갠 섹션을 넣어주면 이 자리가 여러 개가 된다.
-	Sections.Add({ 0, InIndexCount, 0 });
+	Sections.Add({ 0, static_cast<uint32>(InIndexCount), 0 });
+}
+
+void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, int32 InVertexCount, const uint32* InIndices, int32 InIndexCount, const FStaticMeshSection* InSections, int32 InSectionCount)
+{
+	UAsset::Initialize(InAssetName);
+
+	VertexCount = InVertexCount;
+	IndexCount = InIndexCount;
+
+	VertexBuffer = InRenderer.CreateVertexBuffer(InVertices, InVertexCount);
+	IndexBuffer = InRenderer.CreateIndexBuffer(InIndices, InIndexCount);
+
+	Vertices.Reserve(InVertexCount);
+	for (uint32 i = 0; i < InVertexCount; ++i)
+	{
+		Vertices.Add(InVertices[i]);
+	}
+
+	Indices.Reserve(InIndexCount);
+	for (uint32 i = 0; i < InIndexCount; ++i)
+	{
+		Indices.Add(InIndices[i]);
+
+		const FVertexSimple& Vertex = InVertices[InIndices[i]];
+		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
+	}
+
+	for (uint32 i = 0; i < InSectionCount; ++i)
+	{
+		Sections.Add(InSections[i]);
+	}
+}
+
+void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
+{
+	if (MaterialSlotIndex >= Materials.Num()) {
+		Materials.SetNum(MaterialSlotIndex + 1);
+	}
+
+	Materials[MaterialSlotIndex] = InMaterial;
+}
+
+UMaterial* UStaticMesh::GetMaterial(uint32 MaterialSlotIndex) const
+{
+	if (MaterialSlotIndex >= Materials.Num()) {
+		return nullptr;
+	}
+
+	return Materials[MaterialSlotIndex];
+}
+
+void UStaticMesh::AddSection(const FStaticMeshSection& InSection)
+{
+	Sections.Add(InSection);
+}
+
+uint32 UStaticMesh::AddMaterial(UMaterial* InMaterial)
+{
+	if (InMaterial == nullptr)
+	{
+		return UINT32_MAX;
+	}
+
+	const int32 ExistingSlot =
+		FindMaterialSlot(InMaterial);
+
+	if (ExistingSlot >= 0)
+	{
+		return static_cast<uint32>(ExistingSlot);
+	}
+
+	Materials.Add(InMaterial);
+
+	return Materials.Num() - 1;
+}
+
+int32 UStaticMesh::FindMaterialSlot(UMaterial* InMaterial) const
+{
+	if (InMaterial == nullptr)
+	{
+		return -1;
+	}
+
+	for (uint32 Index = 0; Index < Materials.Num(); ++Index)
+	{
+		if (Materials[Index] == InMaterial)
+		{
+			return static_cast<int32>(Index);
+		}
+	}
+
+	return -1;
+}
+
+void UStaticMesh::SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial)
+{
+	if (SectionIndex >= Sections.Num())
+	{
+		return;
+	}
+
+	if (InMaterial == nullptr)
+	{
+		return;
+	}
+
+	const uint32 MaterialSlotIndex = AddMaterial(InMaterial);
+
+	if (MaterialSlotIndex == UINT32_MAX)
+	{
+		return;
+	}
+
+	Sections[SectionIndex].MaterialSlotIndex = MaterialSlotIndex;
 }
 
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)

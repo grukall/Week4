@@ -8,6 +8,7 @@
 #include "enum.h"
 #include "FAssetManager.h"
 #include "PropertyPanel.h"
+#include <string>
 
 inline constexpr std::string_view kSceneDataDir = "SceneData\\";
 inline constexpr std::string_view kSceneDataSuffix = ".Scene";
@@ -95,6 +96,17 @@ private:
 	FGuiInputField mGuiInputField;
 
 	FPropertyPanel* mPropertyPanel = nullptr;
+
+	//Content Browser
+	std::filesystem::path mRootPath = "Assets";
+	std::filesystem::path mCurrentDirectory = "Assets";
+	std::filesystem::path mSelectedAssetPath = "";
+	char mSearchBuffer[256] = "";
+	float mThumbnailSize = 64.0f;
+	bool mShowContentBrowser = false;
+	void updateContentBrowserGUI(const FGuiReference& guiReference);
+	void drawFolderTree(const std::filesystem::path& currentPath);
+	void drawAssetGrid();
 
 	void updateControlPanelGUI(const FGuiReference& guiReference);
 

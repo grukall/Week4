@@ -24,9 +24,36 @@ struct FConstants
 	FVector4 Color;
 	int32 UseVertexColor;
 	int32 HasTexture;
-	int32 Padding[2];
+	FVector2 UVScroll;
 };
+struct FMaterialConstants
+{
+	FMatrix Matrix;
 
+	FVector4 Color;
+
+	FVector4 AmbientColor;
+	FVector4 SpecularColor;
+	FVector4 EmissiveColor;
+	FVector4 TransmissionFilter;
+
+	float SpecularPower;
+	float OpticalDensity;
+	float Transparency;
+
+	uint32 IlluminationModel;
+
+	uint32 UseVertexColor;
+	uint32 HasTexture;
+
+	FVector2 UVScroll;
+
+	uint32 HasAmbientTexture;
+	uint32 HasSpecularTexture;
+	uint32 HasBumpTexture;
+
+	float Padding;
+};
 struct FLine2DConstants
 {
 	FMatrix Projection;
@@ -467,6 +494,7 @@ private:
 	TSharedPtr<FRenderPipeline> WorldAxisPipeline;
 	TSharedPtr<FRenderPipeline> WorldGridPipeline;
 	TSharedPtr<FRenderPipeline> QuadPipeline;
+	TSharedPtr<FRenderPipeline> MeshPipeline;
 	TSharedPtr<FRenderPipeline> Quad2DPipeline;
 
 	UINT Width, Height;

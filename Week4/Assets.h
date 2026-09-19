@@ -11,12 +11,15 @@
 #include <wrl/client.h>
 #include <filesystem>
 #include <ft2build.h>
+
 #include FT_FREETYPE_H
+#include "StaticMesh.h"
 
 class FFileManager;
 class FFontManager;
 class URenderer;
 class UTexture2D;
+class UMaterial;
 
 class FFileAssetSource : public FAssetSource
 {
@@ -25,16 +28,13 @@ public:
 
 	FString ReadFileToString() const;
 
+	FFileManager& GetFileManager() const { return FileManager;  }
+
+	std::filesystem::path GetFilePath() const { return FilePath; }
+
 private:
 	FFileManager& FileManager;
 	std::filesystem::path FilePath;
-};
-
-struct FStaticMeshSection
-{
-	uint32 StartIndex;        // 인덱스 버퍼 내 시작 위치
-	uint32 IndexCount;        // 이 섹션이 쓰는 인덱스 개수
-	uint32 MaterialSlotIndex; // 아래 슬롯 배열의 인덱스
 };
 
 class UStaticMesh : public UAsset
@@ -45,7 +45,8 @@ public:
 
 	using UAsset::Initialize;
 	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount);
-	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, int32 InVertexCount, const uint32* InIndices, int32 InIndexCount);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, int32 InVertexCount, const uint32* InIndices, int32 InIndexCount, const FStaticMeshSection* InSections, int32 InSectionCount);
 
 	inline Microsoft::WRL::ComPtr<ID3D11Buffer> GetVertexBuffer() const { return VertexBuffer; }
 	inline uint32 GetVertexCount() const { return VertexCount; }
@@ -57,13 +58,30 @@ public:
 	inline const TArray<FVertexSimple>& GetVertices() const { return Vertices; }
 	inline const TArray<uint32>& GetIndices() const { return Indices; }
 	inline const TArray<FStaticMeshSection>& GetSections() const { return Sections; }
-
+	TArray<FStaticMeshSection>& GetSection(){ return Sections; }
 	// UMaterial이 들어오기 전까지 쓰는 임시 표면 정보.
-	inline void SetTexture(UTexture2D* InTexture) { Texture = InTexture; }
-	inline UTexture2D* GetTexture() const { return Texture; }
+	void SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial);
 
-	inline void SetColor(const FVector4& InColor) { Color = InColor; }
-	inline const FVector4& GetColor() const { return Color; }
+	UMaterial* GetMaterial(uint32 MaterialSlotIndex) const;
+
+	inline uint32 GetMaterialCount() const {
+		return Materials.Num();
+	}
+
+	inline const TArray<UMaterial*>& GetMaterials() const {
+		return Materials;
+	}
+
+	void AddSection(const FStaticMeshSection& InSection);
+
+	inline uint32 GetSectionCount() const {
+		return Sections.Num();
+	}
+
+	uint32 AddMaterial(UMaterial* InMaterial);
+	int32 FindMaterialSlot(UMaterial* InMaterial) const;
+
+	void SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial);
 
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
@@ -73,14 +91,11 @@ private:
 	uint32 IndexCount = 0;
 	FAABB BoundingBox;
 
-	//어디서부터 어디까지가 어떤 정점과 머테리얼로 이루어져 있는지 저장한다.
-	TArray<FStaticMeshSection> Sections;
 	TArray<FVertexSimple> Vertices;
 	TArray<uint32> Indices;
 
-	//TODO. UMaterial로 대체한다. 그때까지는 메시 전체가 텍스처 하나와 색 하나를 쓴다.
-	UTexture2D* Texture = nullptr;
-	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
+	TArray<FStaticMeshSection> Sections;
+	TArray<UMaterial*> Materials;
 };
 
 class UTexture2D : public UAsset
@@ -115,7 +130,7 @@ public:
 	inline uint32 GetHeight() const { return Height; }
 
 	inline DXGI_FORMAT GetFormat() const { return Format; }
-
+	
 protected:
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;

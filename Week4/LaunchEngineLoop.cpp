@@ -24,6 +24,7 @@
 #include "Assets.h"
 #include "FStatManager.h"
 
+#include "Material.h"
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
 	// Initialize window infos
@@ -126,6 +127,7 @@ void FEngineLoop::InitAssetManager()
 	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(PlaneAsset);
 
+
 	FTexture2DAssetLoader* TextureLoader = new FTexture2DAssetLoader(*renderer);
 	FFontAssetLoader* FontLoader = new FFontAssetLoader(*mFontManager);
 
@@ -139,7 +141,7 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager->RegisterAsset(FName("ExplosionTexture"), TextureLoader, ExplosionTextureSource);
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
-	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas>(FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
+	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
 	mAssetManager->RegisterAsset(ExplosionSpriteAtlasAsset);
 
 	FFileAssetSource* FontAssetSource = new FFileAssetSource(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
@@ -156,7 +158,7 @@ void FEngineLoop::InitAssetManager()
 	UFont* StatFontAsset = mAssetManager->GetAssetAs<UFont>(FName("StatFont"), true);
 	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(StatFontAtlasAsset);
-}
+}      
 
 void FEngineLoop::InitStatManager()
 {

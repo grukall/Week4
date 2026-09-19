@@ -6,7 +6,7 @@
 #include "FAssetManager.h"
 #include "Assets.h"
 #include "ObjectFactory.h"
-
+#include "Material.h"
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
 
@@ -27,8 +27,8 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 	mMeshPipeline = mRenderer->CreateRenderPipeline();
 	mMeshPipeline->SetRasterRizerState(D3D11_CULL_BACK, 0, { EViewModeIndex::VMI_Lit, EViewModeIndex::VMI_Wireframe });
 	mMeshPipeline->SetDepthStencilState(true, true);
-	mMeshPipeline->SetShader("Assets/Shaders/Mesh.hlsl");
-	mMeshPipeline->AddConstantBuffer<FConstants>();
+	mMeshPipeline->SetShader("Assets/Shaders/StaticMeshShader.hlsl");
+	mMeshPipeline->AddConstantBuffer<FMaterialConstants>();
 	mMeshPipeline->AddConstantBuffer<FMatrix>();
 }
 
@@ -108,20 +108,73 @@ void FGraphicsManager::Render()
 		mMeshPipeline->ClearShaderResource();
 		mMeshPipeline->ClearSamplerState();
 
-		if (renderInfo.Texture)
+		if (renderInfo.Material)
 		{
-			FConstants Constants{};
+			FMaterialConstants Constants{};
+
+			UMaterial* Material = renderInfo.Material;
+
 			Constants.Matrix = renderInfo.WorldTransformMatrix;
-			Constants.Color = renderInfo.Color;
+
+			Constants.Color = Material->GetDiffuseColor();
+
+			Constants.AmbientColor = { Material->GetAmbientColor(),1.0f };
+
+			Constants.SpecularColor = { Material->GetSpecularColor(),1.0f };
+
+			Constants.EmissiveColor = { Material->GetEmissiveColor(),1.0f };
+
+			Constants.TransmissionFilter = { Material->GetTransmissionFilter(), 1.0f };
+
+			Constants.SpecularPower = Material->GetSpecularPower();
+
+			Constants.OpticalDensity = Material->GetOpticalDensity();
+
+			Constants.Transparency = Material->GetTransparency();
+
+			Constants.IlluminationModel = static_cast<uint32>(Material->GetIlluminationModel());
+
 			Constants.UseVertexColor = 0;
-			Constants.HasTexture = 1;
+
+
+			// UV
+			Material->UpdateUVScroll();
+			Constants.UVScroll = Material->GetUVScroll();
+
+
+			// Texture
+			const UTexture2D* AmbientTexture = Material->GetAmbientTexture();
+			const UTexture2D* DiffuseTexture = Material->GetDiffuseTexture();
+			const UTexture2D* SpecularTexture = Material->GetSpecularTexture();
+			const UTexture2D* BumpTexture = Material->GetBumpTexture();
+
+			Constants.HasAmbientTexture = AmbientTexture ? 1 : 0;
+			Constants.HasTexture = DiffuseTexture ? 1 : 0;
+			Constants.HasSpecularTexture = SpecularTexture ? 1 : 0;
+			Constants.HasBumpTexture = BumpTexture ? 1 : 0;
 
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
 			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
+			mMeshPipeline->SetShaderResource(0, nullptr);
+			mMeshPipeline->SetShaderResource(1, nullptr);
+			mMeshPipeline->SetShaderResource(2, nullptr);
+			mMeshPipeline->SetShaderResource(3, nullptr);
+			if (AmbientTexture)
+				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV());
 
-			mMeshPipeline->SetShaderResource(0, renderInfo.Texture->GetSRV());
-			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+			if (DiffuseTexture)
+				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV());
 
+			if (SpecularTexture)
+				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV());
+
+			if (BumpTexture)
+				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV());
+
+			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(1, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(2, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(3, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, Section.StartIndex);
 		}
 		else
