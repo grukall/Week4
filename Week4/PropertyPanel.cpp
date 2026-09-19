@@ -191,6 +191,10 @@ namespace
 				if (ImGui::Selectable("None", CurrentAsset == nullptr))
 				{
 					*AssetSlot = nullptr;
+					if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>())
+					{
+						MeshComp->ClearMaterials();
+					}
 				}
 
 				// 해당 클래스와 그 파생만 나열된다.
@@ -203,6 +207,16 @@ namespace
 					if (ImGui::Selectable(AssetName.c_str(), bSelected))
 					{
 						*AssetSlot = Asset;
+
+						if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>()) {
+							MeshComp->ClearMaterials();
+							if (UStaticMesh* NewMesh = Asset ? Asset->Cast<UStaticMesh>() : nullptr) {
+								TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
+								for (uint32 i = 0; i < MeshMaterials.Num();++i) {
+									MeshComp->SetMaterial(i, MeshMaterials[i]);
+								}
+							}
+						}
 					}
 					if (bSelected)
 					{
@@ -387,7 +401,8 @@ namespace
 			if (ImGui::BeginCombo("##Material", CurrentMaterialName.c_str())) {
 				const bool bNoneSelected = (CurrentMaterial == nullptr);
 				if (ImGui::Selectable("None", bNoneSelected)) {
-					Component->SetMaterial(SectionIndex, nullptr);
+					FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
+					Component->SetMaterial(MutableSection.MaterialSlotIndex, nullptr);
 				}
 
 				if (bNoneSelected) {
@@ -412,7 +427,25 @@ namespace
 					FString MaterialName = Material->GetAssetName().ToString();
 
 					if (ImGui::Selectable(MaterialName.c_str(), bSelected)) {
-						Component->SetMaterial(SectionIndex, Material);
+						TArray<UMaterial*> MeshMaterials = Component->GetMaterials();
+						uint32 FoundSlotIndex = -1;
+						bool bFound = false;
+						for (uint32 i = 0; i < MeshMaterials.Num(); ++i) {
+							if (MeshMaterials[i] == Material) {
+								FoundSlotIndex = i;
+								bFound = true;
+								break;
+							}
+						}
+						if (!bFound) {
+							FoundSlotIndex = MeshMaterials.Num();
+						}
+
+						FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
+						MutableSection.MaterialSlotIndex = FoundSlotIndex;
+
+						Component->SetMaterial(FoundSlotIndex, Material);
+						CurrentMaterial = Material;
 					}
 
 					if (bSelected) {

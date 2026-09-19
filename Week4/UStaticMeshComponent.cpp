@@ -16,6 +16,24 @@ void UStaticMeshComponent::Initialize(UStaticMesh* InStaticMesh)
 	StaticMesh = InStaticMesh;
 }
 
+void UStaticMeshComponent::SetStaticMesh(UStaticMesh* _InStaticMesh)
+{
+	if (GetStaticMesh() == _InStaticMesh) {
+		return;
+	}
+
+	StaticMesh = _InStaticMesh;
+	OverrideMaterials.Empty();
+
+	if (StaticMesh) {
+		const TArray<UMaterial*>& MeshMaterials = StaticMesh->GetMaterials();
+
+		for (uint32 i = 0; i < MeshMaterials.Num(); ++i) {
+			SetMaterial(i, MeshMaterials[i]);
+		}
+	}
+}
+
 /*UTexture2D* UStaticMeshComponent::GetRenderTexture() const
 {
 	if (TextureOverride)
@@ -43,13 +61,18 @@ void UStaticMeshComponent::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMa
 UMaterial* UStaticMeshComponent::GetMaterial(uint32 MaterialSlotIndex) const
 {
 
-	if (OverrideMaterials.Num() > MaterialSlotIndex && OverrideMaterials[MaterialSlotIndex] != nullptr) {
+	if (OverrideMaterials.Num() > MaterialSlotIndex) {
 		return OverrideMaterials[MaterialSlotIndex];
 	}
 
 	if (!StaticMesh)	return nullptr;
 
 	return StaticMesh->GetMaterial(MaterialSlotIndex);
+}
+
+void UStaticMeshComponent::ClearMaterials()
+{
+	OverrideMaterials.Empty();
 }
 
 void UStaticMeshComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const

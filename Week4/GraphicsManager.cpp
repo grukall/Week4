@@ -28,7 +28,7 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 	mMeshPipeline->SetRasterRizerState(D3D11_CULL_BACK, 0, { EViewModeIndex::VMI_Lit, EViewModeIndex::VMI_Wireframe });
 	mMeshPipeline->SetDepthStencilState(true, true);
 	mMeshPipeline->SetShader("Assets/Shaders/StaticMeshShader.hlsl");
-	mMeshPipeline->AddConstantBuffer<FConstants>();
+	mMeshPipeline->AddConstantBuffer<FMaterialConstants>();
 	mMeshPipeline->AddConstantBuffer<FMatrix>();
 }
 
@@ -103,23 +103,6 @@ void FGraphicsManager::Render()
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
 		UStaticMesh* Asset = renderInfo.StaticMesh;
-		/*UMaterial* Material0 = FObjectFactory::ConstructObject<UMaterial>();
-		Material0->SetDiffuseColor(FVector4(1.f, 0.f, 0.f, 1.f));
-		Material0->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("TestTexture"), true));
-		Material0->SetUVSpeed(0.01f);
-		Material0->UpdateUVScroll();
-		Asset->SetMaterial(0, Material0);
-		Asset->GetSection()[0].IndexCount = 1200;
-		UMaterial* Material1 = FObjectFactory::ConstructObject<UMaterial>();
-		Material1->SetDiffuseColor(FVector4(0.f, 0.f, 1.f, 1.f));
-		Material1->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("SpotLightIcon"), true));
-		Asset->SetMaterial(1, Material1);
-		FStaticMeshSection Section1;
-		Section1.StartIndex = 1200;
-		Section1.IndexCount = 1200;
-		Section1.MaterialSlotIndex = 1;
-		if(Asset->GetSectionCount() < 2)
-			Asset->AddSection(Section1);*/
 		if (!Asset)
 		{
 			continue;
@@ -138,21 +121,71 @@ void FGraphicsManager::Render()
 
 		if (renderInfo.Material)
 		{
-			FConstants Constants{};
+			FMaterialConstants Constants{};
+
+			UMaterial* Material = renderInfo.Material;
+
 			Constants.Matrix = renderInfo.WorldTransformMatrix;
-			Constants.Color = renderInfo.Material->GetDiffuseColor();
+
+			Constants.Color = Material->GetDiffuseColor();
+
+			Constants.AmbientColor = { Material->GetAmbientColor(),1.0f };
+
+			Constants.SpecularColor = { Material->GetSpecularColor(),1.0f };
+
+			Constants.EmissiveColor = { Material->GetEmissiveColor(),1.0f };
+
+			Constants.TransmissionFilter = { Material->GetTransmissionFilter(), 1.0f };
+
+			Constants.SpecularPower = Material->GetSpecularPower();
+
+			Constants.OpticalDensity = Material->GetOpticalDensity();
+
+			Constants.Transparency = Material->GetTransparency();
+
+			Constants.IlluminationModel = static_cast<uint32>(Material->GetIlluminationModel());
+
 			Constants.UseVertexColor = 0;
 
-			const UTexture2D* DiffuseTexture = renderInfo.Material->GetDiffuseTexture();
+
+			// UV
+			Material->UpdateUVScroll();
+			Constants.UVScroll = Material->GetUVScroll();
+
+
+			// Texture
+			const UTexture2D* AmbientTexture = Material->GetAmbientTexture();
+			const UTexture2D* DiffuseTexture = Material->GetDiffuseTexture();
+			const UTexture2D* SpecularTexture = Material->GetSpecularTexture();
+			const UTexture2D* BumpTexture = Material->GetBumpTexture();
+
+			Constants.HasAmbientTexture = AmbientTexture ? 1 : 0;
 			Constants.HasTexture = DiffuseTexture ? 1 : 0;
-			renderInfo.Material->UpdateUVScroll();
-			Constants.UVScroll = renderInfo.Material->GetUVScroll();
+			Constants.HasSpecularTexture = SpecularTexture ? 1 : 0;
+			Constants.HasBumpTexture = BumpTexture ? 1 : 0;
+
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
 			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
-			if (DiffuseTexture) {
-				mMeshPipeline->SetShaderResource(0, DiffuseTexture->GetSRV());
-				mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
-			}
+			mMeshPipeline->SetShaderResource(0, nullptr);
+			mMeshPipeline->SetShaderResource(1, nullptr);
+			mMeshPipeline->SetShaderResource(2, nullptr);
+			mMeshPipeline->SetShaderResource(3, nullptr);
+			if (AmbientTexture)
+				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV());
+
+			if (DiffuseTexture)
+				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV());
+
+			if (SpecularTexture)
+				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV());
+
+			if (BumpTexture)
+				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV());
+
+			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(1, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(2, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(3, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, Section.StartIndex);
 		}
 		else

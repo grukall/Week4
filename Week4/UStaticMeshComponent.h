@@ -20,14 +20,14 @@ public:
 	using UMeshComponent::Initialize;
 	void Initialize(UStaticMesh* InStaticMesh);
 
-	void SetStaticMesh(UStaticMesh* _InStaticMesh) { StaticMesh = _InStaticMesh; }
+	void SetStaticMesh(UStaticMesh* _InStaticMesh);
 	UStaticMesh* GetStaticMesh() const { return StaticMesh; }
 
 	void SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial);
 
 	UMaterial* GetMaterial(uint32 MaterialSlotIndex) const override;
 
-
+	void ClearMaterials();
 
 
 	// 섹션(머티리얼 구간) 하나당 RenderInfo 하나를 만든다.
@@ -35,7 +35,10 @@ public:
 
 	// AABB로 먼저 거르고 메시의 삼각형과 판정한다.
 	virtual bool RayCastComponent(const FPickingRay& PickingRay, float& OutHitT) const override;
-
+	
+	inline const TArray<UMaterial*>& GetMaterials() const {
+		return OverrideMaterials;
+	}
 protected:
 	UStaticMesh* StaticMesh = nullptr;
 	

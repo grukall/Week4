@@ -451,9 +451,10 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			const std::filesystem::path& Path = selectedPath.value();
 			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
 			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
-			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer);
+			FTexture2DAssetLoader* Texture2DLoader = new FTexture2DAssetLoader(*Renderer);
+			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer, *guiReference.AssetManager, *Texture2DLoader);
 			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
-			FName AssetName = FName(selectedPath.value().stem().string());
+			FName AssetName = FName(selectedPath.value().stem().string().c_str());
 			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
 			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
 		}

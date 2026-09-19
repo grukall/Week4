@@ -159,19 +159,6 @@ void FEngineLoop::InitAssetManager()
 	UFont* StatFontAsset = mAssetManager->GetAssetAs<UFont>(FName("StatFont"), true);
 	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(StatFontAtlasAsset);
-
-
-
-	FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*renderer, *mAssetManager, *TextureLoader);
-	FFileAssetSource* CatObjSource = new FFileAssetSource(*mFileManager, "Test/cat.obj");
-	UStaticMesh* TestAsset = static_cast<UStaticMesh*>(StaticMeshLoader->LoadAsset(FName("TestAsset"), *CatObjSource));
-	mAssetManager->RegisterAsset(TestAsset);  
-	FFileAssetSource* CubeObjSource = new FFileAssetSource(*mFileManager, "Test/cube.obj");
-	UStaticMesh* TestAsset1 = static_cast<UStaticMesh*>(StaticMeshLoader->LoadAsset(FName("TestAsset1"), *CubeObjSource));
-	mAssetManager->RegisterAsset(TestAsset1);
-	FFileAssetSource* CubeTexObjSource = new FFileAssetSource(*mFileManager, "Test/cube-tex.obj");
-	UStaticMesh* TestAsset2 = static_cast<UStaticMesh*>(StaticMeshLoader->LoadAsset(FName("TestAsset2"), *CubeTexObjSource));
-	mAssetManager->RegisterAsset(TestAsset2);
 }      
 
 void FEngineLoop::InitStatManager()
