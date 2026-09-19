@@ -30,21 +30,25 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 	for (const FFaceGroupData& FaceGroup : RawData.FaceGroups)
 	{
 		int SlotIndex = -1;
-
-		for (int i = 0; i < Mesh.Materials.Num(); ++i)
+		if (RawData.MaterialFiles.IsEmpty())
 		{
-			if (Mesh.Materials[i] == FaceGroup.MaterialName)
-			{
-				SlotIndex = i;
-				break;
-			}
+			SlotIndex = 0;
 		}
+		else {
+			for (int i = 0; i < Mesh.Materials.Num(); ++i)
+			{
+				if (Mesh.Materials[i] == FaceGroup.MaterialName)
+				{
+					SlotIndex = i;
+					break;
+				}
+			}
 
-		if (SlotIndex == -1)
-		{
-			if (!RawData.MaterialFiles.IsEmpty())
+			if (SlotIndex == -1)
+			{
 				Mesh.Materials.Add(FaceGroup.MaterialName);
-			SlotIndex = Mesh.Materials.Num() - 1;
+				SlotIndex = Mesh.Materials.Num() - 1;
+			}
 		}
 
 		FStaticMeshSection Section;
