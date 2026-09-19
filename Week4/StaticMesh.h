@@ -16,7 +16,7 @@ struct FStaticMeshSection
 struct FStaticMesh
 {
 	FString PathFileName;
-	TArray<FNormalVertex> Vertices;
+	TArray<FVertexSimple> Vertices;
 	TArray<uint32> Indices;
 	TArray<FStaticMeshSection> Sections;
 	TArray<FString> Materials;
@@ -50,6 +50,4 @@ public:
 	virtual void UnloadAsset(UAsset* Asset) override;
 private:
 	URenderer& Renderer;
-
-	void ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices);
 };
