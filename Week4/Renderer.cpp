@@ -123,6 +123,21 @@ void URenderer::Create(HWND hWindow)
 	}
 }
 
+bool URenderer::GetVideoMemoryInfo(uint64& OutUsed, uint64& OutBudget) const
+{
+	if (!DxgiAdapter) return false;
+
+	DXGI_QUERY_VIDEO_MEMORY_INFO Info = {};
+	if (FAILED(DxgiAdapter->QueryVideoMemoryInfo(
+		0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &Info)))
+	{
+		return false;
+	}
+
+	OutUsed = Info.CurrentUsage;
+	OutBudget = Info.Budget;
+	return true;
+}
 void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 {
 	D3D_FEATURE_LEVEL FeatureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
@@ -153,7 +168,19 @@ void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 	Width = SwapChainDesc.BufferDesc.Width;
 	Height = SwapChainDesc.BufferDesc.Height;
 	ViewportInfo = { 0.0f, 0.0f, (float)Width, (float)Height, 0.0f, 1.0f };
-	Projection2D = FMatrix::Ortho(0.f, Width, Height, 0.f, 0.0f, 1.0f);
+	Projection2D = FMatrix::Ortho(0.0f, 0.0f, (float)Width, (float)Height, 0.0f, 1.0f);
+
+	//Adapter 가져오기
+	//ID3D11Device → IDXGIDevice → IDXGIAdapter → IDXGIAdapter3
+	Microsoft::WRL::ComPtr<IDXGIDevice> DxgiDevice;
+	if (SUCCEEDED(Device->QueryInterface(IID_PPV_ARGS(&DxgiDevice))))
+	{
+		Microsoft::WRL::ComPtr<IDXGIAdapter> Adapter;
+		if (SUCCEEDED(DxgiDevice->GetAdapter(&Adapter)))
+		{
+			Adapter.As(&DxgiAdapter);
+		}
+	}
 }
 
 void URenderer::ReleaseDeviceAndSwapChain()
@@ -264,7 +291,7 @@ void URenderer::SwapBuffer()
 	SwapChain->Present(0, 0);
 }
 
-void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
+void URenderer::Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D)
 {
 	FGpuTimerSlot& Slot = GpuTimers[GpuTimerIndex];
 
@@ -296,9 +323,7 @@ void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
 	StencilMarkPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	StencilOutlinePipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	QuadPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
-
-	// 2D 쿼드는 카메라와 무관하게 화면 픽셀 좌표계를 쓴다.
-	Quad2DPipeline->UpdateConstantBuffer(1, Projection2D);
+	Quad2DPipeline->UpdateConstantBuffer(1, HUDProjection2D);
 }
 
 Microsoft::WRL::ComPtr<ID3D11Buffer> URenderer::CreateIndexBuffer(const uint32* Indices, UINT Count)
@@ -506,6 +531,8 @@ void URenderer::RenderLines(const TArray<FRenderLineInfo>& Lines) const
 		UINT OffsetIndex = 0;
 		DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &OffsetIndex);
 		DeviceContext->DrawInstanced(6, BatchSize, 0, 0);
+		INC_DWORD_STAT("Draws");
+		INC_DWORD_STAT_BY("Prims", BatchSize * 2);
 
 		Remaining -= BatchSize;
 		Offset += BatchSize;
@@ -574,6 +601,7 @@ void URenderer::RenderQuad2D(const FRenderQuadInfo& Info) const
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC Desc{};
 		Info.TextureSRV->GetDesc(&Desc);
+
 		// 폰트 아틀라스는 R8이라 R 채널이 알파다.
 		bGrayscale = (Desc.Format == DXGI_FORMAT_R8_UNORM);
 	}

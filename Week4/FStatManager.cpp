@@ -69,6 +69,21 @@ void FStatManager::ResetFrame()
 	{
 		FStatEntry& Entry = Pair.second;
 
+		// 꺼져 있는 Cycle/Counter는 Accum이 계속 0이라, 그대로 두면 Avg만 매 프레임
+		// 0.9배로 줄어 "0은 아닌 극소값"으로 남는다. 다시 켰을 때 그 값이 한 프레임
+		// 동안 표시되면서 1000/FrameMs 같은 계산을 폭주시킨다. 아예 비워둔다.
+		// (Memory는 표시 여부와 무관하게 총량을 들고 있어야 하므로 예외)
+		if (!Entry.bEnabled && Entry.Type != EStatType::Memory)
+		{
+			Entry.Avg = 0.0;
+			Entry.Max = 0.0;
+			Entry.Display = 0.0;
+			Entry.DisplayCalls = 0;
+			Entry.Accum = 0.0;
+			Entry.Calls = 0;
+			continue;
+		}
+
 		Entry.Avg = Entry.Avg * 0.9 + Entry.Accum * 0.1;
 		Entry.Max = (Entry.Type == EStatType::Memory)
 			? FPlatformMath::Max(Entry.Max, Entry.Accum)

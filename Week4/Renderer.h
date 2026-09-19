@@ -9,6 +9,7 @@
 #include "RenderInfo.h"
 #include "FRenderPipeline.h"
 #include "FStatManager.h"
+#include <dxgi1_4.h>
 
 struct FCameraConstants
 {
@@ -392,7 +393,10 @@ public:
 	TSharedPtr<FDepthStencil> CreateDepthStencil(uint32 Width, uint32 Height);
 
 	//Rendering
-	void Prepare(const FMatrix& ViewProjectionMatrix);
+	// HUDProjection2D는 뷰포트(ImGui 패널) 크기 기준 직교 투영. 씬 RT가 패널 크기로 늘어나
+	// 표시되므로, 그 스트레치를 상쇄하려면 창 크기가 아니라 패널 크기를 기준으로 삼아야 한다.
+	void Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D);
+
 	TSharedPtr<FRenderPipeline> CreateRenderPipeline();
 
 	void BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline) const;
@@ -468,11 +472,19 @@ private:
 	UINT Width, Height;
     FLOAT ClearColor[4] = { 0.025f, 0.025f, 0.025f, 1.0f };
     D3D11_VIEWPORT ViewportInfo;
+
+	//기즈모, 2D 도형 그리기용 직교 투영 행렬(전체 viewport 기준)
 	FMatrix Projection2D;
 
 	// 와이어프레임 여부. Prepare에서 갱신하고 BindPipeline이 읽는다.
 	// RSSetState는 드로우 직전마다 덮어써지므로 플래그로 들고 있어야 한다.
 	EViewModeIndex ViewModeIndex = EViewModeIndex::VMI_Lit;
+
+	//===========================================
+	// Stat 추적
+	
+public:
+	bool GetVideoMemoryInfo(uint64& OutUsed, uint64& OutBudget) const;
 
 private:
 	//GPU Time 측정을 위한 구조체
@@ -491,4 +503,7 @@ private:
 	bool bGpuTimerActive = false;
 
 	bool ResolveGpuTimer(FGpuTimerSlot& Slot);
+
+	//DXGI Adapter(VRAM 측정용)
+	Microsoft::WRL::ComPtr<IDXGIAdapter3> DxgiAdapter;
 };

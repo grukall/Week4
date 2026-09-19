@@ -60,7 +60,7 @@ private:
 	static void DrawStatText(UFontAtlas* Atlas, FRenderCollector& RenderCollector,const char* Text, float LeftX, float Y, float Scale, const FVector4& Color);
 
 	// HUD에 그릴 글자 크기(픽셀).
-	static constexpr float StatFontPixelSize = 24.0f;
+	static constexpr float StatFontPixelSize = 18.0f;
 
 	// 화면 가장자리에서 띄우는 여백
 	static constexpr float StatScreenMargin = 48.0f;
