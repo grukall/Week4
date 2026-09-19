@@ -42,7 +42,8 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 
 		if (SlotIndex == -1)
 		{
-			Mesh.Materials.Add(FaceGroup.MaterialName);
+			if (!RawData.MaterialFiles.IsEmpty())
+				Mesh.Materials.Add(FaceGroup.MaterialName);
 			SlotIndex = Mesh.Materials.Num() - 1;
 		}
 
