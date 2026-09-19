@@ -43,3 +43,19 @@ void UMaterial::DeserializeClass(const json::JSON& inJson)
 
 	DiffuseTexturePath = FString(propertiesJson.at("DiffuseTexture").ToString());
 }
+UMaterial* UMaterial::DefaultMaterial = nullptr;
+void UMaterial::InitDefaultMaterial(URenderer* Renderer)
+{
+	if (DefaultMaterial != nullptr || Renderer == nullptr) return;
+
+	// "DefaultMaterial"을 FName("DefaultMaterial")으로 명시적 생성하여 전달
+	DefaultMaterial = FObjectFactory::ConstructObject<UMaterial>(
+		FName("None"),
+		*Renderer
+	);
+
+	// 디폴트 파라미터 설정
+	DefaultMaterial->SetAmbientColor({ 0.2f, 0.2f, 0.2f });
+	DefaultMaterial->SetDiffuseColor({ 0.6f, 0.6f, 0.6f, 1.0f });
+	DefaultMaterial->SetSpecularPower(32.0f);
+}
