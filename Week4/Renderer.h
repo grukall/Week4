@@ -8,6 +8,8 @@
 #include "Vector.h"
 #include "RenderInfo.h"
 #include "FRenderPipeline.h"
+#include "FStatManager.h"
+#include <dxgi1_4.h>
 
 struct FCameraConstants
 {
@@ -22,9 +24,36 @@ struct FConstants
 	FVector4 Color;
 	int32 UseVertexColor;
 	int32 HasTexture;
-	int32 Padding[2];
+	FVector2 UVScroll;
 };
+struct FMaterialConstants
+{
+	FMatrix Matrix;
 
+	FVector4 Color;
+
+	FVector4 AmbientColor;
+	FVector4 SpecularColor;
+	FVector4 EmissiveColor;
+	FVector4 TransmissionFilter;
+
+	float SpecularPower;
+	float OpticalDensity;
+	float Transparency;
+
+	uint32 IlluminationModel;
+
+	uint32 UseVertexColor;
+	uint32 HasTexture;
+
+	FVector2 UVScroll;
+
+	uint32 HasAmbientTexture;
+	uint32 HasSpecularTexture;
+	uint32 HasBumpTexture;
+
+	float Padding;
+};
 struct FLine2DConstants
 {
 	FMatrix Projection;
@@ -335,17 +364,6 @@ public:
 	void Create(HWND hWindow);
 	void Release();
 
-#if 0
-	void CreateLineVertexBuffer(uint32 maxVertices);
-
-	void CreateStencilMarkState();
-	void CreateStencilOutlineState();
-	void CreateNoColorWriteBlendState();
-
-	//release
-	void ReleaseLineVertexBuffer();
-#endif
-
 	template <typename T>
 	Microsoft::WRL::ComPtr<ID3D11Buffer> CreateVertexBuffer(T* Vertices, UINT Count)
 	{
@@ -358,6 +376,8 @@ public:
 
 		Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
 		Device->CreateBuffer(&VertexBufferDesc, &VertexBufferSRD, VertexBuffer.GetAddressOf());
+
+		INC_MEMORY_STAT_BY("VertexBufferMem", VertexBufferDesc.ByteWidth);
 
 		return VertexBuffer;
 	}
@@ -400,14 +420,11 @@ public:
 	TSharedPtr<FDepthStencil> CreateDepthStencil(uint32 Width, uint32 Height);
 	void ClearRenderTarget(ID3D11RenderTargetView* RTV, ID3D11DepthStencilView* DSV, const float ClearColor[4]);
 
-	//Update
-	void RSUpdateState();
 
 	//Rendering
-	void Prepare(const FMatrix& ViewProjectionMatrix);
-#if 0
-	void RenderLines(const FVertexSimple* vertices, uint32 numVertices);
-#endif
+	// HUDProjection2D는 뷰포트(ImGui 패널) 크기 기준 직교 투영. 씬 RT가 패널 크기로 늘어나
+	// 표시되므로, 그 스트레치를 상쇄하려면 창 크기가 아니라 패널 크기를 기준으로 삼아야 한다.
+	void Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D);
 
 	TSharedPtr<FRenderPipeline> CreateRenderPipeline();
 
@@ -417,10 +434,9 @@ public:
 	void BindRenderTarget(const TSharedPtr<FRenderTarget2D>& RenderTarget, const TSharedPtr<FDepthStencil>& DepthStencil, bool bClear = true);
 
 	void RenderLines(const TArray<FRenderLineInfo>& Lines) const;
-
 	void RenderHighlight(Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer, UINT NumVertices, Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer, UINT NumIndices, const FMatrix& Model, const FMatrix& OutlineModel, const FVector4& OutlineColor) const;
-
 	void RenderQuad(const FRenderQuadInfo& Info) const;
+	void RenderQuad2D(const FRenderQuadInfo& Info) const;
 
 	void RenderPrimitive(const TSharedPtr<FRenderPipeline>& Pipeline, Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices) const;
 	void RenderPrimitive(Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices, const FMatrix& Model) const;
@@ -436,11 +452,6 @@ public:
 	void RenderWorldGrid(const FMatrix& ViewProjection, const FVector& CameraLocation, float GridGap) const;
 
 	void SwapBuffer();
-
-	//=============================================
-	//해상도 변경 시 호출
-	//void OnResize(UINT Width, UINT Height);
-	void OnResize(UINT width, UINT height);
 
 	FORCEINLINE uint32 GetWidth() const { return Width; }
 	FORCEINLINE uint32 GetHeight() const { return Height; }
@@ -485,24 +496,44 @@ private:
 	TSharedPtr<FRenderPipeline> WorldAxisPipeline;
 	TSharedPtr<FRenderPipeline> WorldGridPipeline;
 	TSharedPtr<FRenderPipeline> QuadPipeline;
+	TSharedPtr<FRenderPipeline> MeshPipeline;
+	TSharedPtr<FRenderPipeline> Quad2DPipeline;
 
 	UINT Width, Height;
     FLOAT ClearColor[4] = { 0.025f, 0.025f, 0.025f, 1.0f };
     D3D11_VIEWPORT ViewportInfo;
+
+	//기즈모, 2D 도형 그리기용 직교 투영 행렬(전체 viewport 기준)
 	FMatrix Projection2D;
 
 	// 와이어프레임 여부. Prepare에서 갱신하고 BindPipeline이 읽는다.
 	// RSSetState는 드로우 직전마다 덮어써지므로 플래그로 들고 있어야 한다.
 	EViewModeIndex ViewModeIndex = EViewModeIndex::VMI_Lit;
 
-#if 1
-	ID3D11RasterizerState* RasterizerState[2] = {};
-	ID3D11DepthStencilState* StencilMarkState = nullptr;	// 스텐실에 1 마킹용 상태
-	ID3D11DepthStencilState* StencilOutlineState = nullptr; // 아웃라인 그리기용
-	ID3D11BlendState* NoColorWriteBlendState = nullptr;		// 스텐실만 찍고 색은 쓰지 않는 상태
+	//===========================================
+	// Stat 추적
+	
+public:
+	bool GetVideoMemoryInfo(uint64& OutUsed, uint64& OutBudget) const;
 
-	// 매 프레임 내용이 바뀌는 선분용. 메시 버퍼와 달리 IMMUTABLE이 아니라 DYNAMIC이다
-	ID3D11Buffer* LineVertexBuffer = nullptr;
-	uint32 LineVertexCapacity = 0;
-#endif
+private:
+	//GPU Time 측정을 위한 구조체
+	struct FGpuTimerSlot
+	{
+		Microsoft::WRL::ComPtr<ID3D11Query> Disjoint;
+		Microsoft::WRL::ComPtr<ID3D11Query> StartStamp;
+		Microsoft::WRL::ComPtr<ID3D11Query> EndStamp;
+		bool bInFlight = false;   // 발행했고 아직 안 읽은 상태
+	};
+
+	static constexpr uint32 GpuTimerSlotCount = 3;   // GPU가 따라올 여유
+	FGpuTimerSlot GpuTimers[GpuTimerSlotCount];
+	uint32 GpuTimerIndex = 0;
+	double LastGpuMs = 0.0;       // 수확 실패/Disjoint 시 유지할 값u
+	bool bGpuTimerActive = false;
+
+	bool ResolveGpuTimer(FGpuTimerSlot& Slot);
+
+	//DXGI Adapter(VRAM 측정용)
+	Microsoft::WRL::ComPtr<IDXGIAdapter3> DxgiAdapter;
 };

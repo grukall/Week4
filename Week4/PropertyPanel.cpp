@@ -5,10 +5,13 @@
 #include "UAsset.h"
 #include "UObjectIterator.h"
 #include "FLogManager.h"
+#include "Material.h"
+#include "UStaticMeshComponent.h"
 
 namespace
 {
-	bool DrawAxisControl(const FString& _label, float& _value, float _speed, float _minValue, float _maxValue, float _resetValue, FVector4 _color)
+	// _dragId는 "##X"처럼 호출부에서 상수로 넘긴다. 매 프레임 문자열을 조립하지 않기 위함이다.
+	bool DrawAxisControl(const char* _label, const char* _dragId, float& _value, float _speed, float _minValue, float _maxValue, float _resetValue, FVector4 _color)
 	{
 		bool isValueChanged = false;
 
@@ -21,7 +24,7 @@ namespace
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{ color.x - 0.1f, color.y - 0.1f, color.z - 0.1f, 1.0f });
 
 		// 굵은 폰트 적용
-		if (ImGui::Button(_label.c_str(), buttonSize))
+		if (ImGui::Button(_label, buttonSize))
 		{
 			_value = _resetValue;
 			isValueChanged = true;
@@ -30,15 +33,13 @@ namespace
 
 		// 드래그 슬라이더
 		ImGui::SameLine();
-		FString dragID = _label;
-		dragID.InsertAt(0, FString("##"));
-		isValueChanged |= ImGui::DragFloat(dragID.c_str(), &_value, _speed, _minValue, _maxValue, "%.2f");
+		isValueChanged |= ImGui::DragFloat(_dragId, &_value, _speed, _minValue, _maxValue, "%.2f");
 
 		return isValueChanged;
 
 	}
 
-	bool DrawVector3Controller(const FString& _label, FVector& _values, float _resetValue, float _columnWidth)
+	bool DrawVector3Controller(const char* _label, FVector& _values, float _resetValue, float _columnWidth)
 	{
 		ImGuiIO& io = ImGui::GetIO();
 		auto boldFont = io.Fonts->Fonts[0];
@@ -47,8 +48,8 @@ namespace
 
 		bool isVectorChanged = false;
 
-		ImGui::PushID(_label.c_str());
-		if (ImGui::BeginTable(_label.c_str(), 2, flags)) // 고유 ID, 열 2개, 플래그
+		ImGui::PushID(_label);
+		if (ImGui::BeginTable(_label, 2, flags)) // 고유 ID, 열 2개, 플래그
 		{
 			// ImGuiTableColumnFlags_WidthFixed: 초기 너비 고정
 			// ImGuiTableColumnFlags_WidthStretch: 창 크기에 따라 너비 조절 (기본값)
@@ -57,7 +58,7 @@ namespace
 
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
-			ImGui::Text(_label.c_str()); // 왼쪽 열: 레이블
+			ImGui::Text(_label); // 왼쪽 열: 레이블
 
 			ImGui::TableSetColumnIndex(1);
 			// [컨트롤러 UI 코드] // 오른쪽 열: 컨트롤러
@@ -65,17 +66,17 @@ namespace
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{ 2,0 });
 			ImGui::PushFont(boldFont);
 
-			isVectorChanged |= DrawAxisControl("X", _values.x, 0.1f, 0.0f, 0.0f, 0.0f, { 0.8f, 0.1f,0.1f, 1.0f });
+			isVectorChanged |= DrawAxisControl("X", "##X", _values.x, 0.1f, 0.0f, 0.0f, 0.0f, { 0.8f, 0.1f,0.1f, 1.0f });
 
 			ImGui::PopItemWidth();
 
 			ImGui::SameLine();
-			isVectorChanged |= DrawAxisControl("Y", _values.y, 0.1f, 0.0f, 0.0f, 0.0f, { 0.1f, 0.8f,0.1f, 1.0f });
+			isVectorChanged |= DrawAxisControl("Y", "##Y", _values.y, 0.1f, 0.0f, 0.0f, 0.0f, { 0.1f, 0.8f,0.1f, 1.0f });
 
 			ImGui::PopItemWidth();
 
 			ImGui::SameLine();
-			isVectorChanged |= DrawAxisControl("Z", _values.z, 0.1f, 0.0f, 0.0f, 0.0f, { 0.1f, 0.1f,0.8f, 1.0f });
+			isVectorChanged |= DrawAxisControl("Z", "##Z", _values.z, 0.1f, 0.0f, 0.0f, 0.0f, { 0.1f, 0.1f,0.8f, 1.0f });
 
 			ImGui::PopItemWidth();
 
@@ -94,8 +95,7 @@ namespace
 	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
 	{
 		void* ValuePtr = reinterpret_cast<char*>(Object) + Property.Offset;
-		FString Label = Property.Name;
-		Label.InsertAt(0, FString("##")); // 내부 ID용 식별자 생성
+		const char* Label = Property.WidgetId.c_str(); // 등록 시점에 만들어 둔 "##Name"
 
 		// Vector 타입은 DrawVector3Controller 내부에서 레이블을 자체적으로 그리므로 예외 처리
 		if (Property.Type != EPropertyType::Vector)
@@ -108,28 +108,28 @@ namespace
 		switch (Property.Type)
 		{
 		case EPropertyType::Float:
-			ImGui::DragFloat(Label.c_str(), static_cast<float*>(ValuePtr), 0.1f);
+			ImGui::DragFloat(Label, static_cast<float*>(ValuePtr), 0.1f);
 			break;
 
 		case EPropertyType::Int:
-			ImGui::DragInt(Label.c_str(), static_cast<int*>(ValuePtr), 1.0f);
+			ImGui::DragInt(Label, static_cast<int*>(ValuePtr), 1.0f);
 			break;
 
 		case EPropertyType::Bool:
-			ImGui::Checkbox(Label.c_str(), static_cast<bool*>(ValuePtr));
+			ImGui::Checkbox(Label, static_cast<bool*>(ValuePtr));
 			break;
 
 		case EPropertyType::Vector:
 		{
 			FVector* Value = static_cast<FVector*>(ValuePtr);
-			DrawVector3Controller(Property.Name, *Value, 0.0f, 120.0f);
+			DrawVector3Controller(Property.Name.c_str(), *Value, 0.0f, 120.0f);
 			break;
 		}
 
 		case EPropertyType::Vector4:
 		{
 			FVector4* Value = static_cast<FVector4*>(ValuePtr);
-			ImGui::ColorEdit4(Label.c_str(), &Value->x);
+			ImGui::ColorEdit4(Label, &Value->x);
 			break;
 		}
 
@@ -140,7 +140,7 @@ namespace
 			char Buffer[256] = {};
 			strncpy_s(Buffer, Value->c_str(), sizeof(Buffer) - 1);
 			if (CustomFont) ImGui::PushFont(CustomFont);
-			if (ImGui::InputText(Label.c_str(), Buffer, sizeof(Buffer)))
+			if (ImGui::InputText(Label, Buffer, sizeof(Buffer)))
 			{
 				*Value = (FString)Buffer;
 			}
@@ -158,7 +158,7 @@ namespace
 
 			if (CustomFont) ImGui::PushFont(CustomFont);
 
-			if (ImGui::InputText(Label.c_str(), Buffer, sizeof(Buffer)))
+			if (ImGui::InputText(Label, Buffer, sizeof(Buffer)))
 			{
 				wchar_t wBuffer[256] = {};
 				mbstowcs_s(&convertedChars, wBuffer, sizeof(wBuffer), Buffer, _TRUNCATE);
@@ -186,11 +186,15 @@ namespace
 			// FName::ToString()이 임시 객체를 돌려주므로 반드시 붙잡아 둔다.
 			FString CurrentName = CurrentAsset ? CurrentAsset->GetAssetName().ToString() : FString("None");
 
-			if (ImGui::BeginCombo(Label.c_str(), CurrentName.c_str()))
+			if (ImGui::BeginCombo(Label, CurrentName.c_str()))
 			{
 				if (ImGui::Selectable("None", CurrentAsset == nullptr))
 				{
 					*AssetSlot = nullptr;
+					if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>())
+					{
+						MeshComp->ClearMaterials();
+					}
 				}
 
 				// 해당 클래스와 그 파생만 나열된다.
@@ -203,6 +207,16 @@ namespace
 					if (ImGui::Selectable(AssetName.c_str(), bSelected))
 					{
 						*AssetSlot = Asset;
+
+						if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>()) {
+							MeshComp->ClearMaterials();
+							if (UStaticMesh* NewMesh = Asset ? Asset->Cast<UStaticMesh>() : nullptr) {
+								TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
+								for (uint32 i = 0; i < MeshMaterials.Num();++i) {
+									MeshComp->SetMaterial(i, MeshMaterials[i]);
+								}
+							}
+						}
 					}
 					if (bSelected)
 					{
@@ -213,14 +227,124 @@ namespace
 			}
 			break;
 		}
+		case EPropertyType::Array:
+		{
+			if (Property.ElementType != EPropertyType::Asset ||
+				Property.ElementClassInfo == nullptr)
+			{
+				ImGui::TextDisabled("(Unsupported array type)");
+				break;
+			}
 
+			// 현재 우리가 지원하는 배열은 TArray<UMaterial*>.
+			TArray<UMaterial*>* Materials =
+				static_cast<TArray<UMaterial*>*>(ValuePtr);
+
+			for (uint32 Index = 0; Index < Materials->Num(); ++Index)
+			{
+				ImGui::PushID(static_cast<int>(Index));
+
+				ImGui::Text("Slot %u", Index);
+				ImGui::SameLine(120.0f);
+				ImGui::SetNextItemWidth(-1.0f);
+
+				UMaterial* CurrentMaterial = (*Materials)[Index];
+
+				FString CurrentName =CurrentMaterial? CurrentMaterial->GetAssetName().ToString(): FString("None");
+
+				if (ImGui::BeginCombo("##Material",CurrentName.c_str()))
+				{
+					// None
+					if (ImGui::Selectable(
+						"None",
+						CurrentMaterial == nullptr))
+					{
+						(*Materials)[Index] = nullptr;
+					}
+
+					// Material Asset 목록
+					for (TObjectIterator<UAsset> It(Property.ElementClassInfo); It; ++It)
+					{
+						UAsset* Asset = *It;
+
+						if (!Asset)
+						{
+							continue;
+						}
+
+						UMaterial* Material = Asset->Cast<UMaterial>();
+
+						if (!Material)
+						{
+							continue;
+						}
+
+						const bool bSelected =
+							(Material == CurrentMaterial);
+
+						FString AssetName =
+							Material->GetAssetName().ToString();
+
+						if (ImGui::Selectable(
+							AssetName.c_str(),
+							bSelected))
+						{
+							(*Materials)[Index] = Material;
+						}
+
+						if (bSelected)
+						{
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+
+					ImGui::EndCombo();
+				}
+
+				ImGui::PopID();
+			}
+
+			if (ImGui::Button("Add Material Slot"))
+			{
+				Materials->Add(nullptr);
+			}
+
+			break;
+		}
 		default:
 			ImGui::TextDisabled("(Unsupported)");
 			break;
 		}
 	}
 
-	// 클래스 계층을 따라 올라가며 각 단계의 프로퍼티를 표시
+	// 클래스 계층을 따라 올라가며 각 단계의 프로퍼티를 표시.
+	// 기반 클래스부터 그려야 하므로 재귀로 먼저 최상위까지 올라간다.
+	// (계층을 배열에 모아 뒤집으면 매 프레임 TArray 할당이 생긴다)
+	void DrawProperties(UObject* Object, const FClassInfo* Class, ImFont* CustomFont)
+	{
+		if (!Class)
+		{
+			return;
+		}
+
+		DrawProperties(Object, Class->SuperClass, CustomFont);
+
+		if (Class->GetProperties().IsEmpty())
+		{
+			return;
+		}
+
+		ImGui::PushID(Class->Name.c_str());
+		if (ImGui::CollapsingHeader(Class->Name.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			for (const FProperty& Property : Class->GetProperties())
+			{
+				DrawProperty(Object, Property, CustomFont);
+			}
+		}
+		ImGui::PopID();
+	}
+
 	void DrawProperties(UObject* Object, ImFont* CustomFont)
 	{
 		if (!Object)
@@ -228,29 +352,125 @@ namespace
 			return;
 		}
 
-		TArray<const FClassInfo*> ClassChain;
-		for (const FClassInfo* Class = Object->GetRuntimeClass(); Class; Class = Class->SuperClass)
-		{
-			ClassChain.Add(Class);
+		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont);
+	}
+	void DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
+		if (!Component) {
+			return;
 		}
 
-		// 기반 클래스부터 표시
-		for (auto It = ClassChain.rbegin(); It != ClassChain.rend(); ++It)
-		{
-			const FClassInfo* Class = *It;
-			if (Class->GetProperties().IsEmpty())
-			{
-				continue;
+		UStaticMesh* StaticMesh = Component->GetStaticMesh();
+
+		if (!StaticMesh) {
+			return;
+		}
+
+		const TArray<FStaticMeshSection>& Sections = StaticMesh->GetSections();
+
+		if (Sections.IsEmpty()) {
+			return;
+		}
+
+		ImGui::Separator();
+
+		if (!ImGui::CollapsingHeader("Static Mesh Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+			return;
+		}
+
+		for (uint32 SectionIndex = 0;SectionIndex < Sections.Num();++SectionIndex) {
+			const FStaticMeshSection& Section = Sections[SectionIndex];
+
+			ImGui::PushID(static_cast<int>(SectionIndex));
+
+			ImGui::Text("Section %u", SectionIndex);
+
+			ImGui::Text("Start Index : %u", Section.StartIndex);
+
+			ImGui::Text("Index Count : %u", Section.IndexCount);
+
+			ImGui::Text("Material Slot : %u", Section.MaterialSlotIndex);
+
+			UMaterial* CurrentMaterial = Component->GetMaterial(Section.MaterialSlotIndex);
+
+			FString CurrentMaterialName = CurrentMaterial ? CurrentMaterial->GetAssetName().ToString() : FString("None");
+
+			ImGui::Text("Material");
+			ImGui::SameLine(120.0f);
+			ImGui::SetNextItemWidth(-1.0f);
+
+			if (ImGui::BeginCombo("##Material", CurrentMaterialName.c_str())) {
+				const bool bNoneSelected = (CurrentMaterial == nullptr);
+				if (ImGui::Selectable("None", bNoneSelected)) {
+					FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
+					Component->SetMaterial(MutableSection.MaterialSlotIndex, nullptr);
+				}
+
+				if (bNoneSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+
+				for (TObjectIterator<UAsset> It(UMaterial::GetClass());It;++It) {
+					UAsset* Asset = *It;
+
+					if (!Asset) {
+						continue;
+					}
+
+					UMaterial* Material = Asset->Cast<UMaterial>();
+
+					if (!Material) {
+						continue;
+					}
+
+					const bool bSelected = (Material == CurrentMaterial);
+
+					FString MaterialName = Material->GetAssetName().ToString();
+
+					if (ImGui::Selectable(MaterialName.c_str(), bSelected)) {
+						TArray<UMaterial*> MeshMaterials = Component->GetMaterials();
+						uint32 FoundSlotIndex = -1;
+						bool bFound = false;
+						for (uint32 i = 0; i < MeshMaterials.Num(); ++i) {
+							if (MeshMaterials[i] == Material) {
+								FoundSlotIndex = i;
+								bFound = true;
+								break;
+							}
+						}
+						if (!bFound) {
+							FoundSlotIndex = MeshMaterials.Num();
+						}
+
+						FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
+						MutableSection.MaterialSlotIndex = FoundSlotIndex;
+
+						Component->SetMaterial(FoundSlotIndex, Material);
+						CurrentMaterial = Material;
+					}
+
+					if (bSelected) {
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
 			}
 
-			ImGui::PushID(Class->Name.c_str());
-			if (ImGui::CollapsingHeader(Class->Name.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+			if (CurrentMaterial)
 			{
-				for (const FProperty& Property : Class->GetProperties())
+				ImGui::Spacing();
+
+				// Get 함수를 사용해 현재 UV Speed 값을 가져옴
+				FVector2 CurrentSpeed = CurrentMaterial->GetUVSpeed();
+				float Speed[2] = { static_cast<float>(CurrentSpeed.X), static_cast<float>(CurrentSpeed.Y) };
+
+				// ImGui에서 드래그로 값 수정 시 Set 함수 호출
+				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f))
 				{
-					DrawProperty(Object, Property, CustomFont);
+					CurrentMaterial->SetUVSpeed(FVector2(Speed[0], Speed[1]));
 				}
 			}
+
+			ImGui::Separator();
 			ImGui::PopID();
 		}
 	}
@@ -308,6 +528,13 @@ void FPropertyPanel::OnRender()
 			for (UActorComponent* Component : Components)
 			{
 				DrawProperties(Component, CustomFont);
+
+				UStaticMeshComponent* StaticMeshComponent = Component->Cast<UStaticMeshComponent>();
+
+				if (StaticMeshComponent)
+				{
+					DrawStaticMeshMaterials(StaticMeshComponent);
+				}
 			}
 		}
 	}

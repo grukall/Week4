@@ -37,6 +37,11 @@
 #include "AStaticMeshTestActor.h"
 #include "UObjectIterator.h"
 
+#include "LaunchEngineLoop.h"
+#include "StaticMesh.h"
+
+#include "Material.h"
+
 FSceneManager::FSceneManager()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -261,7 +266,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
 	updateOutlinerGUI(guiReference);
-
+	updateContentBrowserGUI(guiReference);
 	ConsoleWindow::Get().Process(mPanelWidth);
 }
 
@@ -278,9 +283,6 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::Begin("Jungle Control Panel", nullptr, flags);
 	mPanelWidth = ImGui::GetWindowWidth();
 
-	ImGui::Text("Hello Jungle World!");
-	ImGui::Text("FPS: %.1f  dt: %.4f", guiReference.FrameTimer.GetFPS(), guiReference.FrameTimer.GetDeltaTime());
-
 	/* Spawn Actor */
 	// NOTE: 세 배열은 같은 순서를 유지해야 한다. 메시 이름이 비어 있으면 아래에서 따로 조립하는 타입이다.
 	ImGui::SeparatorText("Spawn Actor");
@@ -293,7 +295,8 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"GizmoArrow",
 		"Circle",
 		"SpotLight",
-		"Explosion"
+		"Explosion",
+		"Cat"
 	};
 
 	const char* ActorMeshNames[] = {
@@ -304,7 +307,8 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"GizmoArrowMesh",
 		"CircleMesh",
 		"",
-		""
+		"",
+		"TestAsset"
 	};
 
 	const FClassInfo* ActorClassInfo[] = {
@@ -315,7 +319,8 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		UStaticMeshComponent::GetClass(),
 		UStaticMeshComponent::GetClass(),
 		ASpotLight::GetClass(),
-		UAtlasAnimationComponent::GetClass()
+		UAtlasAnimationComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
 	};
 
 	static_assert(IM_ARRAYSIZE(ActorTypeNames) == IM_ARRAYSIZE(ActorClassInfo), "ActorTypeNames and ActorClassInfo must stay the same length");
@@ -528,6 +533,28 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		}
 	}
 
+	ImGui::SameLine();
+
+	if (ImGui::Button("Import"))
+	{
+		const std::optional<std::filesystem::path> selectedPath = FNativeFileDialog::OpenObjFile(
+			ownerWindow,
+			sceneDirectory
+		);
+
+		if (selectedPath.has_value())
+		{
+			const std::filesystem::path& Path = selectedPath.value();
+			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
+			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+			FTexture2DAssetLoader* Texture2DLoader = new FTexture2DAssetLoader(*Renderer);
+			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer, *guiReference.AssetManager, *Texture2DLoader);
+			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
+			FName AssetName = FName(selectedPath.value().stem().string().c_str());
+			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
+			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
+		}
+	}
 
 	/* Camera Control */
 	ImGui::SeparatorText("Camera Control");
@@ -1100,6 +1127,197 @@ const TArray<FRenderInfo> FSceneManager::GetAxisRenderInfos()
 {
 	// TODO: Implement axis render info retrieval logic
 	return TArray<FRenderInfo>();
+}
+
+void FSceneManager::updateContentBrowserGUI(const FGuiReference& guiReference)
+{
+	ImGuiIO& io = ImGui::GetIO();
+
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_Space)) {
+		mShowContentBrowser = !mShowContentBrowser;
+	}
+
+	if (!mShowContentBrowser)	return;
+
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+	const float browserHeight = io.DisplaySize.y * WINDOW_PROPERTY_HEIGHT_RATIO;
+
+	// 화면의 가장 아래에 고정
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - browserHeight), ImGuiCond_Always);
+
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, browserHeight), ImGuiCond_Always);
+
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking;
+
+
+	if (!ImGui::Begin("Jungle Content Browser", nullptr, flags)) {
+		ImGui::End();
+		return;
+	}
+
+	//상단 툴바
+	if (mCurrentDirectory != mRootPath) {
+		if (ImGui::Button("<- Back")) {
+			mCurrentDirectory = mCurrentDirectory.parent_path();
+		}
+		ImGui::SameLine();
+	}
+	ImGui::Text("Path: %s", mCurrentDirectory.string().c_str());
+
+	//우측 상단 검색창
+	ImGui::SameLine(ImGui::GetContentRegionAvail().x - 200.0f);
+	ImGui::SetNextItemWidth(200.0f);
+	ImGui::InputTextWithHint("##SearchAsset", "Search...", mSearchBuffer, IM_ARRAYSIZE(mSearchBuffer));
+
+	ImGui::Separator();
+
+	//2열 영역 분할
+	if (ImGui::BeginTable("ContentBrowserLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {
+		ImGui::TableSetupColumn("Folders", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+		ImGui::TableSetupColumn("Assets", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableNextRow();
+
+		ImGui::TableSetColumnIndex(0);
+		ImGui::BeginChild("FolderTreeChildArea", ImVec2(0, 0), false);
+		drawFolderTree(mRootPath);
+		ImGui::EndChild();
+
+		ImGui::TableSetColumnIndex(1);
+		ImGui::BeginChild("AssetGridChildArea", ImVec2(0, 0), false);
+		drawAssetGrid();
+		ImGui::EndChild();
+
+		ImGui::EndTable();
+	}
+	ImGui::End();
+}
+
+void FSceneManager::drawFolderTree(const std::filesystem::path& currentPath)
+{
+	if (!std::filesystem::exists(currentPath)) return;
+
+	for (const auto& entry : std::filesystem::directory_iterator(currentPath)) {
+		if (!entry.is_directory()) continue;
+
+		const auto& path = entry.path();
+		std::string folderName = path.filename().string();
+
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+		if (mCurrentDirectory == path) {
+			nodeFlags |= ImGuiTreeNodeFlags_Selected;
+		}
+
+		bool hasSubFolders = false;
+		for (const auto& subEntry : std::filesystem::directory_iterator(path)) {
+			if (subEntry.is_directory()) {
+				hasSubFolders = true;
+				break;
+			}
+		}
+
+		if (!hasSubFolders) {
+			nodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+		}
+
+		bool bNodeOpen = ImGui::TreeNodeEx(path.string().c_str(), nodeFlags, "%s", folderName.c_str());
+
+		if (ImGui::IsItemClicked())
+		{
+			mCurrentDirectory = path; // 클릭 시 우측 그리드 경로 변경
+		}
+
+		if (bNodeOpen && hasSubFolders)
+		{
+			drawFolderTree(path); // 재귀 호출
+			ImGui::TreePop();
+		}
+	}
+}
+
+// ----------------------------------------------------
+// 우측: 반응형 에셋 타일 그리드 & Drag & Drop
+// ----------------------------------------------------
+void FSceneManager::drawAssetGrid()
+{
+	if (!std::filesystem::exists(mCurrentDirectory)) return;
+
+	float padding = 16.0f;
+	float cellSize = mThumbnailSize + padding;
+
+	float panelWidth = ImGui::GetContentRegionAvail().x;
+	int columnCount = static_cast<int>(panelWidth / cellSize);
+	if (columnCount < 1) columnCount = 1;
+
+	ImGui::Columns(columnCount, 0, false);
+
+	for (const auto& entry : std::filesystem::directory_iterator(mCurrentDirectory))
+	{
+		const auto& path = entry.path();
+		std::string filename = path.filename().string();
+
+		// 검색 필터 적용
+		if (strlen(mSearchBuffer) > 0 && filename.find(mSearchBuffer) == std::string::npos)
+		{
+			continue;
+		}
+
+		ImGui::PushID(filename.c_str());
+
+		bool isDirectory = entry.is_directory();
+
+		// 아이콘 레이블 (실제 엔진에서는 ImTextureID를 받아 ImGui::ImageButton을 사용)
+		const char* iconText = isDirectory ? "[FOLDER]" : "[FILE]";
+
+		// 선택 여부 하이라이트 표시
+		if (mSelectedAssetPath == path)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 0.6f));
+		}
+
+		ImGui::Button(iconText, ImVec2(mThumbnailSize, mThumbnailSize));
+
+		if (mSelectedAssetPath == path)
+		{
+			ImGui::PopStyleColor();
+		}
+
+		// 클릭 선택
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+		{
+			mSelectedAssetPath = path;
+		}
+
+		// 폴더 더블 클릭 시 이동
+		if (isDirectory && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			mCurrentDirectory /= path.filename();
+		}
+
+		// ==========================================
+		// 에셋 드래그 앤 드롭 (Drag Source)
+		// 뷰포트나 인스펙터로 에셋 전송
+		// ==========================================
+		if (!isDirectory && ImGui::BeginDragDropSource())
+		{
+			std::string pathString = path.string();
+
+			// "CONTENT_BROWSER_ITEM" 이라는 페이로드 키로 파일 경로 전달
+			ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", pathString.c_str(), pathString.size() + 1);
+
+			ImGui::Text("Dragging: %s", filename.c_str());
+			ImGui::EndDragDropSource();
+		}
+
+		// 파일명 텍스트 표시
+		ImGui::TextWrapped("%s", filename.c_str());
+
+		ImGui::NextColumn();
+		ImGui::PopID();
+	}
+
+	ImGui::Columns(1);
 }
 
 

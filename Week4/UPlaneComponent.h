@@ -45,7 +45,7 @@ public:
 		FRenderQuadInfo QuadInfo;
 		QuadInfo.Model = PivotTransform.MakeMatrix();
 		QuadInfo.Color = FVector4(1.f, 1.f, 1.f, 1.f);
-		UTexture2D* QuadTexture = GetRenderTexture();
+		UTexture2D* QuadTexture = GetTexture();
 		QuadInfo.TextureSRV = QuadTexture ? QuadTexture->GetSRV() : nullptr;
 		QuadInfo.SubUV = mSubUV;
 		QuadInfo.BlendMode = mBlendMode;

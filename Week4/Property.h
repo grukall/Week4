@@ -5,7 +5,7 @@
 
 struct FClassInfo;
 
-enum class EPropertyType { Unknown, Float, Int, String, Bool, Vector, Vector4, WString, Asset};
+enum class EPropertyType { Unknown, Float, Int, String, Bool, Vector, Vector4, WString, Asset, Array};
 
 template <typename T>
 struct TPropertyTypeTraits
@@ -19,6 +19,12 @@ struct TPropertyTypeTraits<TSharedPtr<T>>
 {
     static constexpr EPropertyType Value = EPropertyType::Asset;
 };
+
+template<typename T>
+struct TPropertyTypeTraits<TArray<T>> {
+    static constexpr EPropertyType Value = EPropertyType::Array;
+};
+
 
 // 원시 포인터 프로퍼티(T*)의 특수화는 UAsset.h에 있다.
 // 여기서 UAsset.h를 include하면 Property.h -> UAsset.h -> Object.h -> Property.h 로 순환한다.
@@ -38,6 +44,7 @@ DEFINE_PROPERTY_TYPE(FVector, Vector)
 DEFINE_PROPERTY_TYPE(FVector4, Vector4)
 DEFINE_PROPERTY_TYPE(std::wstring, WString)
 
+
 template <typename T>
 constexpr EPropertyType GetPropertyType()
 {
@@ -52,6 +59,41 @@ struct TPropertyClassInfo
     static const FClassInfo* Get() { return nullptr; }
 };
 
+template<typename T>
+struct TPropertyElementTraits
+{
+    static constexpr EPropertyType Type = EPropertyType::Unknown;
+
+    static const FClassInfo* GetClassInfo()
+    {
+        return nullptr;
+    }
+};
+
+template<typename T>
+struct TPropertyElementTraits<TArray<T>>
+{
+    static constexpr EPropertyType Type =
+        TPropertyTypeTraits<T>::Value;
+
+    static const FClassInfo* GetClassInfo()
+    {
+        return TPropertyClassInfo<T>::Get();
+    }
+};
+
+template<typename T>
+constexpr EPropertyType GetPropertyElementType()
+{
+    return TPropertyElementTraits<T>::Type;
+}
+
+template<typename T>
+const FClassInfo* GetPropertyElementClassInfo()
+{
+    return TPropertyElementTraits<T>::GetClassInfo();
+}
+
 template <typename T>
 const FClassInfo* GetPropertyClassInfo()
 {
@@ -61,10 +103,17 @@ const FClassInfo* GetPropertyClassInfo()
 struct FProperty
 {
     FString Name;
+
+    // "##Name" 형태의 ImGui 위젯 ID. 매 프레임 만들면 그만큼 임시 문자열이 생기므로 등록 시점에 한 번만 만든다.
+    FString WidgetId;
+
     EPropertyType Type;
     size_t Offset;
     size_t Size;
 
     // Type이 Asset일 때만 채워진다. 드롭다운에 어떤 에셋을 나열할지 결정한다.
     const FClassInfo* ClassInfo = nullptr;
+
+    EPropertyType ElementType = EPropertyType::Unknown;
+    const FClassInfo* ElementClassInfo = nullptr;
 };

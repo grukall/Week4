@@ -46,6 +46,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return true;
 	}
 
+	FDeferredMessage M{ hWnd, message, wParam, lParam };
+
 	switch (message)
 	{
 	case WM_DESTROY:
@@ -58,14 +60,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_RBUTTONDOWN: case WM_RBUTTONUP:
 	case WM_MOUSEMOVE:   case WM_MOUSEWHEEL:
 	case WM_KILLFOCUS:
-		WindowApplication.Defer({ hWnd, message, wParam, lParam });
+		WindowApplication.Defer(M);
 		return 0;
 
 	//마우스가 얼마정도 이동했나
 	case WM_INPUT:
 	{
-		FDeferredMessage M{ hWnd, message, wParam, lParam };
-
 		BYTE  buf[sizeof(RAWINPUT)];
 		UINT  size = sizeof(buf);
 		if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf, &size, sizeof(RAWINPUTHEADER)) != (UINT)-1)
@@ -83,7 +83,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	//SYS_ : Alt가 눌린 상태의 입력
 	case WM_SYSKEYDOWN: case WM_SYSKEYUP:
-		WindowApplication.Defer({ hWnd, message, wParam, lParam });
+		WindowApplication.Defer(M);
 		return DefWindowProc(hWnd, message, wParam, lParam);
 
 	//창 크기 변경

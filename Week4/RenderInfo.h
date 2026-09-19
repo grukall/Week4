@@ -8,7 +8,7 @@
 
 class FCamera;
 class UPrimitiveComponent;
-
+class UMaterial;
 enum class ERenderBlendMode
 {
 	Opaque,
@@ -24,8 +24,10 @@ struct FRenderInfo
 	UStaticMesh* StaticMesh = nullptr;
 
 	// UMaterial이 들어오면 이 두 개가 머티리얼 포인터로 합쳐진다.
-	UTexture2D* Texture = nullptr;
-	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
+	/*UTexture2D* Texture = nullptr;
+	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);*/
+
+	UMaterial* Material = nullptr;
 
 	FMatrix WorldTransformMatrix;
 	FObjectID ObejctID;
@@ -66,8 +68,15 @@ public:
 	TArray<FRenderLineInfo> LineInfos;     // 라인 패스
 	TArray<UPrimitiveComponent*> PickTargets;
 
-	inline void AddQuadInfo(const FRenderQuadInfo& QuadInfo)
+	inline void AddQuadInfo(const FRenderQuadInfo& QuadInfo, bool bScreenQuad = false)
 	{
+		if (bScreenQuad)
+		{
+			// 2D 큐에만 넣는다. 아래 월드 큐로 흘러가면 카메라 행렬로 한 번 더 그려진다.
+			Quad2DInfos.Add(QuadInfo);
+			return;
+		}
+
 		if (QuadInfo.EnableDepthTest)
 		{
 			if (QuadInfo.EnableDepthWrite)
@@ -93,14 +102,17 @@ public:
 		OpaqueQuadInfos.Empty();
 		TransparentQuadInfos.Empty();
 		OverlayQuadInfos.Empty();
+		Quad2DInfos.Empty();
 	}
 
 	inline const TArray<FRenderQuadInfo>& GetOpaqueQuadInfos() const { return OpaqueQuadInfos; }
 	inline const TArray<FRenderQuadInfo>& GetTransparentQuadInfos() const { return TransparentQuadInfos; }
 	inline const TArray<FRenderQuadInfo>& GetOverlayQuadInfos() const { return OverlayQuadInfos; }
+	inline const TArray<FRenderQuadInfo>& Get2DQuadInfos() const { return Quad2DInfos; }
 
 private:
 	TArray<FRenderQuadInfo> OpaqueQuadInfos;
 	TArray<FRenderQuadInfo> TransparentQuadInfos;
 	TArray<FRenderQuadInfo> OverlayQuadInfos;
+	TArray<FRenderQuadInfo> Quad2DInfos;
 };

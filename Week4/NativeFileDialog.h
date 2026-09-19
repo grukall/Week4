@@ -13,4 +13,9 @@ public:
     static std::optional<std::filesystem::path> SaveScene(
         void* ownerWindow,
         const std::filesystem::path& initialDirectory);
+
+    static std::optional<std::filesystem::path> OpenObjFile(
+        void* ownerWindow,
+        const std::filesystem::path& initialDirectory
+    );
 };

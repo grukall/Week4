@@ -162,6 +162,13 @@ public:
 		return Face->size->metrics.descender / 64.f;
 	}
 
+	// 이 아틀라스를 구울 때 쓴 폰트 픽셀 크기(FT_Set_Pixel_Sizes에 넘긴 값).
+	// 글리프 수치가 전부 이 크기 기준이라, 다른 크기로 그리려면 이 값으로 나눈 비율을 쓴다.
+	inline float BakedPixelSize() const
+	{
+		return static_cast<float>(Face->size->metrics.y_ppem);
+	}
+
 	inline uint32 GetWidth() const { return Width; }
 	inline uint32 GetHeight() const { return Height; }
 

@@ -6,6 +6,8 @@
 #include "ImGui/imgui_impl_win32.h"
 #include <string.h>
 #include <ctime>
+#include "FStatManager.h"
+#include "GlobalFNames.h"
 
 namespace {
 	void ButtonHelper(bool& bShow, int type) {
@@ -40,13 +42,25 @@ static int   Stricmp(const char* s1, const char* s2) { int d; while ((d = touppe
 static int   Strnicmp(const char* s1, const char* s2, int n) { int d = 0; while (n > 0 && (d = toupper(*s2) - toupper(*s1)) == 0 && *s1) { s1++; s2++; n--; } return d; }
 static char* Strdup(const char* s) { IM_ASSERT(s); size_t len = strlen(s) + 1; void* buf = ImGui::MemAlloc(len); IM_ASSERT(buf); return (char*)memcpy(buf, (const void*)s, len); }
 static void  Strtrim(char* s) { char* str_end = s + strlen(s); while (str_end > s && str_end[-1] == ' ') str_end--; *str_end = 0; }
+static const char* Stristr(const char* haystack, const char* needle)
+{
+	if (!*needle) return haystack;
+	for (; *haystack; haystack++)
+	{
+		const char* h = haystack;
+		const char* n = needle;
+		while (*h && *n && toupper((unsigned char)*h) == toupper((unsigned char)*n)) { h++; n++; }
+		if (!*n) return haystack;
+	}
+	return nullptr;
+}
 
 void ConsoleWindow::Process(float panelWidth)
 {
+	ImGuiIO& io = ImGui::GetIO();
+
 	if (!bIsOpened)
 		return;
-
-	ImGuiIO& io = ImGui::GetIO();
 
 	float consolHeight = io.DisplaySize.y * HEIGHT_RATIO;
 
@@ -59,6 +73,9 @@ void ConsoleWindow::Process(float panelWidth)
 		ImVec2(io.DisplaySize.x - panelWidth, consolHeight),
 		ImGuiCond_FirstUseEver
 	);
+
+	if (bFocusInputRequested)
+		ImGui::SetNextWindowFocus();
 
 	if (!ImGui::Begin("Console Window", &bIsOpened, ImGuiWindowFlags_MenuBar)) {
 		ImGui::End();
@@ -95,8 +112,6 @@ void ConsoleWindow::Process(float panelWidth)
 	std::time_t now = std::time(nullptr);
 	std::tm local_time;
 	localtime_s(&local_time, &now);
-
-	if (ImGui::SmallButton("Add Debug Text")) { UE_LOG("%dY-%dm-%dd %dH:%dM:%dS", local_time.tm_year + 1900, local_time.tm_mon + 1, local_time.tm_mday, local_time.tm_hour, local_time.tm_min, local_time.tm_sec); UE_LOG_WARN("진돗개 둘"); UE_LOG_ERROR("DEFCON 1!!"); }
 
 	ImGuiStyle& style = ImGui::GetStyle();
 	const float footer_height_to_reserve = style.SeparatorSize + style.ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
@@ -155,7 +170,17 @@ void ConsoleWindow::Process(float panelWidth)
 	// Command-line
 	bool reclaim_focus = false;
 	ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;
-	if (ImGui::InputText("Input", InputBuf, IM_COUNTOF(InputBuf), input_text_flags, &TextEditCallbackStub, (void*)this))
+	if (bFocusInputRequested)
+	{
+		ImGui::SetKeyboardFocusHere();
+		bFocusInputRequested = false;
+	}
+	const bool submitted = ImGui::InputText("Input", InputBuf, IM_COUNTOF(InputBuf), input_text_flags, &TextEditCallbackStub, (void*)this);
+	const ImVec2 InputMin = ImGui::GetItemRectMin();
+	const bool InputActive = ImGui::IsItemActive();
+
+	//Enter 시
+	if (submitted)
 	{
 		char* s = InputBuf;
 		Strtrim(s);
@@ -163,6 +188,21 @@ void ConsoleWindow::Process(float panelWidth)
 			ExecCommand(s);
 		strcpy_s(s, 256, "");
 		reclaim_focus = true;
+		Suggestions.clear();
+		SuggestionIndex = -1;
+	}
+
+	//입력 중일 시(ImGui 활성화 시)
+	else if (InputActive)
+	{
+		UpdateSuggestions();
+	}
+
+	//아니면 클리어
+	else
+	{
+		Suggestions.clear();
+		SuggestionIndex = -1;
 	}
 
 	// Auto-focus on window apparition
@@ -170,6 +210,8 @@ void ConsoleWindow::Process(float panelWidth)
 	if (reclaim_focus)
 		ImGui::SetKeyboardFocusHere(-1); // Auto focus previous widget
 
+	if (InputActive && !Suggestions.empty())
+		DrawSuggestionPopup(InputMin);
 
 	ImGui::End();
 }
@@ -185,6 +227,10 @@ ConsoleWindow::ConsoleWindow()
 	Commands.push_back("HISTORY");
 	Commands.push_back("CLEAR");
 	Commands.push_back("CLASSIFY");
+	Commands.push_back("Stat UNIT");
+	Commands.push_back("Stat FPS");
+	Commands.push_back("Stat MEMORY");
+	Commands.push_back("Stat NONE");
 	AutoScroll = true;
 	ScrollToBottom = false;
 }
@@ -198,11 +244,19 @@ ConsoleWindow::~ConsoleWindow()
 
 int ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
 {
-	//AddLog("cursor: %d, selection: %d-%d", data->CursorPos, data->SelectionStart, data->SelectionEnd);
 	switch (data->EventFlag)
 	{
 	case ImGuiInputTextFlags_CallbackCompletion:
 	{
+		// 위에 떠 있는 추천 목록이 있으면 그 중 선택된 항목으로 바로 채운다.
+		if (!Suggestions.empty())
+		{
+			const int idx = (SuggestionIndex >= 0 && SuggestionIndex < Suggestions.Size) ? SuggestionIndex : 0;
+			data->DeleteChars(0, data->BufTextLen);
+			data->InsertChars(0, Suggestions[idx]);
+			break;
+		}
+
 		// Example of TEXT COMPLETION
 
 		// Locate beginning of current word
@@ -269,6 +323,16 @@ int ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
 	}
 	case ImGuiInputTextFlags_CallbackHistory:
 	{
+		// 추천 목록이 떠 있으면 Up/Down은 히스토리 대신 목록 탐색에 사용한다.
+		if (!Suggestions.empty())
+		{
+			if (data->EventKey == ImGuiKey_UpArrow)
+				SuggestionIndex = (SuggestionIndex <= 0) ? Suggestions.Size - 1 : SuggestionIndex - 1;
+			else if (data->EventKey == ImGuiKey_DownArrow)
+				SuggestionIndex = (SuggestionIndex + 1 >= Suggestions.Size) ? 0 : SuggestionIndex + 1;
+			break;
+		}
+
 		// Example of HISTORY
 		const int prev_history_pos = HistoryPos;
 		if (data->EventKey == ImGuiKey_UpArrow)
@@ -295,6 +359,57 @@ int ConsoleWindow::TextEditCallback(ImGuiInputTextCallbackData* data)
 	}
 	}
 	return 0;
+}
+
+void ConsoleWindow::UpdateSuggestions()
+{
+	Suggestions.clear();
+
+	if (!InputBuf[0])
+	{
+		SuggestionIndex = -1;
+		return;
+	}
+
+	for (int i = 0; i < Commands.Size; i++)
+		if (Stristr(Commands[i], InputBuf) != nullptr)
+			Suggestions.push_back(Commands[i]);
+
+	if (Suggestions.empty())
+		SuggestionIndex = -1;
+	else if (SuggestionIndex < 0 || SuggestionIndex >= Suggestions.Size)
+		SuggestionIndex = 0;
+}
+
+void ConsoleWindow::DrawSuggestionPopup(const ImVec2& InputMin)
+{
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float RowHeight = ImGui::GetTextLineHeight() + style.ItemSpacing.y;
+	const int VisibleCount = ImMin(Suggestions.Size, 8);
+	const ImVec2 PopupSize(300.0f, RowHeight * VisibleCount + style.WindowPadding.y * 2.0f);
+
+	ImGui::SetNextWindowPos(ImVec2(InputMin.x, InputMin.y - PopupSize.y));
+	ImGui::SetNextWindowSize(PopupSize);
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+		| ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+	ImGui::Begin("##ConsoleSuggestions", nullptr, flags);
+
+	for (int i = 0; i < Suggestions.Size; i++)
+	{
+		const bool selected = (i == SuggestionIndex);
+		ImGui::PushID(i);
+		if (ImGui::Selectable(Suggestions[i], selected))
+		{
+			strcpy_s(InputBuf, IM_COUNTOF(InputBuf), Suggestions[i]);
+			SuggestionIndex = i;
+			RequestFocus();
+		}
+		if (selected)
+			ImGui::SetScrollHereY();
+		ImGui::PopID();
+	}
+
+	ImGui::End();
 }
 
 void ConsoleWindow::ExecCommand(const char* command_line)
@@ -329,6 +444,40 @@ void ConsoleWindow::ExecCommand(const char* command_line)
 		int first = History.Size - 10;
 		for (int i = first > 0 ? first : 0; i < History.Size; i++)
 			UE_LOG("%3d: %s\n", i, History[i]);
+	}
+	else if (Stricmp(command_line, "Stat UNIT") == 0)
+	{
+		FStatManager& StatManager = FStatManager::Get();
+
+		StatManager.StatCommands[Name_UNIT] = !StatManager.StatCommands[Name_UNIT];
+
+		// 어떤 스탯을 수집할지는 켜진 명령들로부터 통째로 다시 계산한다.
+		// 명령별로 따로 켜고 끄면 FPS와 UNIT이 공유하는 Frame을 서로 덮어쓴다.
+		StatManager.RefreshEnabled();
+	}
+	else if (Stricmp(command_line, "Stat FPS") == 0)
+	{
+		FStatManager& StatManager = FStatManager::Get();
+
+		StatManager.StatCommands[Name_FPS] = !StatManager.StatCommands[Name_FPS];
+		StatManager.RefreshEnabled();
+	}
+	else if (Stricmp(command_line, "Stat MEMORY") == 0)
+	{
+		FStatManager& StatManager = FStatManager::Get();
+
+		StatManager.StatCommands[Name_MEMORY] = !StatManager.StatCommands[Name_MEMORY];
+		StatManager.RefreshEnabled();
+	}
+	else if (Stricmp(command_line, "Stat NONE") == 0)
+	{
+		FStatManager& StatManager = FStatManager::Get();
+
+		StatManager.StatCommands[Name_UNIT] = false;
+		StatManager.StatCommands[Name_FPS] = false;
+		StatManager.StatCommands[Name_MEMORY] = false;
+
+		StatManager.RefreshEnabled();
 	}
 	else
 	{

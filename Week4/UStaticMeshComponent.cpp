@@ -16,7 +16,25 @@ void UStaticMeshComponent::Initialize(UStaticMesh* InStaticMesh)
 	StaticMesh = InStaticMesh;
 }
 
-UTexture2D* UStaticMeshComponent::GetRenderTexture() const
+void UStaticMeshComponent::SetStaticMesh(UStaticMesh* _InStaticMesh)
+{
+	if (GetStaticMesh() == _InStaticMesh) {
+		return;
+	}
+
+	StaticMesh = _InStaticMesh;
+	OverrideMaterials.Empty();
+
+	if (StaticMesh) {
+		const TArray<UMaterial*>& MeshMaterials = StaticMesh->GetMaterials();
+
+		for (uint32 i = 0; i < MeshMaterials.Num(); ++i) {
+			SetMaterial(i, MeshMaterials[i]);
+		}
+	}
+}
+
+/*UTexture2D* UStaticMeshComponent::GetRenderTexture() const
 {
 	if (TextureOverride)
 	{
@@ -29,6 +47,32 @@ UTexture2D* UStaticMeshComponent::GetRenderTexture() const
 FVector4 UStaticMeshComponent::GetRenderColor() const
 {
 	return StaticMesh ? StaticMesh->GetColor() : FVector4(1.f, 1.f, 1.f, 1.f);
+}*/
+
+void UStaticMeshComponent::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
+{
+	if (MaterialSlotIndex >= OverrideMaterials.Num()) {
+		OverrideMaterials.SetNum(MaterialSlotIndex + 1);
+	}
+
+	OverrideMaterials[MaterialSlotIndex] = InMaterial;
+}
+
+UMaterial* UStaticMeshComponent::GetMaterial(uint32 MaterialSlotIndex) const
+{
+
+	if (OverrideMaterials.Num() > MaterialSlotIndex) {
+		return OverrideMaterials[MaterialSlotIndex];
+	}
+
+	if (!StaticMesh)	return nullptr;
+
+	return StaticMesh->GetMaterial(MaterialSlotIndex);
+}
+
+void UStaticMeshComponent::ClearMaterials()
+{
+	OverrideMaterials.Empty();
 }
 
 void UStaticMeshComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const
@@ -51,21 +95,21 @@ void UStaticMeshComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) c
 		? FObjectID{ mOwner->UUID, mOwner->InternalIndex }
 		: FObjectID{ 0, 0 };
 
-	UTexture2D* RenderTexture = GetRenderTexture();
-	const FVector4 RenderColor = GetRenderColor();
+		for (uint32 SectionIndex = 0; SectionIndex < Sections.Num(); ++SectionIndex) {
+			const FStaticMeshSection& Section = Sections[SectionIndex];
 
-	// 섹션마다 따로 넘긴다. 나중에 머티리얼 기준으로 정렬하거나 묶을 여지를 남긴다.
-	for (uint32 SectionIndex = 0; SectionIndex < Sections.Num(); ++SectionIndex)
-	{
-		FRenderInfo RenderInfo;
-		RenderInfo.StaticMesh = StaticMesh;
-		RenderInfo.Texture = RenderTexture;
-		RenderInfo.WorldTransformMatrix = WorldMatrix;
-		RenderInfo.ObejctID = ObjectID;
-		RenderInfo.Color = RenderColor;
-		RenderInfo.SectionIndex = SectionIndex;
+			UMaterial* Material = GetMaterial(Section.MaterialSlotIndex);
 
-		outRenderInfos->Add(RenderInfo);
+			FRenderInfo RenderInfo{};
+
+			RenderInfo.StaticMesh = StaticMesh;
+			RenderInfo.WorldTransformMatrix = WorldMatrix;
+			RenderInfo.ObejctID = ObjectID;
+			RenderInfo.SectionIndex = SectionIndex;
+
+			RenderInfo.Material = Material;
+
+			outRenderInfos->Add(RenderInfo);
 	}
 }
 

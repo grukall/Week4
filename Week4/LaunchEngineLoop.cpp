@@ -22,7 +22,9 @@
 #include "World.h"
 #include <FLogManager.h>
 #include "Assets.h"
+#include "FStatManager.h"
 
+#include "Material.h"
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
 	// Initialize window infos
@@ -57,6 +59,9 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	rid.hwndTarget = hWnd;
 	RegisterRawInputDevices(&rid, 1, sizeof(rid));
 
+	// 아래 초기화들이 리소스를 만들면서 INC_MEMORY_STAT_BY 같은 매크로를 타는데, 그때 이미 살아 있어야 한다.
+	InitStatManager();
+
 	mGraphicsManager = new FGraphicsManager(hWnd);
 
 	IMGUI_CHECKVERSION();
@@ -76,7 +81,8 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	ConsoleWindow& console = ConsoleWindow::Get();
 	console.Init(clientWidth);
 
-	FrameTimer = new FFrameTimer(120);
+	FrameTimer = new FFrameTimer(false);
+	//ViewportClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer()); // Todo: cChange to class
 
 	ViewportClients.Empty();
 	for (int i = 0; i < 4; ++i)
@@ -97,25 +103,16 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	mSceneManager = new FSceneManager();
 	mFileManager = new FFileManager();
 	mFontManager = new FFontManager();
+	mComponentVisualizerManager = new FComponentVisualizerManager();
 	InitAssetManager();
 
-	mComponentVisualizerManager = new FComponentVisualizerManager();
 
 	char Value[64] = {};
 	GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), ".\\editor.ini");
 	int32 GridGap = 1;
 	sscanf_s(Value, "%d", &	GridGap);
 	mGraphicsManager->SetGridGap(GridGap);
-
 	mSceneManager->NewScene();
-
-	//test code
-	//{
-	//	UCubeComponent* cubeComonent = FObjectFactory::ConstructObject<UCubeComponent>(FVector(0), FRotator(), FVector(1));
-	//	AActor* cubeActor = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor->AddComponent(cubeComonent);
-	//	mSceneManager.GetCurrentWorld()->AddActor(cubeActor);
-	//}
 }
 
 void FEngineLoop::InitAssetManager()
@@ -143,6 +140,7 @@ void FEngineLoop::InitAssetManager()
 	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(PlaneAsset);
 
+
 	FTexture2DAssetLoader* TextureLoader = new FTexture2DAssetLoader(*renderer);
 	FFontAssetLoader* FontLoader = new FFontAssetLoader(*mFontManager);
 
@@ -156,7 +154,7 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager->RegisterAsset(FName("ExplosionTexture"), TextureLoader, ExplosionTextureSource);
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
-	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas>(FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
+	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
 	mAssetManager->RegisterAsset(ExplosionSpriteAtlasAsset);
 
 	FFileAssetSource* FontAssetSource = new FFileAssetSource(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
@@ -165,6 +163,39 @@ void FEngineLoop::InitAssetManager()
 	UFont* TestFontAsset = mAssetManager->GetAssetAs<UFont>(FName("TestFont"), true);
 	UFontAtlas* FontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("TestFontAtlas"), *renderer, TestFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(FontAtlasAsset);
+
+	// 스탯 HUD용 고정폭 폰트. 숫자가 바뀌어도 글자 폭이 같아야 표가 흔들리지 않는다.
+	FFileAssetSource* StatFontSource = new FFileAssetSource(*mFileManager, "Fonts/RobotoMono-Regular.ttf");
+	mAssetManager->RegisterAsset(FName("StatFont"), FontLoader, StatFontSource);
+
+	UFont* StatFontAsset = mAssetManager->GetAssetAs<UFont>(FName("StatFont"), true);
+	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);
+	mAssetManager->RegisterAsset(StatFontAtlasAsset);
+}      
+
+void FEngineLoop::InitStatManager()
+{
+	mStatManager = new FStatManager();
+
+	// 매크로를 처음 지날 때 자동 등록되지만, 아직 한 번도 안 지난 스탯은
+	// 콘솔 목록에 뜨지 않는다. 미리 등록해 목록을 고정해둔다.
+
+	// --- Cycle: 구간별 소요 시간(ms) ---
+	mStatManager->Register(FName("Frame"), EStatType::Cycle);
+	mStatManager->Register(FName("Game"), EStatType::Cycle);
+	mStatManager->Register(FName("Draw"), EStatType::Cycle);
+	mStatManager->Register(FName("ImGui"), EStatType::Cycle);   // Draw에 포함된 시간 중 ImGui 몫
+	mStatManager->Register(FName("GPU Time"), EStatType::Cycle);
+	mStatManager->Register(FName("Input"), EStatType::Cycle);
+
+	// --- Counter: 프레임당 개수 ---
+	mStatManager->Register(FName("Draws"), EStatType::Counter);
+	mStatManager->Register(FName("Prims"), EStatType::Counter);
+
+	// --- Memory: 현재 총량(byte). 프레임마다 리셋되지 않는다 ---
+	mStatManager->Register(FName("VertexBufferMem"), EStatType::Memory);
+	mStatManager->Register(FName("IndexBufferMem"), EStatType::Memory);
+	mStatManager->Register(FName("TextureMem"), EStatType::Memory);
 }
 
 void FEngineLoop::Tick(bool bPumpMessages)
@@ -173,7 +204,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	GInTick = true;
 
 	FrameTimer->StartFrame();
-	const float deltaTime = FrameTimer->GetDeltaTime();
+	float deltaTime = FrameTimer->GetDeltaTime();
+
+	SCOPE_CYCLE_COUNTER("Frame");
+
+	float deltaTime = FrameTimer->GetDeltaTime();
+	ConsoleWindow& console = ConsoleWindow::Get();
 
 	// 1. 공통 접근 변수 및 입력 상태 1회 초기화
 	ConsoleWindow& console = ConsoleWindow::Get();
@@ -205,8 +241,18 @@ void FEngineLoop::Tick(bool bPumpMessages)
 					break;
 				}
 			}
+
 		}
+
+
+		}
+
+	if (WindowApplication.Input.WasPressed(VK_OEM_3))
+	{
+		console.RequestFocus();
 	}
+	mGraphicsManager->UpdateProjectionTransition(deltaTime);
+	ViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
 
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
@@ -215,15 +261,19 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	mGraphicsManager->UpdateProjectionTransition(deltaTime);
 	ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
 
-	// Update 완료 후 활성 뷰포트의 해상도 비율 및 ViewProjection 행렬을 미리 계산해 캐싱
+	// 5. Physics / Game Threads
+	{
+		SCOPE_CYCLE_COUNTER("Game");
+
+		mSceneManager->Tick(deltaTime);
+		mSceneManager->Update(deltaTime, RenderCollector);
+	}
+
 	const float ActiveAspect = static_cast<float>(ActiveViewportClient->mWidth) / static_cast<float>(ActiveViewportClient->mHeight);
 	const FMatrix ActiveViewProjMatrix =
 		ActiveViewportClient->GetCamera().GetViewMatrix() *
 		ActiveViewportClient->GetCamera().GetProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, 0.1f, 1000.f);
 
-	// 5. Physics / Game Threads
-	mSceneManager->Tick(deltaTime);
-	mSceneManager->Update(deltaTime, RenderCollector);
 
 	// 6. Mouse Picking & Gizmo
 	{
@@ -285,6 +335,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	// 7. Render Threads
 	{
+		SCOPE_CYCLE_COUNTER("Draw");
 		if (WindowApplication.bPendingResize)
 		{
 			mGraphicsManager->OnResize(WindowApplication.PendingWidth, WindowApplication.PendingHeight);
@@ -331,9 +382,9 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			);
 		}
 
-		mGraphicsManager->GetRenderCollector().Clear();
 
 		// 8. ImGui
+		SCOPE_CYCLE_COUNTER("ImGui");
 		mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, &ViewportClients, ActiveViewportClient, mFileManager, mAssetManager });
 		mGraphicsManager->GetRenderer()->BindFrameBuffer();
 		ImGui::Render();
@@ -341,6 +392,16 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		mGraphicsManager->Display();
 	}
+
+	//입력 지연 시간 측정(Stat Unit의 Input)
+	static double LastInputLatencyMs = 0;
+	if (WindowApplication.bHasPendingInput)
+	{
+		LARGE_INTEGER Now; QueryPerformanceCounter(&Now);
+		LastInputLatencyMs = (Now.QuadPart - WindowApplication.PendingInputTime.QuadPart) * GetMsPerCount();
+		WindowApplication.bHasPendingInput = false;
+	}
+	SET_CYCLE_COUNTER("Input", LastInputLatencyMs);
 
 	FrameTimer->EndFrame();
 	GInTick = false;

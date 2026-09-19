@@ -4,8 +4,9 @@
 
 class UTexture2D;
 
-// 재질(지금은 텍스처 한 장)을 가진 프리미티브의 공통 단계.
-// 어떤 메시를 그리는지는 이 단계가 알지 않는다. 파생 클래스가 자기 메시로 그린다.
+// 메시를 사용하는 컴포넌트의 공통 Material 단계.
+// UStaticMesh가 가진 기본 Material을 사용할 수도 있고,
+// 이 컴포넌트에서만 Override Material을 지정할 수도 있다.
 class UMeshComponent : public UPrimitiveComponent
 {
 	REFLECT_CLASS(UMeshComponent, UPrimitiveComponent);
@@ -15,11 +16,15 @@ public:
 
 	using UPrimitiveComponent::Initialize;
 
-	//TODO : UMaterial이 들어오면 OverrideMaterials 배열로 바뀐다.
-	// 메시는 여러 컴포넌트가 공유하므로, 이 컴포넌트만 다른 텍스처를 쓰려면 여기에 건다.
-	inline void SetTexture(UTexture2D* InTexture) { TextureOverride = InTexture; }
-	inline UTexture2D* GetTexture() const { return TextureOverride; }
+	void SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial);
+	virtual UMaterial* GetMaterial(uint32 MaterialSlotIndex) const;
 
+	void ClearMaterialOverride(uint32 MaterialSlotIndex);
+
+	void SetTexture(UTexture2D* InTexture);
+	UTexture2D* GetTexture() const;
+
+	UMaterial* GetOverrideMaterial(uint32 MaterialSlotIndex) const;
 protected:
-	UTexture2D* TextureOverride = nullptr;
+	TArray<UMaterial*> OverrideMaterials;
 };

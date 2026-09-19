@@ -6,7 +6,7 @@
 #include "FAssetManager.h"
 #include "Assets.h"
 #include "ObjectFactory.h"
-
+#include "Material.h"
 // 선분 하나당 정점 2개. 축 6개 + 앞으로 붙을 그리드까지 감당할 만큼 잡아둔다
 static constexpr uint32 LINE_VERTEX_CAPACITY = 8192;
 
@@ -27,8 +27,8 @@ FGraphicsManager::FGraphicsManager(HWND hWindow) :
 	mMeshPipeline = mRenderer->CreateRenderPipeline();
 	mMeshPipeline->SetRasterRizerState(D3D11_CULL_BACK, 0, { EViewModeIndex::VMI_Lit, EViewModeIndex::VMI_Wireframe });
 	mMeshPipeline->SetDepthStencilState(true, true);
-	mMeshPipeline->SetShader("Assets/Shaders/Mesh.hlsl");
-	mMeshPipeline->AddConstantBuffer<FConstants>();
+	mMeshPipeline->SetShader("Assets/Shaders/StaticMeshShader.hlsl");
+	mMeshPipeline->AddConstantBuffer<FMaterialConstants>();
 	mMeshPipeline->AddConstantBuffer<FMatrix>();
 }
 
@@ -46,20 +46,17 @@ FGraphicsManager::~FGraphicsManager()
 
 void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight)
 {
-	// Cache view and projection matrices for rendering
-	const float nearZ = 0.1f;
-	const float farZ = 2000.0f;
-
 	float d = mCamera->mOrthoDistance;
-	
 	mAspect = viewportWidth / viewportHeight;
+
+	float nearZ = mCamera->nearZ;
+	float farZ = mCamera->farZ;
 
 	FMatrix view = mCamera->GetViewMatrix();
 	FMatrix projection_u_p = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 1.0f);
 	FMatrix projection_u_o = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 0.0f);
 	FMatrix projection_u = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, mProjectionRatio);
 
-	//mViewProjectionMatrix = view * mCamera->GetProjectionMatrix(mAspect, mCamera->mFovDegree, nearZ, farZ);
 	mViewMatrix = view;
 	mProjectionMatrix = projection_u;
 	mViewProjectionMatrix = view * projection_u_p;
@@ -68,11 +65,12 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// 솔리드/와이어프레임 래스터라이저를 고른다.
 	mRenderer->SetViewModeIndex(mViewModeIndex);
 
-	mRenderer->Prepare(view * projection_u);
+	// 스탯 HUD 등 화면 좌표 오버레이용. 뷰포트 크기가 바뀌면 여기서 매 프레임 다시 만들어진다.
+	const FMatrix HUDProjection2D = FMatrix::Ortho(0.f, viewportWidth, viewportHeight, 0.f, 0.0f, 1.0f);
+	mRenderer->Prepare(view * projection_u, HUDProjection2D);
 
 	float orthoHeight = mCamera->mOrthoHeight;
 	float orthoWidth = orthoHeight * mAspect;
-	//mViewOrthogonalProjectionMatrix = view * mCamera->GetOrthographicMatrix(orthoWidth, orthoHeight, nearZ, farZ);
 	mViewOrthogonalProjectionMatrix = view * projection_u_o;
 	mViewUnifiedProjectionMatrix = view * projection_u;
 
@@ -90,12 +88,6 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// The caller selects the render target.  Rebinding the legacy scene target here
 	// would make every viewport render into the same texture instead of the
 	// FEditorViewportClient render target that was bound for this draw.
-}
-
-void FGraphicsManager::GizmoPrepare()
-{
-	mRenderer->RSUpdateState();
-
 }
 
 void FGraphicsManager::Render()
@@ -121,20 +113,73 @@ void FGraphicsManager::Render()
 		mMeshPipeline->ClearShaderResource();
 		mMeshPipeline->ClearSamplerState();
 
-		if (renderInfo.Texture)
+		if (renderInfo.Material)
 		{
-			FConstants Constants{};
+			FMaterialConstants Constants{};
+
+			UMaterial* Material = renderInfo.Material;
+
 			Constants.Matrix = renderInfo.WorldTransformMatrix;
-			Constants.Color = renderInfo.Color;
+
+			Constants.Color = Material->GetDiffuseColor();
+
+			Constants.AmbientColor = { Material->GetAmbientColor(),1.0f };
+
+			Constants.SpecularColor = { Material->GetSpecularColor(),1.0f };
+
+			Constants.EmissiveColor = { Material->GetEmissiveColor(),1.0f };
+
+			Constants.TransmissionFilter = { Material->GetTransmissionFilter(), 1.0f };
+
+			Constants.SpecularPower = Material->GetSpecularPower();
+
+			Constants.OpticalDensity = Material->GetOpticalDensity();
+
+			Constants.Transparency = Material->GetTransparency();
+
+			Constants.IlluminationModel = static_cast<uint32>(Material->GetIlluminationModel());
+
 			Constants.UseVertexColor = 0;
-			Constants.HasTexture = 1;
+
+
+			// UV
+			Material->UpdateUVScroll();
+			Constants.UVScroll = Material->GetUVScroll();
+
+
+			// Texture
+			const UTexture2D* AmbientTexture = Material->GetAmbientTexture();
+			const UTexture2D* DiffuseTexture = Material->GetDiffuseTexture();
+			const UTexture2D* SpecularTexture = Material->GetSpecularTexture();
+			const UTexture2D* BumpTexture = Material->GetBumpTexture();
+
+			Constants.HasAmbientTexture = AmbientTexture ? 1 : 0;
+			Constants.HasTexture = DiffuseTexture ? 1 : 0;
+			Constants.HasSpecularTexture = SpecularTexture ? 1 : 0;
+			Constants.HasBumpTexture = BumpTexture ? 1 : 0;
 
 			mMeshPipeline->UpdateConstantBuffer(0, Constants);
 			mMeshPipeline->UpdateConstantBuffer(1, mViewUnifiedProjectionMatrix);
+			mMeshPipeline->SetShaderResource(0, nullptr);
+			mMeshPipeline->SetShaderResource(1, nullptr);
+			mMeshPipeline->SetShaderResource(2, nullptr);
+			mMeshPipeline->SetShaderResource(3, nullptr);
+			if (AmbientTexture)
+				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV());
 
-			mMeshPipeline->SetShaderResource(0, renderInfo.Texture->GetSRV());
-			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+			if (DiffuseTexture)
+				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV());
 
+			if (SpecularTexture)
+				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV());
+
+			if (BumpTexture)
+				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV());
+
+			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(1, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(2, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
+			mMeshPipeline->SetSamplerState(3, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
 			mRenderer->RenderPrimitiveIndexed(mMeshPipeline, Asset->GetVertexBuffer(), Asset->GetIndexBuffer(), Section.IndexCount, Section.StartIndex);
 		}
 		else
@@ -165,7 +210,11 @@ void FGraphicsManager::Render()
 		mRenderer->RenderQuad(QuadInfo);
 	}
 
-	//mRenderCollector.Clear();
+	// 스탯 HUD 등 화면 좌표 오버레이. 씬 위에 덮어야 하므로 제일 마지막.
+	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.Get2DQuadInfos())
+	{
+		mRenderer->RenderQuad2D(QuadInfo);
+	}
 }
 
 void FGraphicsManager::DrawLine(const FVector& start, const FVector& end, const FVector4& color)
@@ -251,8 +300,6 @@ void FGraphicsManager::OnResize(UINT width, UINT height)
 	{
 		mSceneDepthStencil = mRenderer->CreateDepthStencil(width, height);
 	}
-
-	mRenderer->OnResize(width, height);
 }
 
 // 테두리가 화면에서 차지할 두께(픽셀). 물체 크기와 카메라 거리 어느 쪽에도 영향받지 않는다.
