@@ -64,6 +64,8 @@ public:
 	inline void SetColor(const FVector4& InColor) { Color = InColor; }
 	inline const FVector4& GetColor() const { return Color; }
 
+	void BuildRenderBuffers(URenderer& InRenderer);
+	void SetData(const TArray<FVertexSimple>& InVertices, const TArray<uint32>& InIndices, const TArray<FStaticMeshSection>& InSections);
 	void Serialize(FArchive& Ar) override;
 
 private:
