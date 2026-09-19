@@ -62,17 +62,22 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 					int UVIndex = Face.Vertices[j].UVIndex;
 					int NormalIndex = Face.Vertices[j].NormalIndex;
 
-					FNormalVertex NormalVertex
+					FVector Pos = Positions[VertexIndex];
+					FVector2 UV = UVIndex >= 0 ? UVs[UVIndex] : FVector2{ 0.0f, 0.0f };
+					FVector Norm = NormalIndex >= 0 ? Normals[NormalIndex] : FVector{ 0.0f, 0.0f, 0.0f };
+
+					FVertexSimple Vertex
 					{
-						Positions[VertexIndex],
-						UVIndex >= 0 ? UVs[UVIndex] : FVector2{ 0.0f, 0.0f },
-						NormalIndex >= 0 ? Normals[NormalIndex] : FVector{ 0.0f, 0.0f, 0.0f }
+						Pos.x, Pos.y, Pos.z,
+						0.0f, 0.0f, 0.0f, 0.0f,
+						UV.X, UV.Y,
+						Norm.x, Norm.y, Norm.z
 					};
-					FString Key = NormalVertex.GetKey();
+					FString Key = Vertex.GetKey();
 
 					if (!VertexIndices.Contains(Key))
 					{
-						Mesh.Vertices.Add(NormalVertex);
+						Mesh.Vertices.Add(Vertex);
 						int NewIndex = Mesh.Vertices.Num() - 1;
 						Mesh.Indices.Add(NewIndex);
 						VertexIndices.Add(Key, NewIndex);

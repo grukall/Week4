@@ -24,14 +24,11 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 		Importer.ParseMtlFile(MaterialFileContent, Materials);
 	}
 
-	TArray<FVertexSimple> Vertices;
-	ToFVertexSimple(StaticMesh.Vertices, Vertices);
-
 	UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(
 		AssetName,
 		Renderer,
-		Vertices.Data(),
-		Vertices.Num(),
+		StaticMesh.Vertices.Data(),
+		StaticMesh.Vertices.Num(),
 		StaticMesh.Indices.Data(),
 		StaticMesh.Indices.Num(),
 		StaticMesh.Sections.Data(),
@@ -44,18 +41,4 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 void FStaticMeshAssetLoader::UnloadAsset(UAsset* Asset)
 {
 	// TODO
-}
-
-void FStaticMeshAssetLoader::ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices)
-{
-	for (auto& NormalVertice : NormalVertices)
-	{
-		Vertices.Add
-		({
-			NormalVertice.Pos.x, NormalVertice.Pos.y, NormalVertice.Pos.z,
-			0.0f, 0.0f, 0.0f, 0.0f,
-			NormalVertice.UV.X, NormalVertice.UV.Y,
-			NormalVertice.Normal.x, NormalVertice.Normal.y, NormalVertice.Normal.z
-		});
-	}
 }
