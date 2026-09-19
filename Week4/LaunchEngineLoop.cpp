@@ -217,10 +217,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		mGraphicsManager->UpdateProjectionTransition(deltaTime);
 
-		for (int i = 0; i < 4; ++i)
-		{
-			ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
-		}
+		ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
 	}
 
 	// Physics / Game Threads (씬 로직은 화면 갯수와 무관하게 1번만)
@@ -273,8 +270,29 @@ void FEngineLoop::Tick(bool bPumpMessages)
 				if (Visualizer) Visualizer->VisualizeComponent(Component, RenderCollector);
 			}
 		}
-
-		ActiveViewportClient->mGizmo.Update(mSceneManager, mGraphicsManager->GetViewProjectionMatrix());
+		const float AspectRatio =
+			static_cast<float>(ActiveViewportClient->mWidth) /
+			static_cast<float>(ActiveViewportClient->mHeight);
+		const FMatrix ViewProjectionMatrix =
+			ActiveViewportClient->GetCamera().GetViewMatrix() *
+			ActiveViewportClient->GetCamera().GetProjectionMatrix(
+				AspectRatio,
+				ActiveViewportClient->GetCamera().mFovDegree,
+				0.1f,
+				1000.f
+			);
+		const float ViewportX =
+			mSceneManager->GetViewportX() + ActiveViewportClient->mViewportLeft;
+		const float ViewportY =
+			mSceneManager->GetViewportY() + ActiveViewportClient->mViewportTop;
+		ActiveViewportClient->mGizmo.Update(
+			mSceneManager,
+			ViewProjectionMatrix,
+			ViewportX,
+			ViewportY,
+			static_cast<float>(ActiveViewportClient->mWidth),
+			static_cast<float>(ActiveViewportClient->mHeight)
+		);
 	}
 
 	// Render Threads
@@ -315,9 +333,18 @@ void FEngineLoop::Tick(bool bPumpMessages)
 				mGraphicsManager->RenderHighLight(clickedRenderInfo);
 			}
 
-			// 기즈모 렌더링 (4개 화면 모두에서 기즈모가 보이도록 CurrentClient 기준 렌더링)
-			// mGraphicsManager->GetViewProjectionMatrix() 도 현재 Prepare된 행렬을 반환해야 정상 출력됨
-			CurrentClient->mGizmo.Render(mSceneManager, CurrentClient->mCamera.Transform.Location, mGraphicsManager->GetViewProjectionMatrix());
+			float Aspect = static_cast<float>(CurrentClient->mWidth) / static_cast<float>(CurrentClient->mHeight);
+			// View 행렬과 Projection 행렬을 곱하여 완벽한 ViewProjection 행렬 생성
+			// (Unified 투영 : GetUnifiedProjectionMatrix 로 교체)
+			FMatrix CurrentViewProj = CurrentClient->mCamera.GetViewMatrix() *
+				CurrentClient->mCamera.GetProjectionMatrix(Aspect, CurrentClient->mCamera.mFovDegree, 0.1f, 1000.f);
+
+			CurrentClient->mGizmo.Render(
+				mSceneManager,
+				CurrentClient->mCamera.Transform.Location,
+				CurrentViewProj,
+				static_cast<float>(CurrentClient->mWidth),
+				static_cast<float>(CurrentClient->mHeight));
 		}
 		mGraphicsManager->GetRenderCollector().Clear();
 
