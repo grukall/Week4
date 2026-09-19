@@ -8,6 +8,7 @@
 #include "Vector.h"
 #include "RenderInfo.h"
 #include "FRenderPipeline.h"
+#include "FStatManager.h"
 
 struct FCameraConstants
 {
@@ -359,6 +360,8 @@ public:
 		Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
 		Device->CreateBuffer(&VertexBufferDesc, &VertexBufferSRD, VertexBuffer.GetAddressOf());
 
+		INC_MEMORY_STAT_BY("VertexBufferMem", VertexBufferDesc.ByteWidth);
+
 		return VertexBuffer;
 	}
 
@@ -416,10 +419,9 @@ public:
 	void BindRenderTarget(const TSharedPtr<FRenderTarget2D>& RenderTarget, const TSharedPtr<FDepthStencil>& DepthStencil, bool bClear = true);
 
 	void RenderLines(const TArray<FRenderLineInfo>& Lines) const;
-
 	void RenderHighlight(Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer, UINT NumVertices, Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer, UINT NumIndices, const FMatrix& Model, const FMatrix& OutlineModel, const FVector4& OutlineColor) const;
-
 	void RenderQuad(const FRenderQuadInfo& Info) const;
+	void RenderQuad2D(const FRenderQuadInfo& Info) const;
 
 	void RenderPrimitive(const TSharedPtr<FRenderPipeline>& Pipeline, Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices) const;
 	void RenderPrimitive(Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices, const FMatrix& Model) const;
@@ -484,6 +486,7 @@ private:
 	TSharedPtr<FRenderPipeline> WorldAxisPipeline;
 	TSharedPtr<FRenderPipeline> WorldGridPipeline;
 	TSharedPtr<FRenderPipeline> QuadPipeline;
+	TSharedPtr<FRenderPipeline> Quad2DPipeline;
 
 	UINT Width, Height;
     FLOAT ClearColor[4] = { 0.025f, 0.025f, 0.025f, 1.0f };

@@ -4,13 +4,33 @@
 #include <unordered_set>
 
 #include "Core.h"
+#include "TArray.h"
 
 template <typename T>
 class TSet
 {
 public:
+	using SetType = std::unordered_set<T>;
+	using Iterator = typename SetType::iterator;
+
 	TSet() = default;
 	~TSet() = default;
+
+	Iterator begin() {
+		return mSet.begin();
+	}
+
+	Iterator end() {
+		return mSet.end();
+	}
+
+	typename SetType::const_iterator begin() const {
+		return mSet.cbegin();
+	}
+
+	typename SetType::const_iterator end() const {
+		return mSet.cend();
+	}
 
 	bool Add(const T& data);
 
@@ -24,12 +44,15 @@ public:
 	bool IsEmpty() const;
 	void Reserve(int32 capacity);
 
+	// 순회 중에 원소가 추가/삭제될 수 있는 곳에서는 이걸로 복사해 두고 배열을 돈다.
+	TArray<T> ToTArray() const;
+
 	/*
 	void Empty(int32 ExpectedNumElements = 0)
 	*/
 
 private:
-	std::unordered_set<T> mSet;
+	SetType mSet;
 };
 
 template<typename T>
@@ -74,3 +97,15 @@ inline void TSet<T>::Reserve(int32 capacity)
 	mSet.reserve(capacity);
 }
 
+
+template<typename T>
+inline TArray<T> TSet<T>::ToTArray() const
+{
+	TArray<T> result;
+	result.Reserve(Num());
+	for (const T& element : mSet)
+	{
+		result.Add(element);
+	}
+	return result;
+}

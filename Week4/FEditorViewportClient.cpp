@@ -17,10 +17,17 @@
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
 #include "RayCast.h"
+#include "Assets.h"
+#include "FFontAtlas.h"
+#include "RenderInfo.h"
+#include "GlobalFNames.h"
+#include "LaunchEngineLoop.h"
+#include "FAssetManager.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
 	, mGizmo(InRenderer)
+	, mRenderer(&InRenderer)
 {
 	char Value[64] = {};
 	GetPrivateProfileStringA("Camera", "Sensitivity", "", Value, sizeof(Value), ".\\editor.ini");
@@ -166,6 +173,430 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 		{
 			mGizmo.SetWorldMode(false);
 		}
+	}
+
+	//Stat정보 표시가 켜져 있으면 드로우한다.
+	// 씬 렌더타겟은 백버퍼와 같은 크기이고 Projection2D도 그 크기로 만들어져 있다.
+	// 그래서 렌더러 크기를 그대로 화면 좌표계로 쓴다.
+	if (UFontAtlas* StatFontAtlas = GEngineLoop.GetAssetManager()->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
+	{
+		DrawStatsHUD(FStatManager::Get(), StatFontAtlas, RenderCollector,
+			static_cast<float>(mRenderer->GetWidth()), static_cast<float>(mRenderer->GetHeight()));
+	}
+}
+
+namespace
+{
+	// 언리얼처럼 프레임 시간에 따라 색을 바꾼다. 60fps/30fps가 경계.
+	FVector4 MsToColor(double Ms)
+	{
+		if (Ms > 33.3) return FVector4(1.0f, 0.35f, 0.35f, 1.0f);
+		if (Ms > 16.6) return FVector4(1.0f, 0.85f, 0.35f, 1.0f);
+		return FVector4(0.45f, 1.0f, 0.45f, 1.0f);
+	}
+
+	const FVector4 StatLabelColor(0.88f, 0.88f, 0.88f, 1.0f);
+	const FVector4 StatValueColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// 라벨 열과 값 열 사이 간격(픽셀).
+	constexpr float StatColumnGap = 10.0f;
+
+	void AddStatRow(TArray<FStatRow>& Rows, const char* Label, const char* Value, const FVector4& Color)
+	{
+		FStatRow Row;
+		sprintf_s(Row.Label, "%s:", Label);
+		sprintf_s(Row.Value, "%s", Value);
+		Row.Color = Color;
+		Rows.Add(Row);
+	}
+
+	// 언리얼의 Prims 표기처럼 큰 수는 K로 줄인다.
+	void FormatCount(char* OutBuffer, size_t BufferSize, double Value)
+	{
+		if (Value >= 10000.0)
+		{
+			sprintf_s(OutBuffer, BufferSize, "%7.1fK", Value / 1000.0);
+		}
+		else
+		{
+			sprintf_s(OutBuffer, BufferSize, "%8d", static_cast<int32>(Value));
+		}
+	}
+
+	// 바이트를 KB/MB/GB 중 읽기 좋은 단위로.
+	void FormatBytes(char* OutBuffer, size_t BufferSize, double Bytes)
+	{
+		constexpr double KB = 1024.0;
+		constexpr double MB = KB * 1024.0;
+		constexpr double GB = MB * 1024.0;
+
+		if (Bytes >= GB)      sprintf_s(OutBuffer, BufferSize, "%6.2f GB", Bytes / GB);
+		else if (Bytes >= MB) sprintf_s(OutBuffer, BufferSize, "%6.2f MB", Bytes / MB);
+		else                  sprintf_s(OutBuffer, BufferSize, "%6.2f KB", Bytes / KB);
+	}
+}
+
+void FEditorViewportClient::DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas, FRenderCollector& RenderCollector, float ViewportW, float ViewportH)
+{
+	// 열을 맞추려면 모든 줄의 라벨/값 폭을 알아야 하므로 먼저 다 모은다.
+	TArray<FStatRow> Rows;
+
+	if (StatManager.StatCommands[Name_FPS])
+	{
+		GatherStatFPS(Rows);
+	}
+	if (StatManager.StatCommands[Name_UNIT])
+	{
+		GatherStatUnit(Rows);
+	}
+
+	if (Rows.Num() > 0)
+	{
+		DrawStatRows(Atlas, RenderCollector, Rows, ViewportW);
+	}
+
+	// 메모리는 표 형태라 좌상단에 따로 그린다. 우상단 블록과 겹치지 않는다.
+	if (StatManager.StatCommands[Name_MEMORY])
+	{
+		DrawStatMemoryTable(Atlas, RenderCollector, ViewportW);
+	}
+}
+
+float FEditorViewportClient::MeasureStatText(FFontAtlas* FontAtlas, const char* Text, float Scale)
+{
+	float Width = 0.0f;
+	for (const char* P = Text; *P; ++P)
+	{
+		const uint32 C = static_cast<uint8>(*P);
+
+		if (!FontAtlas->HasGlyph(C))
+		{
+			FontAtlas->AddGlyph(C);
+		}
+		if (!FontAtlas->HasGlyph(C))
+		{
+			continue;
+		}
+
+		Width += FontAtlas->GetGlyph(C).AdvanceX * Scale;
+	}
+	return Width;
+}
+
+void FEditorViewportClient::DrawStatText(UFontAtlas* Atlas, FRenderCollector& RenderCollector,
+	const char* Text, float LeftX, float Y, float Scale, const FVector4& Color)
+{
+	FFontAtlas* FontAtlas = Atlas->GetFontAtlas();
+
+	// 베이스라인은 줄 상단에서 Ascender만큼 내려온 곳이다.
+	const float BaselineY = Y + FontAtlas->Ascender() * Scale;
+	float CursorX = LeftX;
+
+	for (const char* P = Text; *P; ++P)
+	{
+		const uint32 C = static_cast<uint8>(*P);
+
+		// 재지 않고 바로 그리는 문자열도 있으므로 여기서도 글리프를 채운다.
+		// 이게 없으면 한 번도 측정된 적 없는 문자열은 글자가 통째로 빠진다.
+		if (!FontAtlas->HasGlyph(C))
+		{
+			FontAtlas->AddGlyph(C);
+		}
+		if (!FontAtlas->HasGlyph(C))
+		{
+			continue;
+		}
+
+		const FFontGlyph& Glyph = FontAtlas->GetGlyph(C);
+
+		const float W = Glyph.Width * Scale;
+		const float H = Glyph.Height * Scale;
+		const float X = CursorX + Glyph.BearingX * Scale;
+		// BearingY는 베이스라인 위로 올라간 높이라 화면 Y(아래로 +)에서는 뺀다.
+		const float GlyphY = BaselineY - Glyph.BearingY * Scale;
+
+		// 공백처럼 비트맵이 없는 글자는 커서만 전진시킨다.
+		if (W > 0.0f && H > 0.0f)
+		{
+			FRenderQuadInfo QuadInfo;
+			// Quad2D의 로컬 사각형은 (0,0)~(1,1)이라 크기를 곱하고 좌상단으로 옮기면 끝이다.
+			QuadInfo.Model = FMatrix::Scale(FVector3(W, H, 1.0f)) * FMatrix::Translation(FVector(X, GlyphY, 0.0f));
+			QuadInfo.Color = Color;
+			QuadInfo.TextureSRV = Atlas->GetSRV();
+			QuadInfo.SubUV = Glyph.SubUV;
+			QuadInfo.BlendMode = ERenderBlendMode::Transparent;
+			QuadInfo.EnableDepthTest = false;
+			QuadInfo.EnableDepthWrite = false;
+
+			RenderCollector.AddQuadInfo(QuadInfo, true);
+		}
+
+		CursorX += Glyph.AdvanceX * Scale;
+	}
+}
+
+void FEditorViewportClient::DrawStatRows(UFontAtlas* Atlas, FRenderCollector& RenderCollector,
+	const TArray<FStatRow>& Rows, float ViewportW)
+{
+	FFontAtlas* FontAtlas = Atlas->GetFontAtlas();
+
+	// 아틀라스를 구운 크기 기준의 수치를 원하는 크기로 환산하는 비율.
+	const float Scale = StatFontPixelSize / FontAtlas->BakedPixelSize();
+	const float LineHeight = FontAtlas->LineHeight() * Scale;
+
+	// 1패스: 두 열의 최대 폭을 구한다. 여기서 없는 글리프도 다 채워진다.
+	float MaxLabelWidth = 0.0f;
+	float MaxValueWidth = 0.0f;
+	for (uint32 i = 0; i < Rows.Num(); ++i)
+	{
+		MaxLabelWidth = FPlatformMath::Max(MaxLabelWidth, MeasureStatText(FontAtlas, Rows[i].Label, Scale));
+		MaxValueWidth = FPlatformMath::Max(MaxValueWidth, MeasureStatText(FontAtlas, Rows[i].Value, Scale));
+	}
+
+	// 값 열은 왼쪽 정렬, 라벨 열은 오른쪽 정렬. 블록 전체를 화면 우상단에 붙인다.
+	const float Margin = StatScreenMargin;
+	const float ValueLeftX = ViewportW - Margin - MaxValueWidth;
+	const float LabelRightX = ValueLeftX - StatColumnGap;
+
+	float Y = Margin;
+	for (uint32 i = 0; i < Rows.Num(); ++i)
+	{
+		const FStatRow& Row = Rows[i];
+
+		const float LabelWidth = MeasureStatText(FontAtlas, Row.Label, Scale);
+		DrawStatText(Atlas, RenderCollector, Row.Label, LabelRightX - LabelWidth, Y, Scale, StatLabelColor);
+		DrawStatText(Atlas, RenderCollector, Row.Value, ValueLeftX, Y, Scale, Row.Color);
+
+		Y += LineHeight;
+	}
+}
+
+void FEditorViewportClient::GatherStatFPS(TArray<FStatRow>& Rows)
+{
+	FStatManager& StatManager = FStatManager::Get();
+
+	const double FrameMs = StatManager.GetDisplay(FName("Frame"));
+	const double Fps = FrameMs > 0.0 ? 1000.0 / FrameMs : 0.0;
+
+	char Buffer[48];
+
+	sprintf_s(Buffer, "%6.2f FPS", Fps);
+	AddStatRow(Rows, "FPS", Buffer, MsToColor(FrameMs));
+
+	// stat unit이 같이 켜져 있으면 Frame을 거기서 그리므로 중복해서 넣지 않는다.
+	if (!StatManager.StatCommands[Name_UNIT])
+	{
+		sprintf_s(Buffer, "%6.2f ms", FrameMs);
+		AddStatRow(Rows, "Frame", Buffer, MsToColor(FrameMs));
+	}
+}
+
+void FEditorViewportClient::GatherStatUnit(TArray<FStatRow>& Rows)
+{
+	FStatManager& StatManager = FStatManager::Get();
+
+	char Buffer[48];
+
+	// TMap은 순서가 없으므로 등록 순서(Order)대로 정렬해서 모은다.
+	TArray<const FStatEntry*> Sorted;
+	TArray<FName> SortedNames;
+	for (const auto& Pair : StatManager.Stats)
+	{
+		if (Pair.second.Type == EStatType::Memory || !Pair.second.bEnabled)
+		{
+			continue;
+		}
+
+		// 삽입 정렬. 항목이 십여 개라 이걸로 충분하다.
+		uint32 Index = 0;
+		while (Index < Sorted.Num() && Sorted[Index]->Order < Pair.second.Order)
+		{
+			++Index;
+		}
+		Sorted.Insert(&Pair.second, Index);
+		SortedNames.Insert(Pair.first, Index);
+	}
+
+	for (uint32 i = 0; i < Sorted.Num(); ++i)
+	{
+		const FStatEntry& Entry = *Sorted[i];
+
+		if (Entry.Type == EStatType::Cycle)
+		{
+			sprintf_s(Buffer, "%6.2f ms", Entry.Display);
+			AddStatRow(Rows, SortedNames[i].ToString().CStr(), Buffer, MsToColor(Entry.Display));
+		}
+		else
+		{
+			FormatCount(Buffer, sizeof(Buffer), Entry.Display);
+			AddStatRow(Rows, SortedNames[i].ToString().CStr(), Buffer, StatValueColor);
+		}
+	}
+}
+
+namespace
+{
+	// 언리얼 stat memory의 컬럼 구성.
+	constexpr int32 StatMemColumnCount = 5;
+
+	const char* StatMemHeaders[StatMemColumnCount] =
+	{
+		"Memory Counters", "UsedMax", "Mem%", "MemPool", "Pool Capacity"
+	};
+
+	// 첫 열(이름)만 왼쪽 정렬, 나머지 수치는 오른쪽 정렬.
+	constexpr bool StatMemRightAlign[StatMemColumnCount] = { false, true, true, true, true };
+
+	struct FStatMemRow
+	{
+		char Cells[StatMemColumnCount][48] = {};
+	};
+
+	const FVector4 StatTableTitleColor(1.00f, 0.55f, 0.15f, 1.0f);   // 주황: 제목/헤더
+	const FVector4 StatTableTextColor(0.35f, 0.95f, 0.35f, 1.0f);    // 초록: 값
+	const FVector4 StatTableRowColorA(0.10f, 0.10f, 0.10f, 0.72f);
+	const FVector4 StatTableRowColorB(0.16f, 0.16f, 0.16f, 0.72f);
+
+	constexpr float StatTableColumnGap = 34.0f;
+	constexpr float StatTableCellPadding = 6.0f;
+}
+
+void FEditorViewportClient::DrawStatRect(FRenderCollector& RenderCollector,
+	float X, float Y, float W, float H, const FVector4& Color)
+{
+	FRenderQuadInfo QuadInfo;
+	QuadInfo.Model = FMatrix::Scale(FVector3(W, H, 1.0f)) * FMatrix::Translation(FVector(X, Y, 0.0f));
+	QuadInfo.Color = Color;
+	QuadInfo.TextureSRV = nullptr;   // 텍스처가 없으면 셰이더가 Color를 그대로 쓴다
+	QuadInfo.BlendMode = ERenderBlendMode::Transparent;
+	QuadInfo.EnableDepthTest = false;
+	QuadInfo.EnableDepthWrite = false;
+
+	RenderCollector.AddQuadInfo(QuadInfo, true);
+}
+
+void FEditorViewportClient::DrawStatMemoryTable(UFontAtlas* Atlas, FRenderCollector& RenderCollector, float ViewportW)
+{
+	FStatManager& StatManager = FStatManager::Get();
+	FFontAtlas* FontAtlas = Atlas->GetFontAtlas();
+
+	const float Scale = StatFontPixelSize / FontAtlas->BakedPixelSize();
+	const float LineHeight = FontAtlas->LineHeight() * Scale;
+
+	// 값이 큰 것부터. 언리얼도 UsedMax 내림차순으로 보여준다.
+	TArray<FStatMemRow> Rows;
+	TArray<double> SortKeys;
+
+	double TotalBytes = 0.0;
+	for (const auto& Pair : StatManager.Stats)
+	{
+		if (Pair.second.Type != EStatType::Memory)
+		{
+			continue;
+		}
+
+		TotalBytes += Pair.second.Display;
+
+		FStatMemRow Row;
+		sprintf_s(Row.Cells[0], "%s", Pair.first.ToString().CStr());
+		FormatBytes(Row.Cells[1], sizeof(Row.Cells[1]), Pair.second.Display);
+		// 풀 개념이 없어서 Mem%와 Pool Capacity는 비운다. 언리얼도 풀이 아닌 항목은 비어 있다.
+		sprintf_s(Row.Cells[2], "%s", "");
+		sprintf_s(Row.Cells[3], "%s", "Physical");
+		sprintf_s(Row.Cells[4], "%s", "");
+
+		// 삽입 정렬. 항목이 몇 개 안 된다.
+		uint32 Index = 0;
+		while (Index < SortKeys.Num() && SortKeys[Index] > Pair.second.Display)
+		{
+			++Index;
+		}
+		Rows.Insert(Row, Index);
+		SortKeys.Insert(Pair.second.Display, Index);
+	}
+
+	if (Rows.Num() == 0)
+	{
+		return;
+	}
+
+	// 합계는 정렬에서 빼고 항상 맨 아래. 단위는 MB로 고정해 다른 줄과 비교하기 쉽게 둔다.
+	{
+		FStatMemRow TotalRow;
+		sprintf_s(TotalRow.Cells[0], "%s", "Total");
+		sprintf_s(TotalRow.Cells[1], "%6.2f MB", TotalBytes / (1024.0 * 1024.0));
+		sprintf_s(TotalRow.Cells[2], "%s", "");
+		sprintf_s(TotalRow.Cells[3], "%s", "Physical");
+		sprintf_s(TotalRow.Cells[4], "%s", "");
+		Rows.Add(TotalRow);
+	}
+
+	// 컬럼 폭은 헤더와 모든 셀 중 가장 넓은 것에 맞춘다.
+	float ColumnWidth[StatMemColumnCount] = {};
+	for (int32 Col = 0; Col < StatMemColumnCount; ++Col)
+	{
+		ColumnWidth[Col] = MeasureStatText(FontAtlas, StatMemHeaders[Col], Scale);
+		for (uint32 i = 0; i < Rows.Num(); ++i)
+		{
+			ColumnWidth[Col] = FPlatformMath::Max(ColumnWidth[Col],
+				MeasureStatText(FontAtlas, Rows[i].Cells[Col], Scale));
+		}
+	}
+
+	float ColumnX[StatMemColumnCount] = {};
+	const float Margin = StatScreenMargin;
+	float Cursor = Margin + StatTableCellPadding;
+	for (int32 Col = 0; Col < StatMemColumnCount; ++Col)
+	{
+		ColumnX[Col] = Cursor;
+		Cursor += ColumnWidth[Col] + StatTableColumnGap;
+	}
+	const float TableWidth = Cursor - StatTableColumnGap + StatTableCellPadding - Margin;
+
+	// 한 셀을 컬럼 정렬 규칙에 맞춰 그린다.
+	auto DrawCell = [&](int32 Col, const char* Text, float Y, const FVector4& Color)
+	{
+		if (Text[0] == '\0')
+		{
+			return;
+		}
+
+		float X = ColumnX[Col];
+		if (StatMemRightAlign[Col])
+		{
+			X += ColumnWidth[Col] - MeasureStatText(FontAtlas, Text, Scale);
+		}
+		DrawStatText(Atlas, RenderCollector, Text, X, Y, Scale, Color);
+	};
+
+	float Y = Margin;
+
+	// 제목
+	DrawStatText(Atlas, RenderCollector, "Memory [STATGROUP_MEMORY]",
+		Margin + StatTableCellPadding, Y, Scale, StatTableTitleColor);
+	Y += LineHeight;
+
+	// 컬럼 헤더
+	for (int32 Col = 0; Col < StatMemColumnCount; ++Col)
+	{
+		DrawCell(Col, StatMemHeaders[Col], Y, StatTableTitleColor);
+	}
+	Y += LineHeight;
+
+	// 본문. 배경 줄무늬를 먼저 깔아야 글자가 위로 온다.
+	for (uint32 i = 0; i < Rows.Num(); ++i)
+	{
+		DrawStatRect(RenderCollector, Margin, Y + i * LineHeight, TableWidth, LineHeight,
+			(i % 2) == 0 ? StatTableRowColorA : StatTableRowColorB);
+	}
+
+	for (uint32 i = 0; i < Rows.Num(); ++i)
+	{
+		for (int32 Col = 0; Col < StatMemColumnCount; ++Col)
+		{
+			DrawCell(Col, Rows[i].Cells[Col], Y, StatTableTextColor);
+		}
+		Y += LineHeight;
 	}
 }
 

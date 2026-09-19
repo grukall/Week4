@@ -78,19 +78,22 @@ public:
 			SetRelativeRotation(mBillboardCamera->Transform.Rotation);
 		}
 		
-		FVector Location = mOwner->GetRootComponent()->GetRelativeLocation();
-		// Place billboard labels above the actor along the camera's screen-up axis.
-		const FVector LabelUp = (mBillboardCamera && mbBillboard)
-			? mBillboardCamera->GetUpVector()
-			: FVector(0.f, 0.f, 1.f);
-		Location += LabelUp * 1.0f;
-		SetRelativeLocation(Location);
+		USceneComponent* RootComponent = mOwner->GetRootComponent();
+		if (RootComponent)
+		{
+			FVector Location = RootComponent->GetRelativeLocation();
+			// Place billboard labels above the actor along the camera's screen-up axis.
+			const FVector LabelUp = (mBillboardCamera && mbBillboard)
+				? mBillboardCamera->GetUpVector()
+				: FVector(0.f, 0.f, 1.f);
+			Location += LabelUp * 1.0f;
+			SetRelativeLocation(Location);
+		}
 	}
 
 	void Render(FRenderCollector& RenderCollector) override
 	{
 		// Show Flags에서 끄면 쿼드를 아예 만들지 않는다.
-		// 만들고 거르는 게 아니라 글자 수만큼의 계산 자체가 사라진다.
 		if (!FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
 		{
 			return;
