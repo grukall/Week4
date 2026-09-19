@@ -6,10 +6,21 @@
 #include "Camera.h"
 #include "RenderInfo.h"
 #include "Gizmo.h"
+#include "FStatManager.h"
 
 class AActor;
 class FSceneManager;
 class URenderer;
+class UFontAtlas;
+class FFontAtlas;
+
+// 스탯 HUD 한 줄. 라벨은 우측 정렬, 값은 좌측 정렬로 두 열을 이룬다.
+struct FStatRow
+{
+	char Label[32] = {};
+	char Value[48] = {};
+	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
+};
 
 struct FEditorViewportClient
 {
@@ -69,7 +80,10 @@ private:
 	);
 
 	bool bMouseHit = false;
-	
+
+	// 스탯 HUD가 화면 크기(=씬 렌더타겟 크기)를 물어보려고 들고 있는다.
+	URenderer* mRenderer = nullptr;
+
 	// RayCast가 이번 프레임에 쏜 광선. 기즈모 드래그가 같은 광선을 다시 쓴다
 	FVector mRayNear;
 	FVector mRayFar;

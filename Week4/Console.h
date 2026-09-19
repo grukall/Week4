@@ -1,6 +1,8 @@
 ﻿#pragma once
 
 #include "ImGui/imgui.h"
+#include "TMap.h"
+#include <functional>
 
 class ConsoleWindow final {
 public:
@@ -15,10 +17,21 @@ public:
 	ImGuiTextFilter Filter;
 	bool AutoScroll = true;
 	bool ScrollToBottom;
+	bool bFocusInputRequested = false;
+	ImVector<const char*> Suggestions;
+	int SuggestionIndex = -1;
 	int MaxLine = 256;
 	static constexpr float HEIGHT_RATIO = 0.3f;
 
 	void Process(float panelWidth);
+
+	void RequestFocus()
+	{
+		bIsOpened = true;
+		bFocusInputRequested = true;
+		ImGui::GetIO().InputQueueCharacters.resize(0); // 이번 프레임 문자 큐를 비워 토글 키 문자가 InputText에 찍히는 것 방지
+	}
+
 	static ConsoleWindow& Get() {
 		static ConsoleWindow Instance;
 		return Instance;
@@ -40,4 +53,8 @@ private:
 	}
 	int TextEditCallback(ImGuiInputTextCallbackData* data);
 	void ExecCommand(const char* command_line);
+	void UpdateSuggestions();
+	void DrawSuggestionPopup(const ImVec2& InputMin);
+
+	TMap<FString, std::function<void(const char*)>> CommandMap;
 };

@@ -16,6 +16,7 @@
 
 class Sphere;
 class FGraphicsManager;
+class FStatManager;
 class FEngineLoop
 {
 public:
@@ -29,9 +30,11 @@ public:
 	void End();
 
 	FAssetManager* GetAssetManager() { return mAssetManager; }
+	FStatManager* GetStatManager() { return mStatManager; }
 
 private:
 	void InitAssetManager();
+	void InitStatManager();
 
 private:
 	// Todo: Make as pointer
@@ -46,6 +49,7 @@ private:
 	FFontManager* mFontManager;
 
 	FComponentVisualizerManager* mComponentVisualizerManager;
+	FStatManager* mStatManager;
 };
 
 inline FEngineLoop GEngineLoop;

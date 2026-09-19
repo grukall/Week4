@@ -22,6 +22,8 @@
 #include "World.h"
 #include <FLogManager.h>
 #include "Assets.h"
+#include "FStatManager.h"
+#include "UObjectHash.h"
 
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
@@ -57,6 +59,9 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	rid.hwndTarget = hWnd;
 	RegisterRawInputDevices(&rid, 1, sizeof(rid));
 
+	// 아래 초기화들이 리소스를 만들면서 INC_MEMORY_STAT_BY 같은 매크로를 타는데, 그때 이미 살아 있어야 한다.
+	InitStatManager();
+
 	mGraphicsManager = new FGraphicsManager(hWnd);
 
 	IMGUI_CHECKVERSION();
@@ -85,25 +90,16 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	mSceneManager = new FSceneManager();
 	mFileManager = new FFileManager();
 	mFontManager = new FFontManager();
+	mComponentVisualizerManager = new FComponentVisualizerManager();
 	InitAssetManager();
 
-	mComponentVisualizerManager = new FComponentVisualizerManager();
 
 	char Value[64] = {};
 	GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), ".\\editor.ini");
 	int32 GridGap = 1;
 	sscanf_s(Value, "%d", &	GridGap);
 	mGraphicsManager->SetGridGap(GridGap);
-
 	mSceneManager->NewScene();
-
-	//test code
-	//{
-	//	UCubeComponent* cubeComonent = FObjectFactory::ConstructObject<UCubeComponent>(FVector(0), FRotator(), FVector(1));
-	//	AActor* cubeActor = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor->AddComponent(cubeComonent);
-	//	mSceneManager.GetCurrentWorld()->AddActor(cubeActor);
-	//}
 }
 
 void FEngineLoop::InitAssetManager()
@@ -153,6 +149,14 @@ void FEngineLoop::InitAssetManager()
 	UFont* TestFontAsset = mAssetManager->GetAssetAs<UFont>(FName("TestFont"), true);
 	UFontAtlas* FontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("TestFontAtlas"), *renderer, TestFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(FontAtlasAsset);
+
+	// 스탯 HUD용 고정폭 폰트. 숫자가 바뀌어도 글자 폭이 같아야 표가 흔들리지 않는다.
+	FFileAssetSource* StatFontSource = new FFileAssetSource(*mFileManager, "Fonts/RobotoMono-Regular.ttf");
+	mAssetManager->RegisterAsset(FName("StatFont"), FontLoader, StatFontSource);
+
+	UFont* StatFontAsset = mAssetManager->GetAssetAs<UFont>(FName("StatFont"), true);
+	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);
+	mAssetManager->RegisterAsset(StatFontAtlasAsset);
 }
 
 void FEngineLoop::InitStatManager()
@@ -205,7 +209,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	//Input Threads
 	{
+		SCOPE_CYCLE_COUNTER("Input");
 		WindowApplication.ProcessDeferredEvents();
+
+		//'~'누르면 콘솔 Input 포커스
+		if (WindowApplication.Input.WasPressed(VK_OEM_3))
+			console.RequestFocus();
 
 		mGraphicsManager->UpdateProjectionTransition(deltaTime);
 		ViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
@@ -218,12 +227,30 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	//Game Threads
 	{
+		SCOPE_CYCLE_COUNTER("Game");
+
+		if (UWorld* World = mSceneManager->GetCurrentWorld())
+		{
+			INC_DWORD_STAT_BY("Actors", World->GetActors().Num());
+		}
+
+		{
+			// FClassInfo에 크기 정보가 없어 바이트는 못 재고 개수만 센다.
+			uint32 ObjectCount = 0;
+			for (const auto& Pair : FUObjectHashTables::Get().ClassToObjectListMap)
+			{
+				ObjectCount += Pair.second.Num();
+			}
+			INC_DWORD_STAT_BY("Objects", ObjectCount);
+		}
+
 		mSceneManager->Tick(deltaTime);
 		mSceneManager->Update(deltaTime, RenderCollector);
 	}
 
 	//mouse picking
 	{
+		SCOPE_CYCLE_COUNTER("Picking");
 		const FInputState& Input = WindowApplication.Input;
 
 		// 뷰포트가 ImGui 창이 되면서 그 위에서는 io.WantCaptureMouse 가 항상 true 다.
@@ -288,6 +315,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	//Render Threads
 	{
+		SCOPE_CYCLE_COUNTER("Render");
 		if (WindowApplication.bPendingResize)
 		{
 			mGraphicsManager->OnResize(WindowApplication.PendingWidth, WindowApplication.PendingHeight);
@@ -311,6 +339,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		//ImGui
 		{
+			SCOPE_CYCLE_COUNTER("ImGui");
 			//ImGui Input
 			mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, ViewportClient, mFileManager, mAssetManager });
 

@@ -34,7 +34,10 @@ struct FClassInfo
 	template <typename T>
 	void AddProperty(const FString& InName, uint64 InOffset)
 	{
-		Properties.Add({ InName, GetPropertyType<T>(), InOffset, sizeof(T), GetPropertyClassInfo<T>() });
+		FString WidgetId("##");
+		WidgetId.Append(InName);
+
+		Properties.Add({ InName, std::move(WidgetId), GetPropertyType<T>(), InOffset, sizeof(T), GetPropertyClassInfo<T>() });
 	}
 
 private:

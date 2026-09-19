@@ -74,6 +74,10 @@ private:
 
 class FFrameTimer;
 
+// 언리얼의 DrawStatsHUD에 해당한다. ImGui 창 안에서 호출해야 한다.
+// RightX/TopY는 뷰포트 이미지의 우상단 화면 좌표.
+void DrawStatsHUD(FStatManager& StatManager, const FFrameTimer& FrameTimer, float RightX, float TopY);
+
 inline double GetMsPerCount()
 {
     static const double MsPerCount = []

@@ -97,6 +97,7 @@ void FGraphicsManager::GizmoPrepare()
 }
 void FGraphicsManager::Render()
 {
+	INC_DWORD_STAT_BY("Lines", mRenderCollector.LineInfos.Num());
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
 
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
@@ -160,6 +161,12 @@ void FGraphicsManager::Render()
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOverlayQuadInfos())
 	{
 		mRenderer->RenderQuad(QuadInfo);
+	}
+
+	// 스탯 HUD 등 화면 좌표 오버레이. 씬 위에 덮어야 하므로 제일 마지막.
+	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.Get2DQuadInfos())
+	{
+		mRenderer->RenderQuad2D(QuadInfo);
 	}
 
 	mRenderCollector.Clear();
