@@ -38,7 +38,6 @@ struct FClassInfo
 		WidgetId.Append(InName);
 
 		Properties.Add({ InName, std::move(WidgetId), GetPropertyType<T>(), InOffset, sizeof(T), GetPropertyClassInfo<T>() });
-		Properties.Add({ InName,GetPropertyType<T>(),InOffset,sizeof(T),GetPropertyClassInfo<T>(),GetPropertyElementType<T>(),GetPropertyElementClassInfo<T>() });
 	}
 
 private:

@@ -5,7 +5,8 @@
 #include "ObjImporter.h"
 
 class URenderer;
-
+class FAssetManager;
+class FTexture2DAssetLoader;
 struct FStaticMeshSection
 {
 	uint32 StartIndex;
@@ -43,13 +44,15 @@ struct FMaterialData
 class FStaticMeshAssetLoader : public FAssetLoader
 {
 public:
-	FStaticMeshAssetLoader(URenderer& InRenderer) : Renderer(InRenderer) {}
+	FStaticMeshAssetLoader(URenderer& InRenderer, FAssetManager& InAssetManager, FTexture2DAssetLoader& InTextureLoader)
+		: Renderer(InRenderer), AssetManager(&InAssetManager), TextureLoader(&InTextureLoader) { }
 	~FStaticMeshAssetLoader() = default;
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
 private:
 	URenderer& Renderer;
-
+	FAssetManager* AssetManager;
+	FTexture2DAssetLoader* TextureLoader;
 	void ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices);
 };

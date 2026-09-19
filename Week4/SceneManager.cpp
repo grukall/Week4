@@ -197,6 +197,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"Circle",
 		"SpotLight",
 		"Explosion",
+		"Cat"
 	};
 
 	const char* ActorMeshNames[] = {
@@ -207,7 +208,8 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		"GizmoArrowMesh",
 		"CircleMesh",
 		"",
-		""
+		"",
+		"TestAsset"
 	};
 
 	const FClassInfo* ActorClassInfo[] = {
@@ -218,7 +220,8 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		UStaticMeshComponent::GetClass(),
 		UStaticMeshComponent::GetClass(),
 		ASpotLight::GetClass(),
-		UAtlasAnimationComponent::GetClass()
+		UAtlasAnimationComponent::GetClass(),
+		UStaticMeshComponent::GetClass(),
 	};
 
 	static_assert(IM_ARRAYSIZE(ActorTypeNames) == IM_ARRAYSIZE(ActorClassInfo), "ActorTypeNames and ActorClassInfo must stay the same length");

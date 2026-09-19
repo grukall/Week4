@@ -160,15 +160,18 @@ void FEngineLoop::InitAssetManager()
 	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(StatFontAtlasAsset);
 
-	UMaterial* TestMaterial1 = FObjectFactory::ConstructObject<UMaterial>(FName("TestMaterial1"));
-	TestMaterial1->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("TestTexture"), true));
-	mAssetManager->RegisterAsset(TestMaterial1);
-	UMaterial* TestMaterial2 = FObjectFactory::ConstructObject<UMaterial>(FName("TestMaterial2"));
-	TestMaterial2->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("SpotLightIcon"), true));
-	mAssetManager->RegisterAsset(TestMaterial2);
-	UMaterial* TestMaterial3 = FObjectFactory::ConstructObject<UMaterial>(FName("TestMaterial3"));
-	TestMaterial3->SetDiffuseTexture(FAssetManager::Get().GetAssetAs<UTexture2D>(FName("ExplosionTexture"), true));
-	mAssetManager->RegisterAsset(TestMaterial3);
+
+
+	FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*renderer, *mAssetManager, *TextureLoader);
+	FFileAssetSource* CatObjSource = new FFileAssetSource(*mFileManager, "Test/cat.obj");
+	UStaticMesh* TestAsset = static_cast<UStaticMesh*>(StaticMeshLoader->LoadAsset(FName("TestAsset"), *CatObjSource));
+	mAssetManager->RegisterAsset(TestAsset);  
+	FFileAssetSource* CubeObjSource = new FFileAssetSource(*mFileManager, "Test/cube.obj");
+	UStaticMesh* TestAsset1 = static_cast<UStaticMesh*>(StaticMeshLoader->LoadAsset(FName("TestAsset1"), *CubeObjSource));
+	mAssetManager->RegisterAsset(TestAsset1);
+	FFileAssetSource* CubeTexObjSource = new FFileAssetSource(*mFileManager, "Test/cube-tex.obj");
+	UStaticMesh* TestAsset2 = static_cast<UStaticMesh*>(StaticMeshLoader->LoadAsset(FName("TestAsset2"), *CubeTexObjSource));
+	mAssetManager->RegisterAsset(TestAsset2);
 }      
 
 void FEngineLoop::InitStatManager()

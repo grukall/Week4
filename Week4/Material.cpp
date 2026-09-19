@@ -1,6 +1,11 @@
 #include "Material.h"
 #include "Json/json.hpp"
 
+void UMaterial::Initialize(const FName& InAssetName, URenderer& InRenderer)
+{
+	UAsset::Initialize(InAssetName);
+}
+
 void UMaterial::SerializeClass(json::JSON& outJson) const
 {
 	//Super::SerializeClass(outJson);

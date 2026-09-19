@@ -3,7 +3,8 @@
 #include "Vector.h"
 #include "TArray.h"
 #include "FileManager.h"
-
+#include "Material.h"
+#include "FAssetManager.h"
 UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
@@ -15,13 +16,13 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 	StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
 	Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
 
-	TArray<FMaterialData> Materials;
+	TArray<FMaterialData> MaterialDatas;
 	for (FString filename : MaterialFiles)
 	{
 		std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
 		std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
 		FString MaterialFileContent = FileSource.GetFileManager().ReadFileToString(MtlPath);
-		Importer.ParseMtlFile(MaterialFileContent, Materials);
+		Importer.ParseMtlFile(MaterialFileContent, MaterialDatas);
 	}
 
 	TArray<FVertexSimple> Vertices;
@@ -37,6 +38,43 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 		StaticMesh.Sections.Data(),
 		StaticMesh.Sections.Num()
 	);
+
+	for (const FString& MaterialName : StaticMesh.Materials) {
+		const FMaterialData* FoundMaterial = nullptr;
+
+		for (const FMaterialData& MaterialData : MaterialDatas) {
+			if (MaterialData.Name == MaterialName) {
+				FoundMaterial = &MaterialData;
+				break;
+			}
+		}
+
+		UMaterial* Material = nullptr; 
+		if (FoundMaterial != nullptr) {
+			Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
+			Material->SetDiffuseColor({ FoundMaterial->DiffuseColor, 1.0f });
+			if (!FoundMaterial->DiffuseColorMapFilename.empty())
+			{
+				std::filesystem::path TexturePath = FileSource.GetFilePath().parent_path() / FoundMaterial->DiffuseColorMapFilename.CStr();
+
+				FString TexturePathString(TexturePath.string());
+
+				FName TextureAssetName(TexturePathString);
+
+				FFileAssetSource* TextureSource = new FFileAssetSource(FileSource.GetFileManager(), TexturePath);
+
+				AssetManager->RegisterAsset(TextureAssetName, TextureLoader, TextureSource);
+
+				UTexture2D* Texture = AssetManager->GetAssetAs<UTexture2D>(TextureAssetName, true);
+
+				Material->SetDiffuseTexture(Texture);
+			}
+		}
+		else {
+			Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
+		}
+		NewMesh->AddMaterial(Material);
+	}
 
 	return NewMesh;
 }

@@ -1,13 +1,14 @@
 #pragma once
 
 #include "UAsset.h"
-
+#include "Renderer.h"
 class UTexture2D;
 class UMaterial : public UAsset {
 	REFLECT_CLASS(UMaterial, UAsset);
 public:
 	UMaterial() = default;
 	using UAsset::Initialize;
+	void Initialize(const FName& InAssetName, URenderer& InRenderer);
 	virtual ~UMaterial() = default;
 
 	virtual void SerializeClass(json::JSON& outJson) const override;
