@@ -198,8 +198,8 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								FEditorViewportClient* Client = Clients[i];
 								FRect rect = SplitArea->Rect;
 
-								// 1. 이번 프레임의 UI 영역 크기를 클라이언트에게 통보
-								Client->SetTargetSize(rect.GetWidth(), rect.GetHeight());
+								// 이번 프레임의 UI 영역 크기를 클라이언트에게 통보
+								Client->SetViewportArea(rect.Left, rect.Top, rect.GetWidth(), rect.GetHeight());
 
 								if (Client->mRenderTarget && Client->mRenderTarget->SRV)
 								{

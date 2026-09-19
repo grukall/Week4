@@ -31,7 +31,7 @@ public:
 
 	FCamera& GetCamera() { return mCamera; }
 
-	void SetTargetSize(float InWidth, float InHeight);
+	void SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight);
 	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
 
 	FCamera mCamera;
@@ -40,8 +40,11 @@ public:
 	TSharedPtr<FDepthStencil> mDepthStencil;
 	uint32 mWidth = 800;
 	uint32 mHeight = 600;
-	float ViewportX = 0.0f;
-	float ViewportY = 0.0f;
+	float mViewportX = 0.0f;
+	float mViewportY = 0.0f;
+	// 자신의 스플리터 영역 내 상대 위치
+	float mViewportLeft = 0.0f;
+	float mViewportTop = 0.0f;
 
 private:
 	// 선택된 액터의 RenderInfo는 캐시하지 않는다. 필요할 때 ClickedActor->GetRenderInfos()로 그때그때 뽑는다.
