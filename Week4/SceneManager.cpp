@@ -37,6 +37,9 @@
 #include "AStaticMeshTestActor.h"
 #include "UObjectIterator.h"
 
+#include "LaunchEngineLoop.h"
+#include "StaticMesh.h"
+
 FSceneManager::FSceneManager()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -429,6 +432,27 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		}
 	}
 
+	ImGui::SameLine();
+
+	if (ImGui::Button("Import"))
+	{
+		const std::optional<std::filesystem::path> selectedPath = FNativeFileDialog::OpenObjFile(
+			ownerWindow,
+			sceneDirectory
+		);
+
+		if (selectedPath.has_value())
+		{
+			const std::filesystem::path& Path = selectedPath.value();
+			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
+			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer);
+			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
+			FName AssetName = FName(selectedPath.value().stem().string());
+			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
+			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
+		}
+	}
 
 	/* Camera Control */
 	ImGui::SeparatorText("Camera Control");
