@@ -76,7 +76,7 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	ConsoleWindow& console = ConsoleWindow::Get();
 	console.Init(clientWidth);
 
-	FrameTimer = new FFrameTimer(120);
+	FrameTimer = new FFrameTimer(false);
 	ViewportClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer()); // Todo: cChange to class
 
 	const FVector4 NearTint(1.0f, 0.65f, 0.15f, 0.85f); // 주황 = 가까운 쪽
@@ -155,12 +155,48 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager->RegisterAsset(FontAtlasAsset);
 }
 
+void FEngineLoop::InitStatManager()
+{
+	mStatManager = new FStatManager();
+
+	// 매크로를 처음 지날 때 자동 등록되지만, 아직 한 번도 안 지난 스탯은
+	// 콘솔 목록에 뜨지 않는다. 미리 등록해 목록을 고정해둔다.
+
+	// --- Cycle: 구간별 소요 시간(ms) ---
+	mStatManager->Register(FName("Frame"), EStatType::Cycle);   // 제한 대기 포함(실제 프레임 시간)
+	mStatManager->Register(FName("CPU"), EStatType::Cycle);     // 제한 대기 제외(순수 작업 시간)
+	mStatManager->Register(FName("Input"), EStatType::Cycle);
+	mStatManager->Register(FName("Game"), EStatType::Cycle);
+	mStatManager->Register(FName("Picking"), EStatType::Cycle);
+	mStatManager->Register(FName("Render"), EStatType::Cycle);
+	mStatManager->Register(FName("ImGui"), EStatType::Cycle);
+
+	// --- Counter: 프레임당 개수 ---
+	mStatManager->Register(FName("DrawCalls"), EStatType::Counter);
+	mStatManager->Register(FName("Triangles"), EStatType::Counter);
+	mStatManager->Register(FName("Lines"), EStatType::Counter);
+	mStatManager->Register(FName("Actors"), EStatType::Counter);
+	mStatManager->Register(FName("Objects"), EStatType::Counter);
+
+	// --- Memory: 현재 총량(byte). 프레임마다 리셋되지 않는다 ---
+	mStatManager->Register(FName("VertexBufferMem"), EStatType::Memory);
+	mStatManager->Register(FName("IndexBufferMem"), EStatType::Memory);
+	mStatManager->Register(FName("TextureMem"), EStatType::Memory);
+}
+
 void FEngineLoop::Tick(bool bPumpMessages)
 {
 	if (GInTick) return;
 	GInTick = true;
 
 	FrameTimer->StartFrame();
+	mStatManager->ResetFrame();
+
+	SCOPE_CYCLE_COUNTER("Frame");
+
+	{
+	SCOPE_CYCLE_COUNTER("CPU");
+
 	float deltaTime = FrameTimer->GetDeltaTime();
 	ConsoleWindow& console = ConsoleWindow::Get();
 
@@ -286,6 +322,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		mGraphicsManager->Display();
 	}
+
+	} // SCOPE_CYCLE_COUNTER("CPU") 종료
 
 	FrameTimer->EndFrame();
 

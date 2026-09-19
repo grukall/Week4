@@ -179,9 +179,6 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::Begin("Jungle Control Panel", nullptr, flags);
 	mPanelWidth = ImGui::GetWindowWidth();
 
-	ImGui::Text("Hello Jungle World!");
-	ImGui::Text("FPS: %.1f  dt: %.4f", guiReference.FrameTimer.GetFPS(), guiReference.FrameTimer.GetDeltaTime());
-
 	/* Spawn Actor */
 	// NOTE: 세 배열은 같은 순서를 유지해야 한다. 메시 이름이 비어 있으면 아래에서 따로 조립하는 타입이다.
 	ImGui::SeparatorText("Spawn Actor");
