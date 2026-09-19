@@ -39,3 +39,17 @@ struct FMaterialData
 	FString SpecularColorMapFilename;
 	FString BumpMapFilename;
 };
+
+class FStaticMeshAssetLoader : public FAssetLoader
+{
+public:
+	FStaticMeshAssetLoader(URenderer& InRenderer) : Renderer(InRenderer) {}
+	~FStaticMeshAssetLoader() = default;
+
+	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
+	virtual void UnloadAsset(UAsset* Asset) override;
+private:
+	URenderer& Renderer;
+
+	void ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices);
+};

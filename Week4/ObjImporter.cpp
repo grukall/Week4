@@ -2,6 +2,8 @@
 #include <sstream>
 #include <string_view>
 #include <charconv>
+#include "FLogManager.h"
+#include "StaticMesh.h"
 
 bool FObjImporter::LoadObjModel(FString& FileContent, FStaticMesh& Mesh, TArray<FString>& MaterialFiles)
 {

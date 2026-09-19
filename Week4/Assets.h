@@ -26,6 +26,10 @@ public:
 
 	FString ReadFileToString() const;
 
+	FFileManager& GetFileManager() const { return FileManager;  }
+
+	std::filesystem::path GetFilePath() const { return FilePath; }
+
 private:
 	FFileManager& FileManager;
 	std::filesystem::path FilePath;
@@ -39,7 +43,8 @@ public:
 
 	using UAsset::Initialize;
 	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount);
-	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, int32 InVertexCount, const uint32* InIndices, int32 InIndexCount);
+	void Initialize(const FName& InAssetName, URenderer& InRenderer, const FVertexSimple* InVertices, int32 InVertexCount, const uint32* InIndices, int32 InIndexCount, const FStaticMeshSection* InSections, int32 InSectionCount);
 
 	inline Microsoft::WRL::ComPtr<ID3D11Buffer> GetVertexBuffer() const { return VertexBuffer; }
 	inline uint32 GetVertexCount() const { return VertexCount; }
