@@ -60,7 +60,7 @@ AActor* FEditorViewportClient::PerformMousePicking(float perspectiveRatio, const
 	// 투영 방식에 따라 광선을 만드는 법만 다르다. 두 점을 구하고 나면 이후 판정은 완전히 같다
 	FVector NearPoint, FarPoint;
 	DeprojectScreenToWorldForUnified(MouseXInViewport, MouseYInViewport,
-		ViewportWidth, ViewportHeight, 0.1f, 100.f, mCamera.mOrthoDistance, perspectiveRatio, NearPoint, FarPoint);
+		ViewportWidth, ViewportHeight, mCamera.nearZ, mCamera.farZ, mCamera.mOrthoDistance, perspectiveRatio, NearPoint, FarPoint);
 
 	mRayNear = NearPoint;
 	mRayFar = FarPoint;

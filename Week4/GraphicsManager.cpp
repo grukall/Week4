@@ -46,13 +46,11 @@ FGraphicsManager::~FGraphicsManager()
 
 void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight)
 {
-	// Cache view and projection matrices for rendering
-	const float nearZ = 0.1f;
-	const float farZ = 2000.0f;
-
 	float d = mCamera->mOrthoDistance;
-	
 	mAspect = viewportWidth / viewportHeight;
+
+	float nearZ = mCamera->nearZ;
+	float farZ = mCamera->farZ;
 
 	FMatrix view = mCamera->GetViewMatrix();
 	FMatrix projection_u_p = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 1.0f);

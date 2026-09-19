@@ -176,7 +176,7 @@ void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 	Width = SwapChainDesc.BufferDesc.Width;
 	Height = SwapChainDesc.BufferDesc.Height;
 	ViewportInfo = { 0.0f, 0.0f, (float)Width, (float)Height, 0.0f, 1.0f };
-	Projection2D = FMatrix::Ortho(0.0f, 0.0f, (float)Width, (float)Height, 0.0f, 1.0f);
+	Projection2D = FMatrix::Ortho(0.0f, (float)Width, (float)Height, 0.0f, 0.0f, 1.0f);   // Left, Right, Bottom, Top, Near, Far
 
 	//Adapter 가져오기
 	//ID3D11Device → IDXGIDevice → IDXGIAdapter → IDXGIAdapter3
