@@ -94,7 +94,6 @@ public:
 	void Render(FRenderCollector& RenderCollector) override
 	{
 		// Show Flags에서 끄면 쿼드를 아예 만들지 않는다.
-		// 만들고 거르는 게 아니라 글자 수만큼의 계산 자체가 사라진다.
 		if (!FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
 		{
 			return;
