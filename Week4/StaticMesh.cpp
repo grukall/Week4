@@ -31,6 +31,71 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 			Importer.ParseMtlFile(MaterialFileContent, Materials);
 		}
 
+		for (const FString& MaterialName : StaticMesh.Materials) {
+			const FMaterialData* FoundMaterial = nullptr;
+
+			for (const FMaterialData& MaterialData : Materials) {
+				if (MaterialData.Name == MaterialName) {
+					FoundMaterial = &MaterialData;
+					break;
+				}
+			}
+
+			UMaterial* Material = nullptr;
+
+			if (FoundMaterial != nullptr) {
+				Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
+
+				Material->SetSpecularPower(FoundMaterial->SpecularPower);
+
+				Material->SetOpticalDensity(FoundMaterial->OpticalDensity);
+
+				Material->SetTransparency(FoundMaterial->Transparency);
+
+				Material->SetIlluminationModel(FoundMaterial->IlluminationModel);
+
+				Material->SetAmbientColor(FoundMaterial->AmbientColor);
+
+				Material->SetDiffuseColor({ FoundMaterial->DiffuseColor, 1.0f });
+
+				Material->SetSpecularColor(FoundMaterial->SpecularColor);
+
+				Material->SetEmissiveColor(FoundMaterial->EmissiveColor);
+
+				Material->SetTransmissionFilter(FoundMaterial->TransmissionFilter);
+
+				auto LoadTexture = [&](const FString& Filename) -> UTexture2D* {
+					if (Filename.empty()) {
+						return nullptr;
+					}
+
+					std::filesystem::path TexturePath = FileSource.GetFilePath().parent_path() / Filename.CStr();
+
+					FString TexturePathString(TexturePath.string());
+					FName TextureAssetName(TexturePathString);
+
+					FFileAssetSource* TextureSource = new FFileAssetSource(FileSource.GetFileManager(), TexturePath);
+
+					AssetManager->RegisterAsset(TextureAssetName, TextureLoader, TextureSource);
+
+					return AssetManager->GetAssetAs<UTexture2D>(TextureAssetName, true);
+					};
+
+				Material->SetAmbientTexture(LoadTexture(FoundMaterial->AmbientColorMapFilename));
+
+				Material->SetDiffuseTexture(LoadTexture(FoundMaterial->DiffuseColorMapFilename));
+
+				Material->SetSpecularTexture(LoadTexture(FoundMaterial->SpecularColorMapFilename));
+
+				Material->SetBumpTexture(LoadTexture(FoundMaterial->BumpMapFilename));
+			}
+			else {
+				Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
+			}
+
+			NewMesh->AddMaterial(Material);
+		}
+
 		NewMesh->SetData(
 			StaticMesh.Vertices,
 			StaticMesh.Indices,
@@ -47,71 +112,6 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 	}
 
 	NewMesh->BuildRenderBuffers(Renderer);
-
-	for (const FString& MaterialName : StaticMesh.Materials) {
-		const FMaterialData* FoundMaterial = nullptr;
-
-		for (const FMaterialData& MaterialData : MaterialDatas) {
-			if (MaterialData.Name == MaterialName) {
-				FoundMaterial = &MaterialData;
-				break;
-			}
-		}
-
-		UMaterial* Material = nullptr;
-
-		if (FoundMaterial != nullptr) {
-			Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
-
-			Material->SetSpecularPower(FoundMaterial->SpecularPower);
-
-			Material->SetOpticalDensity(FoundMaterial->OpticalDensity);
-
-			Material->SetTransparency(FoundMaterial->Transparency);
-
-			Material->SetIlluminationModel(FoundMaterial->IlluminationModel);
-
-			Material->SetAmbientColor(FoundMaterial->AmbientColor);
-
-			Material->SetDiffuseColor({ FoundMaterial->DiffuseColor, 1.0f });
-
-			Material->SetSpecularColor(FoundMaterial->SpecularColor);
-
-			Material->SetEmissiveColor(FoundMaterial->EmissiveColor);
-
-			Material->SetTransmissionFilter(FoundMaterial->TransmissionFilter);
-
-			auto LoadTexture = [&](const FString& Filename) -> UTexture2D* {
-				if (Filename.empty()) {
-					return nullptr;
-				}
-
-				std::filesystem::path TexturePath = FileSource.GetFilePath().parent_path() / Filename.CStr();
-
-				FString TexturePathString(TexturePath.string());
-				FName TextureAssetName(TexturePathString);
-
-				FFileAssetSource* TextureSource = new FFileAssetSource(FileSource.GetFileManager(), TexturePath);
-
-				AssetManager->RegisterAsset(TextureAssetName, TextureLoader, TextureSource);
-
-				return AssetManager->GetAssetAs<UTexture2D>(TextureAssetName, true);
-				};
-
-			Material->SetAmbientTexture(LoadTexture(FoundMaterial->AmbientColorMapFilename));
-
-			Material->SetDiffuseTexture(LoadTexture(FoundMaterial->DiffuseColorMapFilename));
-
-			Material->SetSpecularTexture(LoadTexture(FoundMaterial->SpecularColorMapFilename));
-
-			Material->SetBumpTexture(LoadTexture(FoundMaterial->BumpMapFilename));
-		}
-		else {
-			Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
-		}
-
-		NewMesh->AddMaterial(Material);
-	}
 
 	return NewMesh;
 }
