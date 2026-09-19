@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include "StaticMesh.h"
 
 class FFileManager;
 class FFontManager;
@@ -28,13 +29,6 @@ public:
 private:
 	FFileManager& FileManager;
 	std::filesystem::path FilePath;
-};
-
-struct FStaticMeshSection
-{
-	uint32 StartIndex;        // 인덱스 버퍼 내 시작 위치
-	uint32 IndexCount;        // 이 섹션이 쓰는 인덱스 개수
-	uint32 MaterialSlotIndex; // 아래 슬롯 배열의 인덱스
 };
 
 class UStaticMesh : public UAsset
