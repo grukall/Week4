@@ -6,7 +6,7 @@
 #include "FFontManager.h"
 #include "MathUtility.h"
 #include "ObjectFactory.h"
-
+#include "Material.h"
 FString FFileAssetSource::ReadFileToString() const
 {
 	return FileManager.ReadFileToString(FilePath);
@@ -120,6 +120,89 @@ void UStaticMesh::Serialize(FArchive& Ar)
 	Ar << Vertices;
 	Ar << Indices;
 	Ar << Sections;
+}
+
+void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
+{
+	if (MaterialSlotIndex >= Materials.Num()) {
+		Materials.SetNum(MaterialSlotIndex + 1);
+	}
+
+	Materials[MaterialSlotIndex] = InMaterial;
+}
+
+UMaterial* UStaticMesh::GetMaterial(uint32 MaterialSlotIndex) const
+{
+	if (MaterialSlotIndex >= Materials.Num()) {
+		return nullptr;
+	}
+
+	return Materials[MaterialSlotIndex];
+}
+
+void UStaticMesh::AddSection(const FStaticMeshSection& InSection)
+{
+	Sections.Add(InSection);
+}
+
+uint32 UStaticMesh::AddMaterial(UMaterial* InMaterial)
+{
+	if (InMaterial == nullptr)
+	{
+		return UINT32_MAX;
+	}
+
+	const int32 ExistingSlot =
+		FindMaterialSlot(InMaterial);
+
+	if (ExistingSlot >= 0)
+	{
+		return static_cast<uint32>(ExistingSlot);
+	}
+
+	Materials.Add(InMaterial);
+
+	return Materials.Num() - 1;
+}
+
+int32 UStaticMesh::FindMaterialSlot(UMaterial* InMaterial) const
+{
+	if (InMaterial == nullptr)
+	{
+		return -1;
+	}
+
+	for (uint32 Index = 0; Index < Materials.Num(); ++Index)
+	{
+		if (Materials[Index] == InMaterial)
+		{
+			return static_cast<int32>(Index);
+		}
+	}
+
+	return -1;
+}
+
+void UStaticMesh::SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial)
+{
+	if (SectionIndex >= Sections.Num())
+	{
+		return;
+	}
+
+	if (InMaterial == nullptr)
+	{
+		return;
+	}
+
+	const uint32 MaterialSlotIndex = AddMaterial(InMaterial);
+
+	if (MaterialSlotIndex == UINT32_MAX)
+	{
+		return;
+	}
+
+	Sections[SectionIndex].MaterialSlotIndex = MaterialSlotIndex;
 }
 
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)

@@ -23,8 +23,8 @@
 #include <FLogManager.h>
 #include "Assets.h"
 #include "FStatManager.h"
-#include "UObjectHash.h"
 
+#include "Material.h"
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
 	// Initialize window infos
@@ -81,8 +81,21 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	ConsoleWindow& console = ConsoleWindow::Get();
 	console.Init(clientWidth);
 
-	FrameTimer = new FFrameTimer(120);
-	ViewportClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer()); // Todo: cChange to class
+	FrameTimer = new FFrameTimer(false);
+	//ViewportClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer()); // Todo: cChange to class
+
+	ViewportClients.Empty();
+	for (int i = 0; i < 4; ++i)
+	{
+		FEditorViewportClient* NewClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer());
+
+		// @TODO : 해상도 관련 문제
+		NewClient->mRenderTarget = mGraphicsManager->GetRenderer()->CreateRenderTarget2D(800, 600, DXGI_FORMAT_R8G8B8A8_UNORM);
+		NewClient->mDepthStencil = mGraphicsManager->GetRenderer()->CreateDepthStencil(800, 600);
+
+		ViewportClients.Add(NewClient);
+	}
+	
 
 	const FVector4 NearTint(1.0f, 0.65f, 0.15f, 0.85f); // 주황 = 가까운 쪽
 	const FVector4 FarTint(0.25f, 0.55f, 1.0f, 0.85f); // 파랑 = 먼 쪽
@@ -127,6 +140,7 @@ void FEngineLoop::InitAssetManager()
 	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
 	mAssetManager->RegisterAsset(PlaneAsset);
 
+
 	FTexture2DAssetLoader* TextureLoader = new FTexture2DAssetLoader(*renderer);
 	FFontAssetLoader* FontLoader = new FFontAssetLoader(*mFontManager);
 
@@ -140,7 +154,7 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager->RegisterAsset(FName("ExplosionTexture"), TextureLoader, ExplosionTextureSource);
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
-	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas>(FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
+	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
 	mAssetManager->RegisterAsset(ExplosionSpriteAtlasAsset);
 
 	FFileAssetSource* FontAssetSource = new FFileAssetSource(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
@@ -157,11 +171,10 @@ void FEngineLoop::InitAssetManager()
 	UFont* StatFontAsset = mAssetManager->GetAssetAs<UFont>(FName("StatFont"), true);
 	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);
 	mAssetManager->RegisterAsset(StatFontAtlasAsset);
-}
+}      
 
 void FEngineLoop::InitStatManager()
 {
-	// 매크로(SCOPE_CYCLE_COUNTER 등)가 쓰는 싱글톤과 같은 인스턴스여야 한다.
 	mStatManager = new FStatManager();
 
 	// 매크로를 처음 지날 때 자동 등록되지만, 아직 한 번도 안 지난 스탯은
@@ -169,18 +182,15 @@ void FEngineLoop::InitStatManager()
 
 	// --- Cycle: 구간별 소요 시간(ms) ---
 	mStatManager->Register(FName("Frame"), EStatType::Cycle);
-	mStatManager->Register(FName("Input"), EStatType::Cycle);
 	mStatManager->Register(FName("Game"), EStatType::Cycle);
-	mStatManager->Register(FName("Picking"), EStatType::Cycle);
-	mStatManager->Register(FName("Render"), EStatType::Cycle);
-	mStatManager->Register(FName("ImGui"), EStatType::Cycle);
+	mStatManager->Register(FName("Draw"), EStatType::Cycle);
+	mStatManager->Register(FName("ImGui"), EStatType::Cycle);   // Draw에 포함된 시간 중 ImGui 몫
+	mStatManager->Register(FName("GPU Time"), EStatType::Cycle);
+	mStatManager->Register(FName("Input"), EStatType::Cycle);
 
 	// --- Counter: 프레임당 개수 ---
-	mStatManager->Register(FName("DrawCalls"), EStatType::Counter);
-	mStatManager->Register(FName("Triangles"), EStatType::Counter);
-	mStatManager->Register(FName("Lines"), EStatType::Counter);
-	mStatManager->Register(FName("Actors"), EStatType::Counter);
-	mStatManager->Register(FName("Objects"), EStatType::Counter);
+	mStatManager->Register(FName("Draws"), EStatType::Counter);
+	mStatManager->Register(FName("Prims"), EStatType::Counter);
 
 	// --- Memory: 현재 총량(byte). 프레임마다 리셋되지 않는다 ---
 	mStatManager->Register(FName("VertexBufferMem"), EStatType::Memory);
@@ -194,128 +204,129 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	GInTick = true;
 
 	FrameTimer->StartFrame();
-	mStatManager->ResetFrame();
-
-	// EndFrame()의 프레임 제한 대기를 빼고 재야 실제 작업 시간이 나온다.
-	// 그래서 EndFrame() 앞에서 닫히는 블록으로 감싼다.
-	{
 	SCOPE_CYCLE_COUNTER("Frame");
-
 	float deltaTime = FrameTimer->GetDeltaTime();
+
+	// 1. 공통 접근 변수 및 입력 상태 1회 초기화
 	ConsoleWindow& console = ConsoleWindow::Get();
-
 	FRenderCollector& RenderCollector = mGraphicsManager->GetRenderCollector();
-	RenderCollector.Camera = &ViewportClient->GetCamera();
+	const FInputState& Input = WindowApplication.Input;
 
-	//Input Threads
+	// 2. 뷰포트 및 마우스 상대 위치 계산 (프레임당 1회)
+	const float vpX = mSceneManager->GetViewportX();
+	const float vpY = mSceneManager->GetViewportY();
+	const float MouseXInViewport = static_cast<float>(Input.CursorX) - vpX;
+	const float MouseYInViewport = static_cast<float>(Input.CursorY) - vpY;
+
+	// 3. 활성 뷰포트(Active Viewport) 판별
+	// (참고: 매 프레임 dynamic_cast가 부담스럽다면, 레이아웃 변경 시에만 캐싱하는 구조를 추천합니다)
+	if (SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mSceneManager->GetRootWindow()))
 	{
-		SCOPE_CYCLE_COUNTER("Input");
-		WindowApplication.ProcessDeferredEvents();
+		if (ViewportClients.Num() == 4)
+		{
+			SWindow* SplitWindows[4] = {
+				QuadSplitter->TopLeft, QuadSplitter->TopRight,
+				QuadSplitter->BottomLeft, QuadSplitter->BottomRight
+			};
 
-		//'~'누르면 콘솔 Input 포커스
-		if (WindowApplication.Input.WasPressed(VK_OEM_3))
-			console.RequestFocus();
+			for (int i = 0; i < 4; ++i)
+			{
+				if (SplitWindows[i] && SplitWindows[i]->Rect.Contains({ MouseXInViewport, MouseYInViewport }))
+				{
+					ActiveViewportClient = ViewportClients[i];
+					break;
+				}
+			}
 
-		mGraphicsManager->UpdateProjectionTransition(deltaTime);
-		ViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+		}
 	}
 
-	//Physics Threads
-	{
+	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
+	// 4. Input Threads & Active Viewport Update
+	WindowApplication.ProcessDeferredEvents();
+	mGraphicsManager->UpdateProjectionTransition(deltaTime);
+	ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+	if (WindowApplication.Input.WasPressed(VK_OEM_3))
+	{
+		console.RequestFocus();
 	}
 
-	//Game Threads
+	// 5. Physics / Game Threads
 	{
 		SCOPE_CYCLE_COUNTER("Game");
-
-		if (UWorld* World = mSceneManager->GetCurrentWorld())
-		{
-			INC_DWORD_STAT_BY("Actors", World->GetActors().Num());
-		}
-
-		{
-			// FClassInfo에 크기 정보가 없어 바이트는 못 재고 개수만 센다.
-			uint32 ObjectCount = 0;
-			for (const auto& Pair : FUObjectHashTables::Get().ClassToObjectListMap)
-			{
-				ObjectCount += Pair.second.Num();
-			}
-			INC_DWORD_STAT_BY("Objects", ObjectCount);
-		}
 
 		mSceneManager->Tick(deltaTime);
 		mSceneManager->Update(deltaTime, RenderCollector);
 	}
 
-	//mouse picking
-	{
-		SCOPE_CYCLE_COUNTER("Picking");
-		const FInputState& Input = WindowApplication.Input;
+	const float ActiveAspect = static_cast<float>(ActiveViewportClient->mWidth) / static_cast<float>(ActiveViewportClient->mHeight);
+	const FMatrix ActiveViewProjMatrix =
+		ActiveViewportClient->GetCamera().GetViewMatrix() *
+		ActiveViewportClient->GetCamera().GetProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, 0.1f, 1000.f);
 
-		// 뷰포트가 ImGui 창이 되면서 그 위에서는 io.WantCaptureMouse 가 항상 true 다.
-		// 그대로 두면 씬을 클릭해도 선택이 되지 않는다. 카메라/기즈모와 같은 기준을 쓴다.
-		AActor* HitActor = ViewportClient->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
-		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) && !ViewportClient->mGizmo.IsDragging() && !ViewportClient->mGizmo.IsMouseOverHandle())
+
+	// 6. Mouse Picking & Gizmo
+	{
+		// 피킹 로직
+		AActor* HitActor = ActiveViewportClient->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
+
+		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) &&
+			!ActiveViewportClient->mGizmo.IsDragging() && !ActiveViewportClient->mGizmo.IsMouseOverHandle())
 		{
-			if (HitActor)
-			{
-				mSceneManager->SetSelectedActor(HitActor);
-			}
-			else
-			{
-				mSceneManager->ResetSelectedActor();
-			}
+			if (HitActor) mSceneManager->SetSelectedActor(HitActor);
+			else          mSceneManager->ResetSelectedActor();
 		}
 
-		AActor* SelectedActor = mSceneManager->GetSelectedActor();
-		if (SelectedActor)
+		// 선택된 액터 AABB 라인 렌더링
+		if (AActor* SelectedActor = mSceneManager->GetSelectedActor())
 		{
 			FTransform Transform = SelectedActor->GetTransform();
-
 			for (UActorComponent* Component : SelectedActor->GetComponents())
 			{
-				UStaticMeshComponent* PrimitiveComponent = Component->Cast<UStaticMeshComponent>();
-				if (PrimitiveComponent)
+				if (UStaticMeshComponent* PrimitiveComponent = Component->Cast<UStaticMeshComponent>())
 				{
-					// 선택된 액터의 AABB를 화면에 표시
-					FMatrix WorldMatrix = Transform.MakeMatrix();
-
-					UStaticMesh* MeshAsset = PrimitiveComponent->GetStaticMesh();
-					if (!MeshAsset) continue;
-
-					const FAABB& AABB = MeshAsset->GetLocalBoundingBox().ToWorld(WorldMatrix);
-
-					AABB.ForEachCornerLines([&RenderCollector](const FVector& Start, const FVector& End)
+					if (UStaticMesh* MeshAsset = PrimitiveComponent->GetStaticMesh())
 					{
-						FVector4 WorldStart = FVector4(Start, 1.f);
-						FVector4 WorldEnd = FVector4(End, 1.f);
+						FMatrix WorldMatrix = Transform.MakeMatrix();
+						const FAABB& AABB = MeshAsset->GetLocalBoundingBox().ToWorld(WorldMatrix);
 
-						FRenderLineInfo LineInfo;
-						LineInfo.Start = WorldStart.ToVec3();
-						LineInfo.End = WorldEnd.ToVec3();
-						LineInfo.Color = FVector4(1.f, 0.f, 0.f, 1.f); // 빨간색
-						LineInfo.Thickness = 5.0f;
-
-						RenderCollector.LineInfos.Add(LineInfo);
-					});
+						AABB.ForEachCornerLines([&RenderCollector](const FVector& Start, const FVector& End)
+							{
+								FRenderLineInfo LineInfo;
+								LineInfo.Start = FVector4(Start, 1.f).ToVec3();
+								LineInfo.End = FVector4(End, 1.f).ToVec3();
+								LineInfo.Color = FVector4(1.f, 0.f, 0.f, 1.f);
+								LineInfo.Thickness = 5.0f;
+								RenderCollector.LineInfos.Add(LineInfo);
+							});
+					}
 				}
 
-				// 선택된 액터의 컴포넌트 시각화
-				FComponentVisualizer* Visualizer = mComponentVisualizerManager->FindVisualizer(Component->GetRuntimeClass());
-				if (Visualizer)
+				if (FComponentVisualizer* Visualizer = mComponentVisualizerManager->FindVisualizer(Component->GetRuntimeClass()))
 				{
 					Visualizer->VisualizeComponent(Component, RenderCollector);
 				}
 			}
 		}
 
-		ViewportClient->mGizmo.Update(mSceneManager, mGraphicsManager->GetViewProjectionMatrix());
+		// Gizmo Update
+		const float ActiveViewportX = vpX + ActiveViewportClient->mViewportLeft;
+		const float ActiveViewportY = vpY + ActiveViewportClient->mViewportTop;
+
+		ActiveViewportClient->mGizmo.Update(
+			mSceneManager,
+			ActiveViewProjMatrix,
+			ActiveViewportX,
+			ActiveViewportY,
+			static_cast<float>(ActiveViewportClient->mWidth),
+			static_cast<float>(ActiveViewportClient->mHeight)
+		);
 	}
 
-	//Render Threads
+	// 7. Render Threads
 	{
-		SCOPE_CYCLE_COUNTER("Render");
+		SCOPE_CYCLE_COUNTER("Draw");
 		if (WindowApplication.bPendingResize)
 		{
 			mGraphicsManager->OnResize(WindowApplication.PendingWidth, WindowApplication.PendingHeight);
@@ -323,45 +334,75 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		}
 
 		mGraphicsManager->Update(deltaTime);
-		mGraphicsManager->Prepare(&ViewportClient->mCamera, mSceneManager->GetViewportWidth(), mSceneManager->GetViewportHeight());
-		mGraphicsManager->FlushLines();
-		mGraphicsManager->Render();
-		
-		//강조
-		if (mSceneManager->GetSelectedActor())
+
+		// 4개의 뷰포트 드로우콜
+		for (int i = 0; i < 4; ++i)
 		{
-			FRenderInfo clickedRenderInfo;
-			mSceneManager->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
-			mGraphicsManager->RenderHighLight(clickedRenderInfo);
+			FEditorViewportClient* CurrentClient = ViewportClients[i];
+
+			CurrentClient->ResizeRenderTarget(mGraphicsManager);
+
+			// 렌더 타겟 바인딩 및 Clear
+			mGraphicsManager->GetRenderer()->BindRenderTarget(CurrentClient->mRenderTarget, CurrentClient->mDepthStencil, true);
+
+			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
+			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
+
+			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
+			mGraphicsManager->FlushLines();
+			mGraphicsManager->Render();
+
+			if (mSceneManager->GetSelectedActor())
+			{
+				FRenderInfo clickedRenderInfo;
+				mSceneManager->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
+				mGraphicsManager->RenderHighLight(clickedRenderInfo);
+			}
+
+			// 각 뷰포트별 렌더링용 ViewProj 계산 및 기즈모 렌더링
+			const float Aspect = currentWidth / currentHeight;
+			const FMatrix CurrentViewProj = CurrentClient->mCamera.GetViewMatrix() *
+				CurrentClient->mCamera.GetProjectionMatrix(Aspect, CurrentClient->mCamera.mFovDegree, 0.1f, 1000.f);
+
+			CurrentClient->mGizmo.Render(
+				mSceneManager,
+				CurrentClient->mCamera.Transform.Location,
+				CurrentViewProj,
+				currentWidth,
+				currentHeight
+			);
 		}
 
-		ViewportClient->mGizmo.Render(mSceneManager, ViewportClient->mCamera.Transform.Location, mGraphicsManager->GetViewProjectionMatrix());
 
-		//ImGui
-		{
-			SCOPE_CYCLE_COUNTER("ImGui");
-			//ImGui Input
-			mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, ViewportClient, mFileManager, mAssetManager });
-
-			mGraphicsManager->GetRenderer()->BindFrameBuffer();
-
-			ImGui::Render();
-			ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-		}
+		// 8. ImGui
+		SCOPE_CYCLE_COUNTER("ImGui");
+		mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, &ViewportClients, ActiveViewportClient, mFileManager, mAssetManager });
+		mGraphicsManager->GetRenderer()->BindFrameBuffer();
+		ImGui::Render();
+		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
 		mGraphicsManager->Display();
 	}
 
-	} // SCOPE_CYCLE_COUNTER("Frame") 종료
+	mGraphicsManager->GetRenderCollector().Clear();
+
+	//입력 지연 시간 측정(Stat Unit의 Input)
+	static double LastInputLatencyMs = 0;
+	if (WindowApplication.bHasPendingInput)
+	{
+		LARGE_INTEGER Now; QueryPerformanceCounter(&Now);
+		LastInputLatencyMs = (Now.QuadPart - WindowApplication.PendingInputTime.QuadPart) * GetMsPerCount();
+		WindowApplication.bHasPendingInput = false;
+	}
+	SET_CYCLE_COUNTER("Input", LastInputLatencyMs);
 
 	FrameTimer->EndFrame();
-
 	GInTick = false;
 }
 
 void FEngineLoop::End()
 {
-	const std::string Value = std::format("{:.6f}", ViewportClient->GetCamera().Sensitivity);
+	const std::string Value = std::format("{:.6f}", ActiveViewportClient->GetCamera().Sensitivity);
 
 	if (!WritePrivateProfileStringA("Camera", "Sensitivity", Value.c_str(), ".\\editor.ini"))
 	{
@@ -381,7 +422,11 @@ void FEngineLoop::End()
 	ImGui::DestroyContext();
 
 	delete mComponentVisualizerManager;
-	delete ViewportClient;
+	for (FEditorViewportClient* Client : ViewportClients)
+	{
+		delete Client;
+	}
+	ViewportClients.Empty();
 	delete FrameTimer;
 	delete mSceneManager;
 	delete mFileManager;

@@ -14,6 +14,7 @@
 #include "GraphicsManager.h"
 #include "Renderer.h"
 #include <cstdio>
+#include <cstdlib>
 #include "EngineMathLibrary.h"
 #include "PrimitiveComponent.h"
 #include "RayCast.h"
@@ -23,6 +24,7 @@
 #include "GlobalFNames.h"
 #include "LaunchEngineLoop.h"
 #include "FAssetManager.h"
+#include "psapi.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -45,20 +47,23 @@ AActor* FEditorViewportClient::PerformMousePicking(float perspectiveRatio, const
 	// 씬은 ImGui "Viewport" 창의 이미지 위에 그려진다.
 	// 그래서 역투영에 넣을 좌표계 기준은 윈도우 전체가 아니라 그 이미지다.
 	// 커서를 이미지 좌상단 기준으로 옮기고, 화면 크기도 이미지 크기를 쓴다.
-	const float ViewportWidth = SceneManager.GetViewportWidth();
-	const float ViewportHeight = SceneManager.GetViewportHeight();
+	const float ViewportWidth = static_cast<float>(mWidth);
+	const float ViewportHeight = static_cast<float>(mHeight);
 	if (ViewportWidth <= 0.f || ViewportHeight <= 0.f)
 	{
 		return nullptr;
 	}
 
-	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(SceneManager.GetViewportX());
-	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(SceneManager.GetViewportY());
+	const float AbsoluteStartX = SceneManager.GetViewportX() + mViewportLeft;
+	const float AbsoluteStartY = SceneManager.GetViewportY() + mViewportTop;
+
+	const int32 MouseXInViewport = WindowApplication.Input.CursorX - static_cast<int32>(AbsoluteStartX);
+	const int32 MouseYInViewport = WindowApplication.Input.CursorY - static_cast<int32>(AbsoluteStartY);
 
 	// 투영 방식에 따라 광선을 만드는 법만 다르다. 두 점을 구하고 나면 이후 판정은 완전히 같다
 	FVector NearPoint, FarPoint;
 	DeprojectScreenToWorldForUnified(MouseXInViewport, MouseYInViewport,
-		ViewportWidth, ViewportHeight, 0.1f, 100.f, mCamera.mOrthoDistance, perspectiveRatio, NearPoint, FarPoint);
+		ViewportWidth, ViewportHeight, mCamera.nearZ, mCamera.farZ, mCamera.mOrthoDistance, perspectiveRatio, NearPoint, FarPoint);
 
 	mRayNear = NearPoint;
 	mRayFar = FarPoint;
@@ -176,12 +181,11 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 	}
 
 	//Stat정보 표시가 켜져 있으면 드로우한다.
-	// 씬 렌더타겟은 백버퍼와 같은 크기이고 Projection2D도 그 크기로 만들어져 있다.
-	// 그래서 렌더러 크기를 그대로 화면 좌표계로 쓴다.
 	if (UFontAtlas* StatFontAtlas = GEngineLoop.GetAssetManager()->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
 	{
+		// 좌표계가 뷰포트(ImGui 패널) 기준이므로 창 크기가 아니라 패널 크기를 넘긴다.
 		DrawStatsHUD(FStatManager::Get(), StatFontAtlas, RenderCollector,
-			static_cast<float>(mRenderer->GetWidth()), static_cast<float>(mRenderer->GetHeight()));
+			sceneManager->GetViewportWidth(), sceneManager->GetViewportHeight());
 	}
 }
 
@@ -204,8 +208,9 @@ namespace
 	void AddStatRow(TArray<FStatRow>& Rows, const char* Label, const char* Value, const FVector4& Color)
 	{
 		FStatRow Row;
-		sprintf_s(Row.Label, "%s:", Label);
-		sprintf_s(Row.Value, "%s", Value);
+		if (Label)
+			_snprintf_s(Row.Label, sizeof(Row.Label), _TRUNCATE, "%s:", Label);
+		_snprintf_s(Row.Value, sizeof(Row.Value), _TRUNCATE, "%s", Value);
 		Row.Color = Color;
 		Rows.Add(Row);
 	}
@@ -215,24 +220,34 @@ namespace
 	{
 		if (Value >= 10000.0)
 		{
-			sprintf_s(OutBuffer, BufferSize, "%7.1fK", Value / 1000.0);
+			_snprintf_s(OutBuffer, BufferSize, _TRUNCATE, "%7.1fK", Value / 1000.0);
 		}
 		else
 		{
-			sprintf_s(OutBuffer, BufferSize, "%8d", static_cast<int32>(Value));
+			// double -> int32 캐스팅은 범위를 벗어나면 UB다. 여기 오는 값은 10000 미만이지만
+			// 음수나 NaN이 섞여 들어와도 조용히 지나가도록 잘라둔다.
+			const double Clamped = (Value > 0.0) ? FPlatformMath::Min(Value, 10000.0) : 0.0;
+			_snprintf_s(OutBuffer, BufferSize, _TRUNCATE, "%8d", static_cast<int32>(Clamped));
 		}
 	}
 
 	// 바이트를 KB/MB/GB 중 읽기 좋은 단위로.
-	void FormatBytes(char* OutBuffer, size_t BufferSize, double Bytes)
+	// bPad=true면 숫자 폭을 6칸으로 맞춘다. 값이 바뀌어도 열이 흔들리지 않게 하려는 것이라,
+	// 문자열 중간에 들어가는 값(VRam의 Budget 등)에는 false로 사용.
+	void FormatBytes(char* OutBuffer, size_t BufferSize, double Bytes, bool bPad = true)
 	{
 		constexpr double KB = 1024.0;
 		constexpr double MB = KB * 1024.0;
 		constexpr double GB = MB * 1024.0;
 
-		if (Bytes >= GB)      sprintf_s(OutBuffer, BufferSize, "%6.2f GB", Bytes / GB);
-		else if (Bytes >= MB) sprintf_s(OutBuffer, BufferSize, "%6.2f MB", Bytes / MB);
-		else                  sprintf_s(OutBuffer, BufferSize, "%6.2f KB", Bytes / KB);
+		const char* Unit = "KB";
+		double Value = Bytes / KB;
+
+		if (Bytes >= GB)      { Unit = "GB"; Value = Bytes / GB; }
+		else if (Bytes >= MB) { Unit = "MB"; Value = Bytes / MB; }
+
+		_snprintf_s(OutBuffer, BufferSize, _TRUNCATE,
+			bPad ? "%6.2f %s" : "%.2f %s", Value, Unit);
 	}
 }
 
@@ -296,8 +311,6 @@ void FEditorViewportClient::DrawStatText(UFontAtlas* Atlas, FRenderCollector& Re
 	{
 		const uint32 C = static_cast<uint8>(*P);
 
-		// 재지 않고 바로 그리는 문자열도 있으므로 여기서도 글리프를 채운다.
-		// 이게 없으면 한 번도 측정된 적 없는 문자열은 글자가 통째로 빠진다.
 		if (!FontAtlas->HasGlyph(C))
 		{
 			FontAtlas->AddGlyph(C);
@@ -376,18 +389,25 @@ void FEditorViewportClient::GatherStatFPS(TArray<FStatRow>& Rows)
 	FStatManager& StatManager = FStatManager::Get();
 
 	const double FrameMs = StatManager.GetDisplay(FName("Frame"));
-	const double Fps = FrameMs > 0.0 ? 1000.0 / FrameMs : 0.0;
+
+	// 0으로 나누는 것만 막으면 부족하다. FrameMs가 극소값이면 Fps가 1e40 같은 값이 되고
+	// "%6.2f"가 정수부만 수십 자리를 찍어 Buffer를 넘긴다. 실제로 있을 수 없는
+	// 프레임 시간(1ns 미만)은 측정값이 아직 없는 것으로 보고 0 FPS로 표시한다.
+	constexpr double MinFrameMs = 1e-6;
+	const double Fps = FrameMs > MinFrameMs ? 1000.0 / FrameMs : 0.0;
 
 	char Buffer[48];
 
-	sprintf_s(Buffer, "%6.2f FPS", Fps);
-	AddStatRow(Rows, "FPS", Buffer, MsToColor(FrameMs));
+	// sprintf_s는 버퍼가 모자라면 _invalid_parameter로 죽는다. HUD 문자열은
+	// 잘려도 그만이므로 _TRUNCATE로 받는다.
+	_snprintf_s(Buffer, sizeof(Buffer), _TRUNCATE, "%6.2f FPS", Fps);
+	AddStatRow(Rows, nullptr, Buffer, MsToColor(FrameMs));
 
 	// stat unit이 같이 켜져 있으면 Frame을 거기서 그리므로 중복해서 넣지 않는다.
 	if (!StatManager.StatCommands[Name_UNIT])
 	{
-		sprintf_s(Buffer, "%6.2f ms", FrameMs);
-		AddStatRow(Rows, "Frame", Buffer, MsToColor(FrameMs));
+		_snprintf_s(Buffer, sizeof(Buffer), _TRUNCATE, "%6.2f ms", FrameMs);
+		AddStatRow(Rows, nullptr, Buffer, MsToColor(FrameMs));
 	}
 }
 
@@ -417,20 +437,46 @@ void FEditorViewportClient::GatherStatUnit(TArray<FStatRow>& Rows)
 		SortedNames.Insert(Pair.first, Index);
 	}
 
+	// 1패스: 시간 항목
 	for (uint32 i = 0; i < Sorted.Num(); ++i)
 	{
-		const FStatEntry& Entry = *Sorted[i];
+		if (Sorted[i]->Type != EStatType::Cycle) continue;
 
-		if (Entry.Type == EStatType::Cycle)
+		sprintf_s(Buffer, "%6.2f ms", Sorted[i]->Display);
+		AddStatRow(Rows, SortedNames[i].ToString().CStr(), Buffer, MsToColor(Sorted[i]->Display));
+	}
+
+	// Mem: OS가 보는 프로세스 사용량이다.
+	{
+		PROCESS_MEMORY_COUNTERS_EX Counters = {};
+		Counters.cb = sizeof(Counters);
+		if (GetProcessMemoryInfo(GetCurrentProcess(),
+			reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&Counters), sizeof(Counters)))
 		{
-			sprintf_s(Buffer, "%6.2f ms", Entry.Display);
-			AddStatRow(Rows, SortedNames[i].ToString().CStr(), Buffer, MsToColor(Entry.Display));
+			FormatBytes(Buffer, sizeof(Buffer), static_cast<double>(Counters.WorkingSetSize));
+			AddStatRow(Rows, "Mem", Buffer, StatValueColor);
 		}
-		else
-		{
-			FormatCount(Buffer, sizeof(Buffer), Entry.Display);
-			AddStatRow(Rows, SortedNames[i].ToString().CStr(), Buffer, StatValueColor);
-		}
+	}
+
+	// VRAM : GPU의 VRAM "사용량 / 예산(이 프로세스에게 OS가 허용한 양)"
+	uint64 VramUsed = 0, VramBudget = 0;
+	if (mRenderer->GetVideoMemoryInfo(VramUsed, VramBudget))
+	{
+		char UsedText[24], BudgetText[24];
+		FormatBytes(UsedText, sizeof(UsedText), static_cast<double>(VramUsed));
+		FormatBytes(BudgetText, sizeof(BudgetText), static_cast<double>(VramBudget), false);
+
+		sprintf_s(Buffer, "%s / %s", UsedText, BudgetText);
+		AddStatRow(Rows, "VRam", Buffer, StatValueColor);
+	}
+
+	// 2패스: 개수 항목
+	for (uint32 i = 0; i < Sorted.Num(); ++i)
+	{
+		if (Sorted[i]->Type == EStatType::Cycle) continue;
+
+		FormatCount(Buffer, sizeof(Buffer), Sorted[i]->Display);
+		AddStatRow(Rows, SortedNames[i].ToString().CStr(), Buffer, StatValueColor);
 	}
 }
 
@@ -498,12 +544,12 @@ void FEditorViewportClient::DrawStatMemoryTable(UFontAtlas* Atlas, FRenderCollec
 		TotalBytes += Pair.second.Display;
 
 		FStatMemRow Row;
-		sprintf_s(Row.Cells[0], "%s", Pair.first.ToString().CStr());
-		FormatBytes(Row.Cells[1], sizeof(Row.Cells[1]), Pair.second.Display);
+		_snprintf_s(Row.Cells[0], sizeof(Row.Cells[0]), _TRUNCATE, "%s", Pair.first.ToString().CStr());
+		FormatBytes(Row.Cells[1], sizeof(Row.Cells[1]), Pair.second.Max);
 		// 풀 개념이 없어서 Mem%와 Pool Capacity는 비운다. 언리얼도 풀이 아닌 항목은 비어 있다.
-		sprintf_s(Row.Cells[2], "%s", "");
-		sprintf_s(Row.Cells[3], "%s", "Physical");
-		sprintf_s(Row.Cells[4], "%s", "");
+		_snprintf_s(Row.Cells[2], sizeof(Row.Cells[2]), _TRUNCATE, "%s", "");
+		_snprintf_s(Row.Cells[3], sizeof(Row.Cells[3]), _TRUNCATE, "%s", "Physical");
+		_snprintf_s(Row.Cells[4], sizeof(Row.Cells[4]), _TRUNCATE, "%s", "");
 
 		// 삽입 정렬. 항목이 몇 개 안 된다.
 		uint32 Index = 0;
@@ -523,11 +569,11 @@ void FEditorViewportClient::DrawStatMemoryTable(UFontAtlas* Atlas, FRenderCollec
 	// 합계는 정렬에서 빼고 항상 맨 아래. 단위는 MB로 고정해 다른 줄과 비교하기 쉽게 둔다.
 	{
 		FStatMemRow TotalRow;
-		sprintf_s(TotalRow.Cells[0], "%s", "Total");
-		sprintf_s(TotalRow.Cells[1], "%6.2f MB", TotalBytes / (1024.0 * 1024.0));
-		sprintf_s(TotalRow.Cells[2], "%s", "");
-		sprintf_s(TotalRow.Cells[3], "%s", "Physical");
-		sprintf_s(TotalRow.Cells[4], "%s", "");
+		_snprintf_s(TotalRow.Cells[0], sizeof(TotalRow.Cells[0]), _TRUNCATE, "%s", "Total");
+		_snprintf_s(TotalRow.Cells[1], sizeof(TotalRow.Cells[1]), _TRUNCATE, "%6.2f MB", TotalBytes / (1024.0 * 1024.0));
+		_snprintf_s(TotalRow.Cells[2], sizeof(TotalRow.Cells[2]), _TRUNCATE, "%s", "");
+		_snprintf_s(TotalRow.Cells[3], sizeof(TotalRow.Cells[3]), _TRUNCATE, "%s", "Physical");
+		_snprintf_s(TotalRow.Cells[4], sizeof(TotalRow.Cells[4]), _TRUNCATE, "%s", "");
 		Rows.Add(TotalRow);
 	}
 
@@ -686,4 +732,25 @@ void FEditorViewportClient::Reset()
 {
 	bMouseHit = false;
 	mGizmo.Reset();
+}
+
+void FEditorViewportClient::SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight)
+{
+	mViewportLeft = InLeft;
+	mViewportTop = InTop;
+	mWidth = std::max<uint32>(1, static_cast<uint32>(InWidth));
+	mHeight = std::max<uint32>(1, static_cast<uint32>(InHeight));
+}
+
+void FEditorViewportClient::ResizeRenderTarget(FGraphicsManager* GraphicsManager)
+{
+	if (mRenderTarget == nullptr ||
+		mRenderTarget->Width != mWidth ||
+		mRenderTarget->Height != mHeight)
+	{
+		URenderer* Renderer = GraphicsManager->GetRenderer();
+
+		mRenderTarget = Renderer->CreateRenderTarget2D(mWidth, mHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
+		mDepthStencil = Renderer->CreateDepthStencil(mWidth, mHeight);
+	}
 }

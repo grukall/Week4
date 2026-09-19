@@ -12,7 +12,7 @@
 #include "ShowFlags.h"
 
 class FAssetManager;
-
+struct FRenderTarget2D;
 struct FBuffer
 {
 	ID3D11Buffer* Buffer;
@@ -25,16 +25,8 @@ public:
 	FGraphicsManager(HWND hWindow);
 	~FGraphicsManager();
 
-	//void Prepare(const Camera* mCamera);
 	void Prepare(const FCamera* Camera,float viewportWidth, float viewportHeight);
-	void GizmoPrepare();
-
-	//void Render(FTransform worldTransformMatrix, EPrimitive ePrimitive); // FRenderInfo
-	//void Render(const TArray<FRenderInfo> renderInfos);
 	void Render();
-	//void RenderOverlay(const TArray<FRenderInfo> renderInfos); //깊이버퍼 초기화
-	// FRenderInfo
-
 	void Display();
 	void Update(float deltaTime);
 
@@ -79,10 +71,20 @@ public:
 	void SetGridGap(int32 GridGap);
 private:
 	URenderer* mRenderer;
+
+	//현재 viewport의 view 행렬
 	FMatrix mViewMatrix;
+
+	//현재 viewport의 projection 행렬
 	FMatrix mProjectionMatrix;
+
+	//view * projection 행렬
 	FMatrix mViewProjectionMatrix;
+
+	//직교 view * projection 행렬
 	FMatrix mViewOrthogonalProjectionMatrix;
+
+	//직교 <-> 투영 행렬간 교체 시 보간값이 반영된 view * projection  행렬
 	FMatrix mViewUnifiedProjectionMatrix;
 
 	// Prepare에서 갱신. 하이라이트 두께의 픽셀 → 월드 환산에 쓴다

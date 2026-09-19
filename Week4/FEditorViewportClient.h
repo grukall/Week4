@@ -13,6 +13,9 @@ class FSceneManager;
 class URenderer;
 class UFontAtlas;
 class FFontAtlas;
+struct FRenderTarget2D;
+struct FDepthStencil;
+class FGraphicsManager;
 
 // 스탯 HUD 한 줄. 라벨은 우측 정렬, 값은 좌측 정렬로 두 열을 이룬다.
 struct FStatRow
@@ -39,8 +42,20 @@ public:
 
 	FCamera& GetCamera() { return mCamera; }
 
+	void SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight);
+	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
+
 	FCamera mCamera;
 	FGizmo mGizmo;
+	TSharedPtr<FRenderTarget2D> mRenderTarget;
+	TSharedPtr<FDepthStencil> mDepthStencil;
+	uint32 mWidth = 800;
+	uint32 mHeight = 600;
+	float mViewportX = 0.0f;
+	float mViewportY = 0.0f;
+	// 자신의 스플리터 영역 내 상대 위치
+	float mViewportLeft = 0.0f;
+	float mViewportTop = 0.0f;
 
 private:
 
@@ -60,15 +75,10 @@ private:
 	static void DrawStatText(UFontAtlas* Atlas, FRenderCollector& RenderCollector,const char* Text, float LeftX, float Y, float Scale, const FVector4& Color);
 
 	// HUD에 그릴 글자 크기(픽셀).
-	static constexpr float StatFontPixelSize = 24.0f;
+	static constexpr float StatFontPixelSize = 18.0f;
 
-	// 화면 가장자리에서 띄우는 여백. 언리얼도 뷰포트 테두리에 붙이지 않는다.
+	// 화면 가장자리에서 띄우는 여백
 	static constexpr float StatScreenMargin = 48.0f;
-
-	// 선택된 액터의 RenderInfo는 캐시하지 않는다. 필요할 때 ClickedActor->GetRenderInfos()로 그때그때 뽑는다.
-	//마우스 밑 무언가가 Actor이면 저장. RayCast 에서 채워야 함 (아직 미구현)
-	// INFO: mClickedActor moved to FSceneManager::mSelectedActor.
-	//AActor* mClickedActor = nullptr;
 
 	void DeprojectScreenToWorld(int32 MouseX, int32 MouseY,
 		float ScreenW, float ScreenH, float NearZ, float FarZ,

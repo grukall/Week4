@@ -8,7 +8,7 @@
 
 class FCamera;
 class UPrimitiveComponent;
-
+class UMaterial;
 enum class ERenderBlendMode
 {
 	Opaque,
@@ -24,8 +24,10 @@ struct FRenderInfo
 	UStaticMesh* StaticMesh = nullptr;
 
 	// UMaterial이 들어오면 이 두 개가 머티리얼 포인터로 합쳐진다.
-	UTexture2D* Texture = nullptr;
-	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
+	/*UTexture2D* Texture = nullptr;
+	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);*/
+
+	UMaterial* Material = nullptr;
 
 	FMatrix WorldTransformMatrix;
 	FObjectID ObejctID;

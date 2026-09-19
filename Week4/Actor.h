@@ -22,7 +22,7 @@ public:
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
 
-	void AddComponent(UActorComponent* actorComponent);
+	void AddComponent(UActorComponent* actorComponent);      
 	void AddRootSceneComponent(USceneComponent* sceneComponent);
 	USceneComponent* GetRootComponent() const;
 	bool RemoveComponent(uint32 componentUUID);

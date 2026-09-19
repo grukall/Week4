@@ -394,3 +394,8 @@ FArchive& operator<<(FArchive& Ar, FString& String)
 
 	return Ar;
 }
+
+const bool FString::empty() const noexcept
+{
+	return mData->empty();
+}

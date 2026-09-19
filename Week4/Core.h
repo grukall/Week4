@@ -142,6 +142,8 @@ public:
 	char& operator[](int32 index);
 
 	const char* c_str() const noexcept;
+
+	const bool empty() const noexcept;
 private:
 	std::unique_ptr<std::string> mData;
 };

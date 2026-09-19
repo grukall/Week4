@@ -198,4 +198,7 @@ public:
 
 	//감속 계수(1/초). 클수록 빨리 멈춘다
 	float Damping = 6.f;
+
+	const float nearZ = 0.1f;
+	const float farZ = 2000.0f;
 };
