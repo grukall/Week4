@@ -336,17 +336,6 @@ public:
 	void Create(HWND hWindow);
 	void Release();
 
-#if 0
-	void CreateLineVertexBuffer(uint32 maxVertices);
-
-	void CreateStencilMarkState();
-	void CreateStencilOutlineState();
-	void CreateNoColorWriteBlendState();
-
-	//release
-	void ReleaseLineVertexBuffer();
-#endif
-
 	template <typename T>
 	Microsoft::WRL::ComPtr<ID3D11Buffer> CreateVertexBuffer(T* Vertices, UINT Count)
 	{
@@ -401,16 +390,9 @@ public:
 
 	TSharedPtr<FRenderTarget2D> CreateRenderTarget2D(uint32 Width, uint32 Height, DXGI_FORMAT Format);
 	TSharedPtr<FDepthStencil> CreateDepthStencil(uint32 Width, uint32 Height);
-	
-	//Update
-	void RSUpdateState();
 
 	//Rendering
 	void Prepare(const FMatrix& ViewProjectionMatrix);
-#if 0
-	void RenderLines(const FVertexSimple* vertices, uint32 numVertices);
-#endif
-
 	TSharedPtr<FRenderPipeline> CreateRenderPipeline();
 
 	void BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline) const;
@@ -437,11 +419,6 @@ public:
 	void RenderWorldGrid(const FMatrix& ViewProjection, const FVector& CameraLocation, float GridGap) const;
 
 	void SwapBuffer();
-
-	//=============================================
-	//해상도 변경 시 호출
-	//void OnResize(UINT Width, UINT Height);
-	void OnResize(UINT width, UINT height);
 
 	FORCEINLINE uint32 GetWidth() const { return Width; }
 	FORCEINLINE uint32 GetHeight() const { return Height; }
@@ -497,14 +474,21 @@ private:
 	// RSSetState는 드로우 직전마다 덮어써지므로 플래그로 들고 있어야 한다.
 	EViewModeIndex ViewModeIndex = EViewModeIndex::VMI_Lit;
 
-#if 1
-	ID3D11RasterizerState* RasterizerState[2] = {};
-	ID3D11DepthStencilState* StencilMarkState = nullptr;	// 스텐실에 1 마킹용 상태
-	ID3D11DepthStencilState* StencilOutlineState = nullptr; // 아웃라인 그리기용
-	ID3D11BlendState* NoColorWriteBlendState = nullptr;		// 스텐실만 찍고 색은 쓰지 않는 상태
+private:
+	//GPU Time 측정을 위한 구조체
+	struct FGpuTimerSlot
+	{
+		Microsoft::WRL::ComPtr<ID3D11Query> Disjoint;
+		Microsoft::WRL::ComPtr<ID3D11Query> StartStamp;
+		Microsoft::WRL::ComPtr<ID3D11Query> EndStamp;
+		bool bInFlight = false;   // 발행했고 아직 안 읽은 상태
+	};
 
-	// 매 프레임 내용이 바뀌는 선분용. 메시 버퍼와 달리 IMMUTABLE이 아니라 DYNAMIC이다
-	ID3D11Buffer* LineVertexBuffer = nullptr;
-	uint32 LineVertexCapacity = 0;
-#endif
+	static constexpr uint32 GpuTimerSlotCount = 3;   // GPU가 따라올 여유
+	FGpuTimerSlot GpuTimers[GpuTimerSlotCount];
+	uint32 GpuTimerIndex = 0;
+	double LastGpuMs = 0.0;       // 수확 실패/Disjoint 시 유지할 값u
+	bool bGpuTimerActive = false;
+
+	bool ResolveGpuTimer(FGpuTimerSlot& Slot);
 };

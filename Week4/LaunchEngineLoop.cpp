@@ -23,7 +23,6 @@
 #include <FLogManager.h>
 #include "Assets.h"
 #include "FStatManager.h"
-#include "UObjectHash.h"
 
 void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 {
@@ -167,20 +166,16 @@ void FEngineLoop::InitStatManager()
 	// 콘솔 목록에 뜨지 않는다. 미리 등록해 목록을 고정해둔다.
 
 	// --- Cycle: 구간별 소요 시간(ms) ---
-	mStatManager->Register(FName("Frame"), EStatType::Cycle);   // 제한 대기 포함(실제 프레임 시간)
-	mStatManager->Register(FName("CPU"), EStatType::Cycle);     // 제한 대기 제외(순수 작업 시간)
-	mStatManager->Register(FName("Input"), EStatType::Cycle);
+	mStatManager->Register(FName("Frame"), EStatType::Cycle);
 	mStatManager->Register(FName("Game"), EStatType::Cycle);
-	mStatManager->Register(FName("Picking"), EStatType::Cycle);
-	mStatManager->Register(FName("Render"), EStatType::Cycle);
-	mStatManager->Register(FName("ImGui"), EStatType::Cycle);
+	mStatManager->Register(FName("Draw"), EStatType::Cycle);
+	mStatManager->Register(FName("ImGui"), EStatType::Cycle);   // Draw에 포함된 시간 중 ImGui 몫
+	mStatManager->Register(FName("GPU Time"), EStatType::Cycle);
+	mStatManager->Register(FName("Input"), EStatType::Cycle);
 
 	// --- Counter: 프레임당 개수 ---
-	mStatManager->Register(FName("DrawCalls"), EStatType::Counter);
-	mStatManager->Register(FName("Triangles"), EStatType::Counter);
-	mStatManager->Register(FName("Lines"), EStatType::Counter);
-	mStatManager->Register(FName("Actors"), EStatType::Counter);
-	mStatManager->Register(FName("Objects"), EStatType::Counter);
+	mStatManager->Register(FName("Draws"), EStatType::Counter);
+	mStatManager->Register(FName("Prims"), EStatType::Counter);
 
 	// --- Memory: 현재 총량(byte). 프레임마다 리셋되지 않는다 ---
 	mStatManager->Register(FName("VertexBufferMem"), EStatType::Memory);
@@ -198,9 +193,6 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	SCOPE_CYCLE_COUNTER("Frame");
 
-	{
-	SCOPE_CYCLE_COUNTER("CPU");
-
 	float deltaTime = FrameTimer->GetDeltaTime();
 	ConsoleWindow& console = ConsoleWindow::Get();
 
@@ -209,7 +201,6 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	//Input Threads
 	{
-		SCOPE_CYCLE_COUNTER("Input");
 		WindowApplication.ProcessDeferredEvents();
 
 		//'~'누르면 콘솔 Input 포커스
@@ -229,28 +220,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	{
 		SCOPE_CYCLE_COUNTER("Game");
 
-		if (UWorld* World = mSceneManager->GetCurrentWorld())
-		{
-			INC_DWORD_STAT_BY("Actors", World->GetActors().Num());
-		}
-
-		{
-			// FClassInfo에 크기 정보가 없어 바이트는 못 재고 개수만 센다.
-			uint32 ObjectCount = 0;
-			for (const auto& Pair : FUObjectHashTables::Get().ClassToObjectListMap)
-			{
-				ObjectCount += Pair.second.Num();
-			}
-			INC_DWORD_STAT_BY("Objects", ObjectCount);
-		}
-
 		mSceneManager->Tick(deltaTime);
 		mSceneManager->Update(deltaTime, RenderCollector);
 	}
 
 	//mouse picking
 	{
-		SCOPE_CYCLE_COUNTER("Picking");
 		const FInputState& Input = WindowApplication.Input;
 
 		// 뷰포트가 ImGui 창이 되면서 그 위에서는 io.WantCaptureMouse 가 항상 true 다.
@@ -315,7 +290,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	//Render Threads
 	{
-		SCOPE_CYCLE_COUNTER("Render");
+		SCOPE_CYCLE_COUNTER("Draw");
 		if (WindowApplication.bPendingResize)
 		{
 			mGraphicsManager->OnResize(WindowApplication.PendingWidth, WindowApplication.PendingHeight);
@@ -352,7 +327,15 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		mGraphicsManager->Display();
 	}
 
-	} // SCOPE_CYCLE_COUNTER("CPU") 종료
+	//입력 지연 시간 측정(Stat Unit의 Input)
+	static double LastInputLatencyMs = 0;
+	if (WindowApplication.bHasPendingInput)
+	{
+		LARGE_INTEGER Now; QueryPerformanceCounter(&Now);
+		LastInputLatencyMs = (Now.QuadPart - WindowApplication.PendingInputTime.QuadPart) * GetMsPerCount();
+		WindowApplication.bHasPendingInput = false;
+	}
+	SET_CYCLE_COUNTER("Input", LastInputLatencyMs);
 
 	FrameTimer->EndFrame();
 

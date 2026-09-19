@@ -25,16 +25,8 @@ public:
 	FGraphicsManager(HWND hWindow);
 	~FGraphicsManager();
 
-	//void Prepare(const Camera* mCamera);
 	void Prepare(const FCamera* Camera,float viewportWidth, float viewportHeight);
-	void GizmoPrepare();
-
-	//void Render(FTransform worldTransformMatrix, EPrimitive ePrimitive); // FRenderInfo
-	//void Render(const TArray<FRenderInfo> renderInfos);
 	void Render();
-	//void RenderOverlay(const TArray<FRenderInfo> renderInfos); //깊이버퍼 초기화
-	// FRenderInfo
-
 	void Display();
 	void Update(float deltaTime);
 

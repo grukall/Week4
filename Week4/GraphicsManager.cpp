@@ -90,14 +90,8 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	mRenderer->BindRenderTarget(mSceneRenderTarget, mSceneDepthStencil);
 }
 
-void FGraphicsManager::GizmoPrepare()
-{
-	mRenderer->RSUpdateState();
-
-}
 void FGraphicsManager::Render()
 {
-	INC_DWORD_STAT_BY("Lines", mRenderCollector.LineInfos.Num());
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
 
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
@@ -255,8 +249,6 @@ void FGraphicsManager::OnResize(UINT width, UINT height)
 	{
 		mSceneDepthStencil = mRenderer->CreateDepthStencil(width, height);
 	}
-
-	mRenderer->OnResize(width, height);
 }
 
 // 테두리가 화면에서 차지할 두께(픽셀). 물체 크기와 카메라 거리 어느 쪽에도 영향받지 않는다.
