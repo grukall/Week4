@@ -204,12 +204,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	GInTick = true;
 
 	FrameTimer->StartFrame();
-	float deltaTime = FrameTimer->GetDeltaTime();
-
 	SCOPE_CYCLE_COUNTER("Frame");
-
 	float deltaTime = FrameTimer->GetDeltaTime();
-	ConsoleWindow& console = ConsoleWindow::Get();
 
 	// 1. 공통 접근 변수 및 입력 상태 1회 초기화
 	ConsoleWindow& console = ConsoleWindow::Get();
@@ -243,16 +239,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			}
 
 		}
-
-
-		}
-
-	if (WindowApplication.Input.WasPressed(VK_OEM_3))
-	{
-		console.RequestFocus();
 	}
-	mGraphicsManager->UpdateProjectionTransition(deltaTime);
-	ViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
 
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
@@ -260,6 +247,10 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	WindowApplication.ProcessDeferredEvents();
 	mGraphicsManager->UpdateProjectionTransition(deltaTime);
 	ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+	if (WindowApplication.Input.WasPressed(VK_OEM_3))
+	{
+		console.RequestFocus();
+	}
 
 	// 5. Physics / Game Threads
 	{
@@ -392,6 +383,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		mGraphicsManager->Display();
 	}
+
+	mGraphicsManager->GetRenderCollector().Clear();
 
 	//입력 지연 시간 측정(Stat Unit의 Input)
 	static double LastInputLatencyMs = 0;
