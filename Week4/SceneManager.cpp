@@ -867,6 +867,8 @@ void FSceneManager::updateOutlinerGUI(const FGuiReference& guiReference)
 
 void FSceneManager::NewScene()
 {
+	mPropertyPanel->SetTarget(nullptr);
+
 	if (mCurrentWorld != nullptr)
 	{
 		delete mCurrentWorld;
@@ -991,6 +993,7 @@ void FSceneManager::LoadScene(
 	}
 
 	// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
+	mPropertyPanel->SetTarget(nullptr);
 	delete mCurrentWorld;
 	mCurrentWorld = newWorld;
 	mPropertyPanel->SetWorld(mCurrentWorld);
