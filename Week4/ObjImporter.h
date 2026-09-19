@@ -69,7 +69,11 @@ private:
 
 static FVector PositionToUEBasis(const FVector& InVector)
 {
-	return { InVector.x, -InVector.y, InVector.z };
+	// assume right handed system, y up coming.
+	return { -InVector.z, InVector.x, InVector.y };
+
+	// Unreal Engine code
+	//return FVector(InVector.x, -InVector.y, InVector.z);
 }
 
 static FVector2 UVToUEBasis(const FVector2& InVector)

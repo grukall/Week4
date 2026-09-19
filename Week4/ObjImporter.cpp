@@ -56,7 +56,7 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 
 			for (int i = 1; i <= TriangleCount; ++i)
 			{
-				for (int j : { 0, i, i + 1 })
+				for (int j : { 0, i + 1, i }) // flip winding order
 				{
 					int VertexIndex = Face.Vertices[j].VertexIndex;
 					int UVIndex = Face.Vertices[j].UVIndex;
@@ -120,7 +120,7 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 			{
 				float vx, vy, vz;
 				iss >> vx >> vy >> vz;
-				Data.Positions.Add({ vx, vy, vz });
+				Data.Positions.Add(PositionToUEBasis({ vx, vy, vz }));
 			}
 			else if (prefix == "vt")
 			{
