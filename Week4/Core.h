@@ -35,6 +35,8 @@ using TPair = std::pair<T, K>;
 
 constexpr float WorldUnitPerPixel = 1.0f / 100.0f; // 100 pixels = 1 world unit
 
+class FArchive;
+
 struct FString
 {
 public:
@@ -220,3 +222,5 @@ inline FString Wide2Utf(const std::wstring& str)
 	return FString("");
 #endif
 }
+
+FArchive& operator<<(FArchive& Ar, FString& String);
