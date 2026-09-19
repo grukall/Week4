@@ -84,19 +84,19 @@ public:
         // 3. 4개의 뷰포트 영역 계산 및 크기 갱신 연쇄 호출
         if (TopLeft)
         {
-            TopLeft->Resize({ Rect.Left, Rect.Top, SplitX, SplitY });
+            TopLeft->Resize({ Rect.Left, Rect.Top, SplitX - HitThickness / 2, SplitY - HitThickness / 2 });
         }
         if (TopRight)
         {
-            TopRight->Resize({ SplitX, Rect.Top, Rect.Right, SplitY });
+            TopRight->Resize({ SplitX + HitThickness / 2, Rect.Top, Rect.Right, SplitY - HitThickness / 2 });
         }
         if (BottomLeft)
         {
-            BottomLeft->Resize({ Rect.Left, SplitY, SplitX, Rect.Bottom });
+            BottomLeft->Resize({ Rect.Left, SplitY + HitThickness / 2, SplitX - HitThickness / 2, Rect.Bottom });
         }
         if (BottomRight)
         {
-            BottomRight->Resize({ SplitX, SplitY, Rect.Right, Rect.Bottom });
+            BottomRight->Resize({ SplitX + HitThickness / 2, SplitY + HitThickness / 2, Rect.Right, Rect.Bottom });
         }
     }
 

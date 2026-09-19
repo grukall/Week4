@@ -101,7 +101,7 @@ void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection, 
 
     bIsHoveredAxis = false;
     HoveredAxis = EAxisNumber::None;
-    UE_LOG("Gizmo=%p Mouse=(%.1f, %.1f) VP=(%.1f x %.1f) Segs=%d", this, MousePosInScreen.X, MousePosInScreen.Y, ViewportWidth, ViewportHeight, HandleScreenSegments.Num());
+
     if (bAllowMouse)
     {
         for (const FHandleSegment& Segment : HandleScreenSegments)
