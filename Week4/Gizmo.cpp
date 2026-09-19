@@ -342,9 +342,9 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
     }
     else if (CurrentOperation == EGIZMO_TYPE::SCALE)
     {
-        DrawLineAxis(ForwardAxis, Front, FVector4(1, 0, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::X);
-        DrawLineAxis(RightAxis, Right, FVector4(0, 1, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::Y);
-        DrawLineAxis(UpAxis, Up, FVector4(0, 0, 1, 1), EAxisEndPointStyle::Circle, EAxisNumber::Z);
+        DrawLineAxis(ForwardAxis, ForwardAxis, FVector4(1, 0, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::X);
+        DrawLineAxis(RightAxis, RightAxis, FVector4(0, 1, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::Y);
+        DrawLineAxis(UpAxis, UpAxis, FVector4(0, 0, 1, 1), EAxisEndPointStyle::Circle, EAxisNumber::Z);
     }
 
     Renderer.RenderCircle2D(ToRenderer(Center), FVector4(0.8f, 0.8f, 0.8f, 1), 5.f);
