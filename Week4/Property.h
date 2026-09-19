@@ -61,6 +61,10 @@ const FClassInfo* GetPropertyClassInfo()
 struct FProperty
 {
     FString Name;
+
+    // "##Name" 형태의 ImGui 위젯 ID. 매 프레임 만들면 그만큼 임시 문자열이 생기므로 등록 시점에 한 번만 만든다.
+    FString WidgetId;
+
     EPropertyType Type;
     size_t Offset;
     size_t Size;

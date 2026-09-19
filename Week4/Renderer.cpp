@@ -24,12 +24,6 @@ namespace
 
 void URenderer::Create(HWND hWindow)
 {
-#if 0
-	CreateStencilMarkState();
-	CreateStencilOutlineState();
-	CreateNoColorWriteBlendState();
-	CreateRasterizerState();
-#else 
 	CreateDeviceAndSwapChain(hWindow);
 	CreateFrameBuffer();
 	CreateDepthStencilBuffer();
@@ -104,7 +98,15 @@ void URenderer::Create(HWND hWindow)
 	QuadPipeline->AddConstantBuffer<FQuadConstants>();
 	QuadPipeline->AddConstantBuffer<FMatrix>();
 	QuadPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
-#endif
+
+	Quad2DPipeline = CreateRenderPipeline();
+	Quad2DPipeline->SetRasterRizerState(D3D11_CULL_NONE);
+	Quad2DPipeline->SetDepthStencilState(false, false);
+	Quad2DPipeline->SetBlendState(ERenderBlendMode::Transparent);
+	Quad2DPipeline->SetShader("Assets/Shaders/Quad2D.hlsl");
+	Quad2DPipeline->AddConstantBuffer<FQuadConstants>();
+	Quad2DPipeline->AddConstantBuffer<FMatrix>();
+	Quad2DPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
 }
 
 void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
@@ -288,6 +290,9 @@ void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
 	StencilMarkPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	StencilOutlinePipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	QuadPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
+
+	// 2D 쿼드는 카메라와 무관하게 화면 픽셀 좌표계를 쓴다.
+	Quad2DPipeline->UpdateConstantBuffer(1, Projection2D);
 }
 
 Microsoft::WRL::ComPtr<ID3D11Buffer> URenderer::CreateIndexBuffer(const uint32* Indices, UINT Count)
@@ -301,6 +306,8 @@ Microsoft::WRL::ComPtr<ID3D11Buffer> URenderer::CreateIndexBuffer(const uint32* 
 	
 	Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer;
 	Device->CreateBuffer(&IndexBufferDesc, &IndexBufferSRD, IndexBuffer.GetAddressOf());
+
+	INC_MEMORY_STAT_BY("IndexBufferMem", IndexBufferDesc.ByteWidth);
 
 	return IndexBuffer;
 }
@@ -321,6 +328,10 @@ Microsoft::WRL::ComPtr<ID3D11Texture2D> URenderer::CreateTexture2D(const D3D11_T
 	{
 		Device->CreateTexture2D(&Desc, nullptr, &Texture);
 	}
+
+	// 밉맵은 계산하지 않고 0레벨만 센다.
+	INC_MEMORY_STAT_BY("TextureMem",
+		Desc.Width * Desc.Height * Desc.ArraySize * GetByteSizeFromFormat(Desc.Format));
 
 	return Texture;
 }
@@ -547,6 +558,36 @@ void URenderer::RenderQuad(const FRenderQuadInfo& Info) const
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 2);
+}
+
+void URenderer::RenderQuad2D(const FRenderQuadInfo& Info) const
+{
+	Quad2DPipeline->ClearShaderResource();
+
+	bool bGrayscale = false;
+	if (Info.TextureSRV)
+	{
+		Quad2DPipeline->SetShaderResource(0, Info.TextureSRV);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC Desc{};
+		Info.TextureSRV->GetDesc(&Desc);
+		// 폰트 아틀라스는 R8이라 R 채널이 알파다.
+		bGrayscale = (Desc.Format == DXGI_FORMAT_R8_UNORM);
+	}
+
+	Quad2DPipeline->SetBlendState(Info.BlendMode);
+
+	BindPipeline(Quad2DPipeline);
+
+	Quad2DPipeline->UpdateConstantBuffer(0, FQuadConstants{ Info.Model, Info.Color, Info.SubUV, Info.TextureSRV ? 1 : 0, bGrayscale });
+
+	UINT Offset = 0;
+	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
+	DeviceContext->Draw(6, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 2);
 }
 
 void URenderer::RenderPrimitive(const TSharedPtr<FRenderPipeline>& Pipeline, Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices) const
@@ -556,6 +597,8 @@ void URenderer::RenderPrimitive(const TSharedPtr<FRenderPipeline>& Pipeline, Mic
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 1, Buffer.GetAddressOf(), &Pipeline->Stride, &Offset);
 	DeviceContext->Draw(NumVertices, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", NumVertices / 3);
 }
 
 
@@ -581,6 +624,8 @@ void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeli
 	DeviceContext->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &Pipeline->Stride, &Offset);
 	DeviceContext->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 	DeviceContext->DrawIndexed(NumIndices, StartIndex, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", NumIndices / 3);
 }
 
 void URenderer::RenderPrimitiveIndexed(Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer, Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer, UINT NumIndices, const FMatrix& Model, UINT StartIndex) const
@@ -599,6 +644,8 @@ void URenderer::RenderLine2D(const FVector2& Start, const FVector2& End, const F
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 2);
 }
 
 void URenderer::RenderCircle2D(const FVector2& Center, const FVector4& Color, float Radius) const
@@ -610,6 +657,8 @@ void URenderer::RenderCircle2D(const FVector2& Center, const FVector4& Color, fl
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 2);
 }
 
 void URenderer::RenderTriangle2D(const FVector2& Center, const FVector4& Color, float Size, float Rotation) const
@@ -621,6 +670,8 @@ void URenderer::RenderTriangle2D(const FVector2& Center, const FVector4& Color, 
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(3, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 1);
 }
 
 void URenderer::RenderWorldAxis(const FMatrix& View, const FMatrix& Projection, const FVector4& Color, const FVector& Axis, float Thickness) const
@@ -637,6 +688,8 @@ void URenderer::RenderWorldAxis(const FMatrix& View, const FMatrix& Projection, 
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 2);
 }
 
 void URenderer::RenderWorldGrid(const FMatrix& ViewProjection, const FVector& CameraLocation, float GridGap) const
@@ -648,6 +701,8 @@ void URenderer::RenderWorldGrid(const FMatrix& ViewProjection, const FVector& Ca
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
+	INC_DWORD_STAT("DrawCalls");
+	INC_DWORD_STAT_BY("Triangles", 2);
 }
 
 //=============================================
