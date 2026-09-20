@@ -74,7 +74,7 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 					FVertexSimple Vertex
 					{
 						Pos.x, Pos.y, Pos.z,
-						0.0f, 0.0f, 0.0f, 0.0f,
+						1.0f, 1.0f, 1.0f, 1.0f,
 						UV.X, UV.Y,
 						Norm.x, Norm.y, Norm.z
 					};

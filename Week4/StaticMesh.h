@@ -26,9 +26,9 @@ struct FStaticMesh
 struct FMaterialData
 {
 	FString Name;
-	float SpecularPower;
-	float OpticalDensity;
-	float Transparency;
+	float SpecularPower = 0.0f;
+	float OpticalDensity = 1.0f;
+	float Transparency = 1.0f;
 	FVector3 TransmissionFilter;
 	int IlluminationModel;
 	FVector3 AmbientColor;
