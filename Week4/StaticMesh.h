@@ -30,11 +30,11 @@ struct FMaterialData
 	float OpticalDensity = 1.0f;
 	float Transparency = 1.0f;
 	FVector3 TransmissionFilter;
-	int IlluminationModel;
-	FVector3 AmbientColor;
-	FVector3 DiffuseColor;
-	FVector3 SpecularColor;
-	FVector3 EmissiveColor;
+	int IlluminationModel = 2;
+	FVector3 AmbientColor = FVector3(1.0f, 1.0f, 1.0f);
+	FVector3 DiffuseColor = FVector3(1.0f, 1.0f, 1.0f);
+	FVector3 SpecularColor = FVector3(0.0f, 0.0f, 0.0f);
+	FVector3 EmissiveColor = FVector3(0.0f, 0.0f, 0.0f);
 	FString AmbientColorMapFilename;
 	FString DiffuseColorMapFilename;
 	FString SpecularColorMapFilename;
