@@ -192,14 +192,15 @@ void FGraphicsManager::Render()
 	{
 		mRenderer->RenderQuad(QuadInfo);
 	}
-
+#if IS_OBJ_VIEWER
+#else
 	if (FShowFlags::Get().IsEnabled(EShowFlag::Grid))
 	{
 		// Match the grid's world-space half-width of 0.001.
 		mRenderer->RenderWorldAxis(mViewMatrix, mProjectionMatrix, FVector4(0.f, 0.f, 1.f, 1.f), FVector3(0.f, 0.f, 1.f), 0.002f);
 		mRenderer->RenderWorldGrid(mViewUnifiedProjectionMatrix, mCameraLocation, GridGap);
 	}
-
+#endif
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetTransparentQuadInfos())
 	{
 		mRenderer->RenderQuad(QuadInfo);

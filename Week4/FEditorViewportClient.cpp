@@ -25,7 +25,7 @@
 #include "LaunchEngineLoop.h"
 #include "FAssetManager.h"
 #include "psapi.h"
-
+#include "UStaticMeshComponent.h"
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
 	, mGizmo(InRenderer)
@@ -97,7 +97,24 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 	const FInputState& Input = WindowApplication.Input;
 	bool bAllowMouse = sceneManager->IsViewportHovered();
 	bool bAllowKeyboardInput = bAllowMouse && !ImGui::GetIO().WantCaptureKeyboard;
+#if IS_OBJ_VIEWER
 
+	if (bAllowMouse && Input.IsDown(VK_LBUTTON) && mViewerActor != nullptr) {
+		constexpr float RotationSensitivity = 0.5f;
+		mViewerYaw += Input.MouseDX * RotationSensitivity;
+		mViewerPitch += Input.MouseDY * RotationSensitivity;
+		mViewerPitch = FMath::Clamp(mViewerPitch, -89.0f, 89.0f);
+		UpdateViewerCamera();
+	}
+
+	if (bAllowMouse && Input.MouseWheelDelta != 0.0f) {
+		mViewerDistance *= FMath::Pow(1.2f, -Input.MouseWheelDelta);
+		mViewerDistance = FMath::Clamp(mViewerDistance, 0.1f, 100.0f);
+		UpdateViewerCamera();
+	}
+
+	mCamera.Velocity = FVector(0.0f);
+#else
 	// Camera Rotate
 	// 회전을 이동보다 먼저, 이번 프레임에 돌린 방향으로 바로 움직이게
 	if (bAllowMouse && Input.IsDown(VK_RBUTTON))
@@ -180,6 +197,8 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 		}
 	}
 
+#endif
+
 	//Stat정보 표시가 켜져 있으면 드로우한다.
 	if (UFontAtlas* StatFontAtlas = GEngineLoop.GetAssetManager()->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
 	{
@@ -249,6 +268,110 @@ namespace
 		_snprintf_s(OutBuffer, BufferSize, _TRUNCATE,
 			bPad ? "%6.2f %s" : "%.2f %s", Value, Unit);
 	}
+}
+
+void FEditorViewportClient::FocusOnMesh(const UStaticMesh* StaticMesh)
+{
+	if (StaticMesh == nullptr) return;
+
+	const FAABB& Bounds = StaticMesh->GetLocalBoundingBox();
+
+	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+	const FVector Extent = (Bounds.Max - Bounds.Min) * 0.5f;
+
+	const float Radius = Extent.Length();
+
+	if (Radius <= KINDA_SMALL_NUMBER) {
+		return;
+	}
+
+#if IS_OBJ_VIEWER
+ 	mViewerTarget = Center;
+	mViewerDistance = Radius * 3.0f;
+	mViewerYaw = 0.0f;
+	mViewerPitch = 0.0f;
+	UpdateViewerCamera();
+#else
+
+
+	const float HalfFovRadians = mCamera.mFovDegree * 0.5f * PI / 180.0f;
+	const float Distance = Radius / tanf(HalfFovRadians) * 1.2f;
+	mCamera.Transform.Location = Center - mCamera.GetForwardVector() * Distance;
+	mCamera.Velocity = FVector(0.0f);
+#endif
+}
+
+void FEditorViewportClient::FocusOnViewerActor()
+{
+	if (mViewerActor == nullptr) return;
+	UStaticMeshComponent* MeshComponent = static_cast<UStaticMeshComponent*>(mViewerActor->GetRootComponent());
+	if (MeshComponent == nullptr) return;
+	UStaticMesh* StaticMesh = MeshComponent->GetStaticMesh();
+	if (StaticMesh == nullptr) return;
+	const FAABB& Bounds = StaticMesh->GetLocalBoundingBox();
+
+	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+	const FVector Extent = (Bounds.Max - Bounds.Min) * 0.5f;
+
+	const FVector ComponentScale = MeshComponent->GetRelativeScale3D();
+
+	const FVector ScaledExtent(Extent.x * FMath::Abs(ComponentScale.x), Extent.y * FMath::Abs(ComponentScale.y), Extent.z * FMath::Abs(ComponentScale.z));
+
+	const float Radius = ScaledExtent.Length();
+
+	if (Radius <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	mViewerTarget = Center;
+	mViewerDistance = Radius * 3.0f;
+
+	UpdateViewerCamera();
+}
+
+void FEditorViewportClient::SetViewerActor(AActor* InActor)
+{
+	mViewerActor = InActor;
+}
+
+void FEditorViewportClient::UpdateViewerCamera()
+{
+#if IS_OBJ_VIEWER
+	constexpr float DegreeToRadian = PI / 180.0f;
+	constexpr float RadianToDegree = 180.0f / PI;
+	const float YawRadians = mViewerYaw * DegreeToRadian;
+	const float PitchRadians = mViewerPitch * DegreeToRadian;
+	const float CosPitch = cosf(PitchRadians);
+	const float SinPitch = sinf(PitchRadians);
+	const float CosYaw = cosf(YawRadians);
+	const float SinYaw = sinf(YawRadians);
+
+	const FVector Offset(CosPitch * CosYaw, CosPitch * SinYaw, SinPitch);
+
+	FVector WorldTarget = mViewerTarget;
+	if (mViewerActor != nullptr) {
+		FVector ActorLocation = mViewerActor->GetTransform().Location;
+		FRotator ActorRotation = mViewerActor->GetTransform().Rotation;
+		FVector ActorScale = mViewerActor->GetTransform().Scale;
+
+		FVector ScaledTarget = FVector(mViewerTarget.x * ActorScale.x, mViewerTarget.y * ActorScale.y, mViewerTarget.z * ActorScale.z);
+		FMatrix RotMatrix = FMatrix::Rotate(ActorRotation);
+		FVector RotatedTarget = RotMatrix.TransformPosition(ScaledTarget);
+
+		WorldTarget = ActorLocation + RotatedTarget;
+	}
+
+	mCamera.Transform.Location = WorldTarget + Offset * mViewerDistance;
+
+	FVector Direction = (WorldTarget - mCamera.Transform.Location);
+	Direction.Normalize();
+
+	const float Yaw = atan2f(Direction.y, Direction.x);
+	const float HorizontalLength = sqrtf(Direction.x * Direction.x + Direction.y * Direction.y);
+	const float Pitch = atan2f(Direction.z, HorizontalLength);
+	mCamera.Transform.Rotation = FRotator(Pitch * RadianToDegree, Yaw * RadianToDegree, 0.0f);
+#endif
 }
 
 void FEditorViewportClient::DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas, FRenderCollector& RenderCollector, float ViewportW, float ViewportH)

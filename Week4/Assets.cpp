@@ -99,6 +99,8 @@ void UStaticMesh::BuildRenderBuffers(URenderer& InRenderer)
 	VertexBuffer = InRenderer.CreateVertexBuffer(Vertices.Data(), VertexCount);
 	IndexBuffer = InRenderer.CreateIndexBuffer(Indices.Data(), IndexCount);
 
+	BoundingBox = FAABB();
+
 	for (uint32 i = 0; i < IndexCount; ++i)
 	{
 		const FVertexSimple& Vertex = Vertices[Indices[i]];
@@ -111,6 +113,11 @@ void UStaticMesh::SetData(const TArray<FVertexSimple>& InVertices, const TArray<
 	Vertices = InVertices;
 	Indices = InIndices;
 	Sections = InSections;
+	BoundingBox = FAABB();
+	for (uint32 i = 0; i < Indices.Num(); ++i) {
+		const FVertexSimple& Vertex = Vertices[Indices[i]];
+		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
+	}
 }
 
 void UStaticMesh::Serialize(FArchive& Ar)

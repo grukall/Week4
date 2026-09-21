@@ -80,6 +80,8 @@ public:
 	bool IsViewportHovered() const { return mbViewportHovered; }
 	SWindow* GetRootWindow() const { return mRootWindow; }
 
+	void InitObjViewer(const char* CmdLine);
+	void UpdateObjViewerGUI(const FGuiReference& guiReference);
 private:
 	static constexpr float MIN_WIDTH_RATIO = 0.2f;
 	static constexpr float MAX_WIDTH_RATIO = 0.6f;

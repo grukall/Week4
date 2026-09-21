@@ -25,7 +25,7 @@
 #include "FStatManager.h"
 
 #include "Material.h"
-void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
+void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine)
 {
 	// Initialize window infos
 	WCHAR WindowClass[] = L"JungleWindowClass";
@@ -112,7 +112,11 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	int32 GridGap = 1;
 	sscanf_s(Value, "%d", &	GridGap);
 	mGraphicsManager->SetGridGap(GridGap);
+#if IS_OBJ_VIEWER
+	mSceneManager->InitObjViewer(CmdLine);
+#else
 	mSceneManager->NewScene();
+#endif
 }
 
 void FEngineLoop::InitAssetManager()
@@ -228,6 +232,12 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	// 3. 활성 뷰포트(Active Viewport) 판별
 	// (참고: 매 프레임 dynamic_cast가 부담스럽다면, 레이아웃 변경 시에만 캐싱하는 구조를 추천합니다)
+
+#if IS_OBJ_VIEWER
+	if (!ViewportClients.IsEmpty()) {
+		ActiveViewportClient = ViewportClients[0];
+	}
+#else
 	if (SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mSceneManager->GetRootWindow()))
 	{
 		if (ViewportClients.Num() == 4)
@@ -245,10 +255,9 @@ void FEngineLoop::Tick(bool bPumpMessages)
 					break;
 				}
 			}
-
 		}
 	}
-
+#endif
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
 	// 4. Input Threads & Active Viewport Update
@@ -343,6 +352,24 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		mGraphicsManager->Update(deltaTime);
 
+#if IS_OBJ_VIEWER
+		if (!ViewportClients.IsEmpty()) {
+			FEditorViewportClient* CurrentClient = ViewportClients[0];
+
+			CurrentClient->ResizeRenderTarget(mGraphicsManager);
+
+			mGraphicsManager->GetRenderer()->BindRenderTarget(CurrentClient->mRenderTarget, CurrentClient->mDepthStencil, true);
+
+			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
+			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
+
+			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
+
+			mGraphicsManager->FlushLines();
+			mGraphicsManager->Render();
+		}
+#else
+
 		// 4개의 뷰포트 드로우콜
 		for (int i = 0; i < 4; ++i)
 		{
@@ -380,7 +407,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 				currentHeight
 			);
 		}
-
+#endif
 
 		// 8. ImGui
 		SCOPE_CYCLE_COUNTER("ImGui");
