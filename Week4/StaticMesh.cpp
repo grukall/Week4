@@ -5,6 +5,7 @@
 #include "FileManager.h"
 #include "Material.h"
 #include "FAssetManager.h"
+#include "FLogManager.h"
 
 UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
@@ -27,6 +28,13 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 		{
 			std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
 			std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
+
+			if (!std::filesystem::exists(MtlPath))
+			{
+				UE_LOG_ERROR(std::format("{} doesn't exists!", MtlPath.string()).c_str());
+				continue;
+			}
+
 			FString MaterialFileContent = FileSource.GetFileManager().ReadFileToString(MtlPath);
 			Importer.ParseMtlFile(MaterialFileContent, Materials);
 		}
@@ -70,6 +78,12 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 					}
 
 					std::filesystem::path TexturePath = FileSource.GetFilePath().parent_path() / Filename.CStr();
+
+					if (!std::filesystem::exists(TexturePath))
+					{
+						UE_LOG_ERROR(std::format("{} doesn't exists!", TexturePath.string()).c_str());
+						return nullptr;
+					}
 
 					FString TexturePathString(TexturePath.string());
 					FName TextureAssetName(TexturePathString);
