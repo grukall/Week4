@@ -23,86 +23,74 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 		StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
 		Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
 
-	// MaterialDatas[i]가 어느 mtl 파일(절대경로)에서 왔는지 같은 인덱스로 같이 들고 있는다.
-	// 머티리얼의 진짜 출처는 obj가 아니라 mtl이라, 키를 만들 때 obj 디렉토리가 아니라 이걸 써야 한다.
-	TArray<FMaterialData> MaterialDatas;
-	TArray<std::filesystem::path> MaterialDataSourcePaths;
-	for (FString filename : MaterialFiles)
-	{
-		std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
-		std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
-		FString MaterialFileContent = FileSource.GetFileManager().ReadFileToString(MtlPath);
-
-		uint32 CountBefore = MaterialDatas.Num();
-		Importer.ParseMtlFile(MaterialFileContent, MaterialDatas);
-		for (uint32 i = CountBefore; i < MaterialDatas.Num(); ++i)
+		// MaterialDatas[i]가 어느 mtl 파일(절대경로)에서 왔는지 같은 인덱스로 같이 들고 있는다.
+		// 머티리얼의 진짜 출처는 obj가 아니라 mtl이라, 키를 만들 때 obj 디렉토리가 아니라 이걸 써야 한다.
+		TArray<FMaterialData> MaterialDatas;
+		TArray<std::filesystem::path> MaterialDataSourcePaths;
+		for (FString filename : MaterialFiles)
 		{
-			MaterialDataSourcePaths.Add(MtlPath);
-		}
-	}
+			std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
+			std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
+			FString MaterialFileContent = FileSource.GetFileManager().ReadFileToString(MtlPath);
 
-	TArray<FVertexSimple> Vertices;
-	ToFVertexSimple(StaticMesh.Vertices, Vertices);
-
-	UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(
-		AssetName,
-		Renderer,
-		Vertices.Data(),
-		Vertices.Num(),
-		StaticMesh.Indices.Data(),
-		StaticMesh.Indices.Num(),
-		StaticMesh.Sections.Data(),
-		StaticMesh.Sections.Num()
-	);
-
-	std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
-
-	for (const FString& MaterialName : StaticMesh.Materials) {
-		const FMaterialData* FoundMaterial = nullptr;
-		const std::filesystem::path* FoundMtlPath = nullptr;
-
-		for (uint32 i = 0; i < MaterialDatas.Num(); ++i) {
-			if (MaterialDatas[i].Name == MaterialName) {
-				FoundMaterial = &MaterialDatas[i];
-				FoundMtlPath = &MaterialDataSourcePaths[i];
-				break;
+			uint32 CountBefore = MaterialDatas.Num();
+			Importer.ParseMtlFile(MaterialFileContent, MaterialDatas);
+			for (uint32 i = CountBefore; i < MaterialDatas.Num(); ++i)
+			{
+				MaterialDataSourcePaths.Add(MtlPath);
 			}
 		}
 
-		std::filesystem::path MaterialKeyBase = FoundMtlPath ? *FoundMtlPath : ObjDirectory;
-		FString MaterialAssetKey(FileSource.GetFileManager().MakeRelativeToRoot(MaterialKeyBase).string());
-		MaterialAssetKey.Append("::");
-		MaterialAssetKey.Append(MaterialName);
-		FName MaterialAssetName(MaterialAssetKey);
+		NewMesh->SetData(StaticMesh.Vertices, StaticMesh.Indices, StaticMesh.Sections);
 
-		FMaterialAssetSource* MaterialSource = new FMaterialAssetSource(
-			FileSource.GetFileManager(),
-			ObjDirectory,
-			FoundMaterial ? *FoundMaterial : FMaterialData{},
-			FoundMaterial != nullptr
-		);
+		std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
 
-		AssetManager->RegisterAsset<FMaterialAssetLoader>(MaterialAssetName, MaterialSource, Renderer, *AssetManager);
+		for (const FString& MaterialName : StaticMesh.Materials) {
+			const FMaterialData* FoundMaterial = nullptr;
+			const std::filesystem::path* FoundMtlPath = nullptr;
 
-		// bImport=true: 재임포트로 mtl 값이 바뀌었으면 이미 로드된 머티리얼도 강제로 다시 만든다.
-		// 주의: 이 머티리얼을 이미 참조 중인 다른 메시/컴포넌트가 있으면 그쪽은 옛 포인터가 댕글링된다
-		// (RebindReferences가 지금은 UStaticMesh만 처리함 — 리플렉션으로 일반화하기 전까지의 임시 상태).
-		UAsset* MaterialAsset = AssetManager->LoadAsset(MaterialAssetName, true);
-		UMaterial* Material = MaterialAsset ? MaterialAsset->Cast<UMaterial>() : nullptr;
+			for (uint32 i = 0; i < MaterialDatas.Num(); ++i) {
+				if (MaterialDatas[i].Name == MaterialName) {
+					FoundMaterial = &MaterialDatas[i];
+					FoundMtlPath = &MaterialDataSourcePaths[i];
+					break;
+				}
+			}
 
-		UE_LOG("[StaticMeshLoader] material slot: name=%s key=%s found_in_mtl=%d material=%p",
-			MaterialName.CStr(), MaterialAssetKey.CStr(), FoundMaterial != nullptr, (void*)Material);
+			std::filesystem::path MaterialKeyBase = FoundMtlPath ? *FoundMtlPath : ObjDirectory;
+			FString MaterialAssetKey(FileSource.GetFileManager().MakeRelativeToRoot(MaterialKeyBase).string());
+			MaterialAssetKey.Append("::");
+			MaterialAssetKey.Append(MaterialName);
+			FName MaterialAssetName(MaterialAssetKey);
 
-		NewMesh->AddMaterial(Material);
-	}
+			FMaterialAssetSource* MaterialSource = new FMaterialAssetSource(
+				FileSource.GetFileManager(),
+				ObjDirectory,
+				FoundMaterial ? *FoundMaterial : FMaterialData{},
+				FoundMaterial != nullptr
+			);
 
-	UE_LOG("[StaticMeshLoader] mesh loaded: name=%s materials=%u sections=%u",
-		AssetName.ToString().CStr(), NewMesh->GetMaterialCount(), NewMesh->GetSectionCount());
+			AssetManager->RegisterAsset<FMaterialAssetLoader>(MaterialAssetName, MaterialSource, Renderer, *AssetManager);
 
-	std::filesystem::create_directories(BinaryPath.parent_path());
-	FArchiveFileWriter Writer(BinaryPath);
-	NewMesh->Serialize(Writer);
-	NewMesh->MarkDirty(false);
+			// bImport=true: 재임포트로 mtl 값이 바뀌었으면 이미 로드된 머티리얼도 강제로 다시 만든다.
+			// 주의: 이 머티리얼을 이미 참조 중인 다른 메시/컴포넌트가 있으면 그쪽은 옛 포인터가 댕글링된다
+			// (RebindReferences가 지금은 UStaticMesh만 처리함 — 리플렉션으로 일반화하기 전까지의 임시 상태).
+			UAsset* MaterialAsset = AssetManager->LoadAsset(MaterialAssetName, true);
+			UMaterial* Material = MaterialAsset ? MaterialAsset->Cast<UMaterial>() : nullptr;
+
+			UE_LOG("[StaticMeshLoader] material slot: name=%s key=%s found_in_mtl=%d material=%p",
+				MaterialName.CStr(), MaterialAssetKey.CStr(), FoundMaterial != nullptr, (void*)Material);
+
+			NewMesh->AddMaterial(Material);
+		}
+
+		UE_LOG("[StaticMeshLoader] mesh loaded: name=%s materials=%u sections=%u",
+			AssetName.ToString().CStr(), NewMesh->GetMaterialCount(), NewMesh->GetSectionCount());
+
+		std::filesystem::create_directories(BinaryPath.parent_path());
+		FArchiveFileWriter Writer(BinaryPath);
+		NewMesh->Serialize(Writer);
+		NewMesh->MarkDirty(false);
 	}
 	else
 	{
@@ -169,11 +157,12 @@ UAsset* FMaterialAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& As
 
 		FFileAssetSource* TextureSource = new FFileAssetSource(MaterialSource.GetFileManager(), TexturePath);
 
-		AssetManager->RegisterAsset<FTexture2DAssetLoader>(TextureAssetName, TextureSource, Renderer);
+		FAssetManager& AssetManager = FAssetManager::Get();
+		AssetManager.RegisterAsset<FTexture2DAssetLoader>(TextureAssetName, TextureSource, Renderer);
 
 		// bImport=true: 재임포트로 텍스처 파일이 바뀌었으면 이미 로드된 것도 강제로 다시 읽는다.
 		// 주의: 이미 이 텍스처를 참조 중인 다른 머티리얼이 있으면 그쪽은 옛 포인터가 댕글링된다(위와 동일한 임시 상태).
-		UAsset* TextureAsset = AssetManager->LoadAsset(TextureAssetName, true);
+		UAsset* TextureAsset = AssetManager.LoadAsset(TextureAssetName, true);
 		UTexture2D* Texture = TextureAsset ? TextureAsset->Cast<UTexture2D>() : nullptr;
 
 		UE_LOG("[MaterialLoader] texture: file=%s key=%s texture=%p", Filename.CStr(), TexturePathString.CStr(), (void*)Texture);

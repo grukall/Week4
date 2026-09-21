@@ -56,7 +56,7 @@ public:
 private:
 	URenderer& Renderer;
 	FAssetManager* AssetManager;
-	void ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices);
+	bool ShouldImport(const FName AssetName, const std::filesystem::path& SourcePath, const std::filesystem::path& BinaryPath);
 };
 
 // mtl 파일 하나에 머티리얼이 여러 개 들어있을 수 있어서(1파일=1에셋인 텍스처와 다름),
@@ -86,7 +86,7 @@ class FMaterialAssetLoader : public FAssetLoader
 {
 public:
 	FMaterialAssetLoader(URenderer& InRenderer, FAssetManager& InAssetManager)
-		: Renderer(InRenderer), AssetManager(&InAssetManager) { }
+		: Renderer(InRenderer){ }
 	~FMaterialAssetLoader() = default;
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
@@ -94,6 +94,4 @@ public:
 
 private:
 	URenderer& Renderer;
-	FAssetManager* AssetManager;
-	bool ShouldImport(const FName AssetName, const std::filesystem::path& SourcePath, const std::filesystem::path& BinaryPath);
 };
