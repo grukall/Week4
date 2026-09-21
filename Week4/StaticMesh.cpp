@@ -11,7 +11,7 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 {
 	UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(AssetName);
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
-	std::filesystem::path BinaryPath = "Assets/Cooked/" + std::string(AssetName.ToString().CStr()) + ".smesh";
+	std::filesystem::path BinaryPath = "Assets/Baked/" + std::string(AssetName.ToString().CStr()) + ".uasset";
 
 	if (ShouldImport(AssetName, FileSource.GetFilePath(), BinaryPath))
 	{
@@ -116,7 +116,10 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 			StaticMesh.Sections
 		);
 
-		NewMesh->MarkDirty(true);
+		std::filesystem::create_directories(BinaryPath.parent_path());
+		FArchiveFileWriter Writer(BinaryPath);
+		NewMesh->Serialize(Writer);
+		NewMesh->MarkDirty(false);
 	}
 	else
 	{
