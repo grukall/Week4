@@ -1,4 +1,4 @@
-﻿#include "SceneManager.h"
+#include "SceneManager.h"
 
 #include <algorithm>
 #include <format>
@@ -42,7 +42,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager()
+FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -54,36 +54,22 @@ FSceneManager::FSceneManager()
 	mPropertyPanel = new FPropertyPanel();
 	mPropertyPanel->Init();
 
-	// 4개의 리프 노드(뷰포트) 생성
-	SWindow* VP_LeftTop = new SWindow();
-	SWindow* VP_LeftBottom = new SWindow();
-	SWindow* VP_RightTop = new SWindow();
-	SWindow* VP_RightBottom = new SWindow();
+	// 4개의 리프 노드(뷰포트) 생성 후 대응 클라이언트를 바로 꽂는다.
+	// 순서: TopLeft=0, TopRight=1, BottomLeft=2, BottomRight=3
+	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->OwningClient     = clients[0];
+	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->OwningClient    = clients[1];
+	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->OwningClient  = clients[2];
+	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->OwningClient = clients[3];
 
 	// 4분할 루트 스플리터 생성 및 조립
 	SSplitterQuad* RootSplitter = new SSplitterQuad();
-	RootSplitter->TopLeft = VP_LeftTop;
-	RootSplitter->BottomLeft = VP_LeftBottom;
-	RootSplitter->TopRight = VP_RightTop;
-	RootSplitter->BottomRight = VP_RightBottom;
+	RootSplitter->TopLeft     = VP_TopLeft;
+	RootSplitter->TopRight    = VP_TopRight;
+	RootSplitter->BottomLeft  = VP_BottomLeft;
+	RootSplitter->BottomRight = VP_BottomRight;
 
 	// SceneManager의 루트 윈도우로 등록
 	mRootWindow = RootSplitter;
-
-	//mCurrentWorld = FObjectFactory::ConstructObject<UWorld>();
-
-	// Todo: Test code, move to other function
-	//{
-	//	UCubeComponent* cubeComponent = FObjectFactory::ConstructObject<UCubeComponent>(FVector(0), FRotator(), FVector(1));
-	//	AActor* cubeActor = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor->AddComponent(cubeComponent);
-	//	mCurrentWorld->AddActor(cubeActor);
-
-	//	UCubeComponent* cubeComponent2 = FObjectFactory::ConstructObject<UCubeComponent>(FVector(1, 1, 1), FRotator(), FVector(0.5));
-	//	AActor* cubeActor2 = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor2->AddComponent(cubeComponent2);
-	//	mCurrentWorld->AddActor(cubeActor2);
-	//}
 }
 
 FSceneManager::~FSceneManager()
@@ -172,87 +158,267 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 				mViewportWidth = size.x;
 				mViewportHeight = size.y;
 
-				ImGui::InvisibleButton("ViewportArea", size);
-				mbViewportHovered = ImGui::IsItemHovered();
+				ImGui::Dummy(size);
+				mbViewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
 
 				if (mRootWindow != nullptr)
 				{
-					mRootWindow->Resize({ 0.0f, 0.0f, size.x, size.y });
 					SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mRootWindow);
 
 					if (QuadSplitter != nullptr)
 					{
-						SWindow* SplitWindows[4] = {
+						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
+						const float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - mViewportY;
+
+						const float ToolbarHeight = 26.0f;
+
+						// 각 리프 뷰포트 및 상단 툴바 렌더링
+						auto ProcessLeaf = [&](SWindow* W, int32 ViewportIndex)
+						{
+							if (!W || !W->OwningClient) return;
+							FEditorViewportClient* Client = W->OwningClient;
+							const FRect rect = W->Rect;
+
+							if (rect.GetWidth() <= 0.0f || rect.GetHeight() <= ToolbarHeight) return;
+
+							const float RenderTop = rect.Top + ToolbarHeight;
+							const float RenderHeight = rect.GetHeight() - ToolbarHeight;
+							const float RenderWidth = rect.GetWidth();
+
+							// 이번 프레임의 3D 렌더 영역 크기를 클라이언트에게 통보 (마우스 피킹과 종횡비 보정)
+							Client->SetViewportArea(rect.Left, RenderTop, RenderWidth, RenderHeight);
+
+							ImGui::PushID(Client);
+
+							// 1. 3D 뷰포트 이미지 렌더링
+							if (Client->mRenderTarget && Client->mRenderTarget->SRV)
+							{
+								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + RenderTop));
+
+								ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
+								ImGui::Image(srv, ImVec2(RenderWidth, RenderHeight));
+
+								// 뷰포트 이미지 영역 클릭 시 ActiveViewport 갱신
+								if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right))
+								{
+									guiReference.ActiveViewport = Client;
+								}
+
+								// ActiveViewport 주황색 테두리 표시 (전체 뷰포트 영역 둘레)
+								if (Client == guiReference.ActiveViewport)
+								{
+									ImDrawList* drawList = ImGui::GetWindowDrawList();
+									const ImVec2 pMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
+									const ImVec2 pMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Bottom);
+
+									drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, 2.0f);
+								}
+							}
+
+							// 2. 상단 툴바 (Toolbar Bar) 렌더링
+							{
+								ImDrawList* drawList = ImGui::GetWindowDrawList();
+								const ImVec2 barMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
+								const ImVec2 barMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Top + ToolbarHeight);
+
+								// 툴바 배경색 및 하단 구분선
+								drawList->AddRectFilled(barMin, barMax, IM_COL32(28, 28, 32, 240));
+								drawList->AddLine(ImVec2(barMin.x, barMax.y), ImVec2(barMax.x, barMax.y), IM_COL32(45, 45, 50, 255));
+
+								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left + 4.0f, startCursorPos.y + rect.Top + 2.0f));
+
+								// 뷰포트 인덱스 배지
+								bool bIsActive = (Client == guiReference.ActiveViewport);
+								if (bIsActive)
+								{
+									ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.1f, 1.0f), "[#%d]", ViewportIndex + 1);
+								}
+								else
+								{
+									ImGui::TextDisabled("[#%d]", ViewportIndex + 1);
+								}
+								if (ImGui::IsItemClicked())
+								{
+									guiReference.ActiveViewport = Client;
+								}
+
+								ImGui::SameLine();
+
+								// 시점 드롭다운 (View Type)
+								const char* ViewTypeNames[] = { "Perspective", "Top", "Bottom", "Left", "Right", "Front", "Back" };
+								int CurrentViewType = static_cast<int>(Client->ViewportType);
+								ImGui::SetNextItemWidth(110.0f);
+								if (ImGui::Combo("##ViewType", &CurrentViewType, ViewTypeNames, IM_ARRAYSIZE(ViewTypeNames)))
+								{
+									Client->SetViewportType(static_cast<EViewportType>(CurrentViewType));
+									guiReference.ActiveViewport = Client;
+								}
+
+								ImGui::SameLine();
+
+								// 뷰 모드 드롭다운 (View Mode)
+								const char* ViewModes[] = { "Lit", "Unlit", "Wireframe" };
+								int CurrentViewMode = static_cast<int>(Client->ViewMode);
+								ImGui::SetNextItemWidth(100.0f);
+								if (ImGui::Combo("##ViewMode", &CurrentViewMode, ViewModes, IM_ARRAYSIZE(ViewModes)))
+								{
+									Client->ViewMode = static_cast<EViewModeIndex>(CurrentViewMode);
+									guiReference.ActiveViewport = Client;
+								}
+
+								ImGui::SameLine();
+
+								// 카메라 속도 조절
+								ImGui::SetNextItemWidth(48.0f);
+								if (ImGui::DragFloat("##Speed", &Client->GetCamera().Speed, 0.2f, 0.1f, 50.0f, "S:%.1f"))
+								{
+									guiReference.ActiveViewport = Client;
+								}
+								if (ImGui::IsItemHovered())
+								{
+									ImGui::SetTooltip("Camera Speed: %.1f", Client->GetCamera().Speed);
+								}
+
+								// 너비 여유에 따라 FOV, Sens를 인라인 또는 팝업으로 제공
+								const float maxBtnWidth = 22.0f;
+								const float rightButtonX = startCursorPos.x + rect.Right - maxBtnWidth - 4.0f;
+								const float spaceRemaining = rightButtonX - ImGui::GetCursorPosX();
+
+								if (spaceRemaining >= 150.0f)
+								{
+									ImGui::SameLine();
+									ImGui::SetNextItemWidth(50.0f);
+									if (ImGui::DragFloat("##FOV", &Client->GetCamera().mFovDegree, 0.5f, 5.0f, 170.0f, "FOV:%.0f"))
+									{
+										guiReference.ActiveViewport = Client;
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip("Field of View (FOV: %.1f deg)", Client->GetCamera().mFovDegree);
+									}
+
+									ImGui::SameLine();
+									ImGui::SetNextItemWidth(60.0f);
+									if (ImGui::DragFloat("##Sens", &Client->GetCamera().Sensitivity, 0.005f, 0.01f, 1.0f, "Sens:%.2f", ImGuiSliderFlags_AlwaysClamp))
+									{
+										guiReference.ActiveViewport = Client;
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip("Camera Sensitivity: %.3f", Client->GetCamera().Sensitivity);
+									}
+								}
+								else
+								{
+									ImGui::SameLine();
+									if (ImGui::Button("..."))
+									{
+										ImGui::OpenPopup("CamOptPopup");
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip("Camera Settings (FOV, Sensitivity)");
+									}
+
+									if (ImGui::BeginPopup("CamOptPopup"))
+									{
+										ImGui::Text("Camera Settings [#%d]", ViewportIndex + 1);
+										ImGui::Separator();
+										ImGui::SliderFloat("FOV", &Client->GetCamera().mFovDegree, 5.0f, 170.0f, "%.1f deg");
+										ImGui::SliderFloat("Sensitivity", &Client->GetCamera().Sensitivity, 0.01f, 1.0f, "%.3f");
+										ImGui::DragFloat("Speed", &Client->GetCamera().Speed, 0.2f, 0.1f, 50.0f, "%.1f");
+										ImGui::EndPopup();
+									}
+								}
+
+								ImGui::SameLine();
+
+								// 포커스 버튼
+								if (ImGui::Button("F"))
+								{
+									Client->FocusOnActor(mSelectedActor);
+									guiReference.ActiveViewport = Client;
+								}
+								if (ImGui::IsItemHovered())
+								{
+									ImGui::SetTooltip("Focus on selected actor (F)");
+								}
+
+								// 최대화 토글 버튼
+								if (rightButtonX > ImGui::GetCursorPosX() + 4.0f)
+								{
+									ImGui::SetCursorPos(ImVec2(rightButtonX, startCursorPos.y + rect.Top + 2.0f));
+									const char* maxIcon = (mMaximizedViewportIndex == ViewportIndex) ? "■" : "□";
+									if (ImGui::Button(maxIcon, ImVec2(maxBtnWidth, 0.0f)))
+									{
+										mMaximizedViewportIndex = (mMaximizedViewportIndex == ViewportIndex) ? -1 : ViewportIndex;
+										guiReference.ActiveViewport = Client;
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip(mMaximizedViewportIndex == ViewportIndex ? "Restore Viewport" : "Maximize Viewport");
+									}
+								}
+							}
+
+							ImGui::PopID();
+						};
+
+						SWindow* Leaves[4] = {
 							QuadSplitter->TopLeft,
 							QuadSplitter->TopRight,
 							QuadSplitter->BottomLeft,
 							QuadSplitter->BottomRight
 						};
 
-						const TArray<FEditorViewportClient*>& Clients = *guiReference.ViewportClients;
-
-						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
-						const float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - mViewportY;
-
-						for (int i = 0; i < 4; ++i)
+						if (mMaximizedViewportIndex >= 0 && mMaximizedViewportIndex < 4)
 						{
-							SWindow* SplitArea = SplitWindows[i];
-
-							if (SplitArea)
+							// 최대화 상태: 선택된 단일 뷰포트만 전체 영역 차지
+							SWindow* TargetLeaf = Leaves[mMaximizedViewportIndex];
+							if (TargetLeaf)
 							{
-								FEditorViewportClient* Client = Clients[i];
-								FRect rect = SplitArea->Rect;
-
-								// 이번 프레임의 UI 영역 크기를 클라이언트에게 통보
-								Client->SetViewportArea(rect.Left, rect.Top, rect.GetWidth(), rect.GetHeight());
-
-								if (Client->mRenderTarget && Client->mRenderTarget->SRV)
-								{
-									// 그리기 커서를 해당 분할 구역의 시작점(Left, Top)으로 이동
-									ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + rect.Top));
-
-									// 텍스처 그리기
-									ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
-									ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
-
-									// ActiveViewport
-									if (MouseXInViewport >= rect.Left && MouseXInViewport <= (rect.Left + rect.GetWidth()) &&
-										MouseYInViewport >= rect.Top && MouseYInViewport <= (rect.Top + rect.GetHeight()))
-									{
-										guiReference.ActiveViewport = Client;
-									}
-								}
+								TargetLeaf->Resize({ 0.0f, 0.0f, size.x, size.y });
+								ProcessLeaf(TargetLeaf, mMaximizedViewportIndex);
 							}
 						}
-
-						// 마우스 드래그 로직
-						const FPoint LocalMousePos = { MouseXInViewport, MouseYInViewport };
-
-						if (mbViewportHovered && QuadSplitter->DragMode == ESplitterDragMode::None)
+						else
 						{
-							ESplitterDragMode HoverMode = QuadSplitter->HitTestSplitter(LocalMousePos);
-							if (HoverMode == ESplitterDragMode::VerticalLine)       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-							else if (HoverMode == ESplitterDragMode::HorizontalLine) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-							else if (HoverMode == ESplitterDragMode::CenterCross)    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-						}
+							// 기본 4분할 뷰
+							mRootWindow->Resize({ 0.0f, 0.0f, size.x, size.y });
+							for (int i = 0; i < 4; ++i)
+							{
+								ProcessLeaf(Leaves[i], i);
+							}
 
-						if (mbViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-						{
-							QuadSplitter->OnMouseDown(LocalMousePos);
-						}
+							// 분할선 드래그 로직 (4분할 상태일 때만 동작)
+							const FPoint LocalMousePos = { MouseXInViewport, MouseYInViewport };
 
-						if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
-						{
-							QuadSplitter->OnMouseMove(LocalMousePos);
+							if (mbViewportHovered && QuadSplitter->DragMode == ESplitterDragMode::None)
+							{
+								ESplitterDragMode HoverMode = QuadSplitter->HitTestSplitter(LocalMousePos);
+								if (HoverMode == ESplitterDragMode::VerticalLine)       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+								else if (HoverMode == ESplitterDragMode::HorizontalLine) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+								else if (HoverMode == ESplitterDragMode::CenterCross)    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+							}
 
-							if (QuadSplitter->DragMode == ESplitterDragMode::VerticalLine)       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-							else if (QuadSplitter->DragMode == ESplitterDragMode::HorizontalLine) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-							else if (QuadSplitter->DragMode == ESplitterDragMode::CenterCross)    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-						}
+							if (mbViewportHovered && !ImGui::IsAnyItemActive() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+							{
+								QuadSplitter->OnMouseDown(LocalMousePos);
+							}
 
-						if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-						{
-							QuadSplitter->OnMouseUp();
+							if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+							{
+								QuadSplitter->OnMouseMove(LocalMousePos);
+
+								if (QuadSplitter->DragMode == ESplitterDragMode::VerticalLine)       ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+								else if (QuadSplitter->DragMode == ESplitterDragMode::HorizontalLine) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+								else if (QuadSplitter->DragMode == ESplitterDragMode::CenterCross)    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+							}
+
+							if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+							{
+								QuadSplitter->OnMouseUp();
+							}
 						}
 					}
 				}
@@ -560,23 +726,9 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::SeparatorText("Camera Control");
 
 	FCamera& camera = guiReference.ActiveViewport->GetCamera();
-	URenderer* renderer = guiReference.GraphicsManager->GetRenderer();
 
-	const char* viewModeNames[] = { "Lit", "Unlit", "Wireframe" };
-
-	EViewModeIndex currentViewMode = guiReference.GraphicsManager->GetViewModeIndex();
-	int32 currentViewModeIndex = static_cast<int32>(currentViewMode);
-	// Combo는 선택이 바뀐 프레임에만 true를 돌려주고, 바뀐 값은 이미
-	// currentViewModeIndex에 들어 있다. 그 안에서 Checkbox를 그리면
-	// 한 프레임만 나타났다 사라져 클릭할 수 없다.
-	if (ImGui::Combo("View Mode", &currentViewModeIndex, viewModeNames, IM_ARRAYSIZE(viewModeNames)))
-	{
-		guiReference.GraphicsManager->SetViewModeIndex(static_cast<EViewModeIndex>(currentViewModeIndex));
-	}
 	if (ImGui::BeginCombo("##ShowFlags", "Show Flags"))
 	{
-		// 표시 옵션은 표를 그대로 훑어 체크박스를 만든다.
-		// 옵션을 추가할 때 ShowFlags.h의 GShowFlagInfos에만 한 줄 적으면 여기 바로 나온다.
 		FShowFlags& showFlags = FShowFlags::Get();
 		for (const FShowFlagInfo& flagInfo : GShowFlagInfos)
 		{
@@ -596,6 +748,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 		ImGui::EndCombo();
 	}
+
 	{
 		static constexpr int32 GridGapValues[] = { 1, 5, 10, 50, 100, 500 };
 		static constexpr const char* GridGapLabels[] = { "(1)", "(5)", "(10)", "(50)", "(100)", "(500)" };
@@ -662,16 +815,6 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		}
 	}
 
-	ImGui::Text("FOV     ");
-	ImGui::SameLine();
-	ImGui::SliderFloat("##FOV", &camera.mFovDegree, 0.0f, 180.0f);
-
-	ImGui::Text("Sensitivity");
-	ImGui::SameLine();
-	ImGui::SliderFloat("##CameraSensitivity", &camera.Sensitivity, 0.01f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-	
-
-
 	// 1) 라벨 텍스트를 먼저 그리고 같은 줄로
 	ImGui::Text("Location");
 	ImGui::SameLine();
@@ -699,41 +842,6 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(itemWidth);
 	ImGui::DragFloat("##CamRotZ", &camera.Transform.Rotation.Yaw, 0.1f, 180.0f);
-
-	/* Memory Info */
-	ImGui::SeparatorText("Memory Info");
-
-	ImGui::Text("Total allocated memory count: %d", UEngineStatics::sTotalAllocationCount);
-	ImGui::Text("Total allocated memory size: %d bytes", UEngineStatics::sTotalAllocationBytes);
-
-	/* Gizmo Control */
-	ImGui::SeparatorText("Gizmo Control");
-
-	// Display the current gizmo mode dropdown
-	const char* gizmoModeNames[] = { "Translate", "Rotate", "Scale" };
-
-	EGIZMO_TYPE currentGizmoType = guiReference.ActiveViewport->mGizmo.GetOperation();
-	int32 currentGizmoIndex = static_cast<int32>(currentGizmoType);
-	if (ImGui::Combo("Gizmo Mode", &currentGizmoIndex, gizmoModeNames, IM_ARRAYSIZE(gizmoModeNames)))
-	{
-		if (currentGizmoIndex == 0)
-		{
-			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::TRANSLATE);
-		}
-		else if (currentGizmoIndex == 1)
-		{
-			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::ROTATE);
-		}
-		else if (currentGizmoIndex == 2)
-		{
-			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::SCALE);
-		}
-	}
-	if (ImGui::Button("Next Gizmo Mode"))
-	{
-		guiReference.ActiveViewport->mGizmo.SetOperation(static_cast<EGIZMO_TYPE>((currentGizmoIndex + 1) % 3));
-	}
-
 
 	ImGui::End();
 }

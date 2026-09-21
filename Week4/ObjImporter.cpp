@@ -155,6 +155,12 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 				iss >> std::ws;
 				std::string MtlFilename;
 				std::getline(iss, MtlFilename);
+
+				if (!MtlFilename.empty() && MtlFilename.back() == '\r')
+				{
+					MtlFilename.pop_back();
+				}
+
 				Data.MaterialFiles.Add(FString(MtlFilename));
 			}
 			else if (prefix == "usemtl") // group material

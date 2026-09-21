@@ -224,7 +224,7 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
         diffuseColor *= textureColor;
     }
 
-
+    /*
     // --------------------------------------------------------
     // Ambient Color
     // --------------------------------------------------------
@@ -384,6 +384,6 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
     // --------------------------------------------------------
 
     float alpha = diffuseColor.a * saturate(Transparency);
-
-    return float4(result, alpha);
+*/
+    return diffuseColor;
 }
