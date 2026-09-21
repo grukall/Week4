@@ -185,7 +185,35 @@ void FGizmo::Update(FSceneManager* SceneManager, const FMatrix& ViewProjection, 
     }
     else if (CurrentOperation == EGIZMO_TYPE::SCALE)
     {
-        FVector Scale = Transform.Scale + AxisDirection * Amount * Sensitivity;
+        FVector DeltaScale(0.0f, 0.0f, 0.0f);
+        if (!bWorldMode)
+        {
+            if (SelectedAxis == EAxisNumber::X) DeltaScale.x = Amount * Sensitivity;
+            else if (SelectedAxis == EAxisNumber::Y) DeltaScale.y = Amount * Sensitivity;
+            else if (SelectedAxis == EAxisNumber::Z) DeltaScale.z = Amount * Sensitivity;
+        }
+        else
+        {
+            const FMatrix Rotation = FMatrix::Rotate(Transform.Rotation);
+            const FVector Lx = Rotation.GetUnitAxis(EAxis::X);
+            const FVector Ly = Rotation.GetUnitAxis(EAxis::Y);
+            const FVector Lz = Rotation.GetUnitAxis(EAxis::Z);
+
+            if (SelectedAxis == EAxisNumber::X)
+            {
+                DeltaScale = FVector(fabsf(Lx.x), fabsf(Ly.x), fabsf(Lz.x)) * Amount * Sensitivity;
+            }
+            else if (SelectedAxis == EAxisNumber::Y)
+            {
+                DeltaScale = FVector(fabsf(Lx.y), fabsf(Ly.y), fabsf(Lz.y)) * Amount * Sensitivity;
+            }
+            else if (SelectedAxis == EAxisNumber::Z)
+            {
+                DeltaScale = FVector(fabsf(Lx.z), fabsf(Ly.z), fabsf(Lz.z)) * Amount * Sensitivity;
+            }
+        }
+
+        FVector Scale = Transform.Scale + DeltaScale;
         Scale.x = FMath::Max(Scale.x, MIN_SCALE);
         Scale.y = FMath::Max(Scale.y, MIN_SCALE);
         Scale.z = FMath::Max(Scale.z, MIN_SCALE);
@@ -302,7 +330,7 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
     };
 
     const FMatrix Rotation = FMatrix::Rotate(Transform.Rotation);
-    const bool bLocal = !bWorldMode || CurrentOperation == EGIZMO_TYPE::SCALE;
+    const bool bLocal = !bWorldMode;
     const FVector ForwardAxis = bLocal ? Rotation.GetUnitAxis(EAxis::X) : Front;
     const FVector RightAxis = bLocal ? Rotation.GetUnitAxis(EAxis::Y) : Right;
     const FVector UpAxis = bLocal ? Rotation.GetUnitAxis(EAxis::Z) : Up;
