@@ -29,9 +29,11 @@ namespace
 		return FName(Path.stem().string().c_str());
 	}
 
-	// .uasset 맨 앞에 UAsset::Serialize가 적어둔 클래스 이름만 읽는다. 나머지 본문은 안 건드린다 —
-	// 스캔 단계는 "이게 무슨 클래스냐"만 알면 되지, 오브젝트 전체를 복원할 필요가 없다.
-	bool ReadBakedClassName(const std::filesystem::path& Path, FString& OutClassName)
+	// .uasset 맨 앞에 UAsset::Serialize가 적어둔 클래스 이름 + 원본 임포트 경로(AssetPath)만
+	// 읽는다. 나머지 본문(정점/머티리얼 등)은 안 건드린다 — 스캔 단계는 "이게 무슨 클래스고
+	// 원본이 어디였냐"만 알면 되지, 오브젝트 전체를 복원할 필요가 없다.
+	// UAsset::Serialize 순서: ClassName -> AssetName -> AssetPath. 순서가 바뀌면 같이 고쳐야 한다.
+	bool ReadBakedAssetHeader(const std::filesystem::path& Path, FString& OutClassName, FString& OutAssetPath)
 	{
 		FArchiveFileReader Reader(Path);
 		if (!Reader.IsValid())
@@ -40,7 +42,15 @@ namespace
 		}
 
 		Reader << OutClassName;
-		return !OutClassName.empty();
+		if (OutClassName.empty())
+		{
+			return false;
+		}
+
+		FName AssetName;
+		Reader << AssetName;
+		Reader << OutAssetPath;
+		return true;
 	}
 }
 
@@ -230,7 +240,8 @@ void FAssetManager::ScanBakedAssets(const std::filesystem::path& BakedDir, URend
 		}
 
 		FString ClassName;
-		if (!ReadBakedClassName(Entry.path(), ClassName))
+		FString ImportPath;
+		if (!ReadBakedAssetHeader(Entry.path(), ClassName, ImportPath))
 		{
 			UE_LOG_WARN("[AssetManager] ScanBakedAssets: failed to read header, skip: %s", Entry.path().string().c_str());
 			continue;
@@ -261,6 +272,14 @@ void FAssetManager::ScanBakedAssets(const std::filesystem::path& BakedDir, URend
 
 		RegisterAssetInternal(Key, Loader, new FFileAssetSource(FileManager, Entry.path()));
 		AssetMetaInfoMap[Key].AssetClass = AssetClass;
+
+		// 원본 경로가 저장돼 있으면 ImportSource를 복원한다 — 런타임 전용이라 재시작하면
+		// 날아가는 정보라, 이게 없으면 재시작 후 같은 원본을 다시 임포트할 때마다 재임포트로
+		// 인식되지 못하고 매번 새 .uasset(_1, _2 ...)이 생긴다.
+		if (!ImportPath.empty())
+		{
+			SetImportSource(Key, new FFileAssetSource(FileManager, std::filesystem::path(ImportPath.CStr())));
+		}
 
 		UE_LOG("[AssetManager] ScanBakedAssets: registered (not loaded) key=%s class=%s", Key.ToString().CStr(), ClassName.CStr());
 	}
