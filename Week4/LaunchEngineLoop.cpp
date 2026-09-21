@@ -322,40 +322,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		// 4개의 뷰포트 드로우콜
 		for (int i = 0; i < 4; ++i)
 		{
-			FEditorViewportClient* CurrentClient = ViewportClients[i];
-
-			CurrentClient->ResizeRenderTarget(mGraphicsManager);
-
-			// 렌더 타겟 바인딩 및 Clear
-			mGraphicsManager->GetRenderer()->BindRenderTarget(CurrentClient->mRenderTarget, CurrentClient->mDepthStencil, true);
-
-			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
-			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
-			const float CurrentRatio = CurrentClient->GetPerspectiveRatio(mGraphicsManager->GetPerspectiveRatio());
-
-			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight, CurrentRatio, CurrentClient->ViewMode);
-			mGraphicsManager->FlushLines();
-			mGraphicsManager->Render();
-
-			if (mSceneManager->GetSelectedActor())
-			{
-				FRenderInfo clickedRenderInfo;
-				mSceneManager->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
-				mGraphicsManager->RenderHighLight(clickedRenderInfo);
-			}
-
-			// 각 뷰포트별 렌더링용 ViewProj 계산 및 기즈모 렌더링
-			const float Aspect = currentWidth / currentHeight;
-			const FMatrix CurrentViewProj = CurrentClient->mCamera.GetViewMatrix() *
-				CurrentClient->mCamera.GetUnifiedProjectionMatrix(Aspect, CurrentClient->mCamera.mFovDegree, CurrentClient->mCamera.mOrthoDistance, 0.1f, 1000.f, CurrentRatio);
-
-			CurrentClient->mGizmo.Render(
-				mSceneManager,
-				CurrentClient->mCamera.Transform.Location,
-				CurrentViewProj,
-				currentWidth,
-				currentHeight
-			);
+			ViewportClients[i]->Draw(mGraphicsManager, mSceneManager);
 		}
 
 

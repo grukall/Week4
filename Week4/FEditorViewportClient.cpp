@@ -25,6 +25,7 @@
 #include "LaunchEngineLoop.h"
 #include "FAssetManager.h"
 #include "psapi.h"
+#include "Actor.h"
 
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
@@ -870,5 +871,238 @@ void FEditorViewportClient::FocusOnActor(AActor* TargetActor)
 		}
 	}
 	mCamera.Velocity = FVector(0.0f);
+}
+
+void FEditorViewportClient::Draw(FGraphicsManager* GraphicsMgr, FSceneManager* SceneMgr)
+{
+	ResizeRenderTarget(GraphicsMgr);
+
+	// 렌더 타겟 바인딩 및 Clear
+	GraphicsMgr->GetRenderer()->BindRenderTarget(mRenderTarget, mDepthStencil, true);
+
+	const float currentWidth = static_cast<float>(mWidth);
+	const float currentHeight = static_cast<float>(mHeight);
+	const float CurrentRatio = GetPerspectiveRatio(GraphicsMgr->GetPerspectiveRatio());
+
+	GraphicsMgr->Prepare(&mCamera, currentWidth, currentHeight, CurrentRatio, ViewMode);
+	GraphicsMgr->FlushLines();
+	GraphicsMgr->Render();
+
+	if (SceneMgr && SceneMgr->GetSelectedActor())
+	{
+		FRenderInfo clickedRenderInfo;
+		SceneMgr->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
+		GraphicsMgr->RenderHighLight(clickedRenderInfo);
+	}
+
+	// 각 뷰포트별 렌더링용 ViewProj 계산 및 기즈모 렌더링
+	const float Aspect = currentWidth / currentHeight;
+	const FMatrix CurrentViewProj = mCamera.GetViewMatrix() *
+		mCamera.GetUnifiedProjectionMatrix(Aspect, mCamera.mFovDegree, mCamera.mOrthoDistance, 0.1f, 1000.f, CurrentRatio);
+
+	mGizmo.Render(
+		SceneMgr,
+		mCamera.Transform.Location,
+		CurrentViewProj,
+		currentWidth,
+		currentHeight
+	);
+}
+
+void FEditorViewportClient::DrawViewportUI(
+	const FRect& rect,
+	int32 ViewportIndex,
+	FEditorViewportClient*& InOutActiveViewport,
+	int32& InOutMaximizedIndex,
+	AActor* SelectedActor,
+	const ImVec2& startCursorPos,
+	const ImVec2& screenCursorPos
+)
+{
+	const float ToolbarHeight = 26.0f;
+
+	if (rect.GetWidth() <= 0.0f || rect.GetHeight() <= ToolbarHeight) return;
+
+	const float RenderTop = rect.Top + ToolbarHeight;
+	const float RenderHeight = rect.GetHeight() - ToolbarHeight;
+	const float RenderWidth = rect.GetWidth();
+
+	// 이번 프레임의 3D 렌더 영역 크기를 클라이언트에게 통보 (마우스 피킹과 종횡비 보정)
+	SetViewportArea(rect.Left, RenderTop, RenderWidth, RenderHeight);
+
+	ImGui::PushID(this);
+
+	// 1. 3D 뷰포트 이미지 렌더링
+	if (mRenderTarget && mRenderTarget->SRV)
+	{
+		ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + RenderTop));
+
+		ImTextureID srv = (ImTextureID)(intptr_t)mRenderTarget->SRV.Get();
+		ImGui::Image(srv, ImVec2(RenderWidth, RenderHeight));
+
+		// 뷰포트 이미지 영역 클릭 시 ActiveViewport 갱신
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right))
+		{
+			InOutActiveViewport = this;
+		}
+
+		// ActiveViewport 주황색 테두리 표시 (전체 뷰포트 영역 둘레)
+		if (this == InOutActiveViewport)
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 pMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
+			const ImVec2 pMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Bottom);
+
+			drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, 2.0f);
+		}
+	}
+
+	// 2. 상단 툴바 (Toolbar Bar) 렌더링
+	{
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImVec2 barMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
+		const ImVec2 barMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Top + ToolbarHeight);
+
+		// 툴바 배경색 및 하단 구분선
+		drawList->AddRectFilled(barMin, barMax, IM_COL32(28, 28, 32, 240));
+		drawList->AddLine(ImVec2(barMin.x, barMax.y), ImVec2(barMax.x, barMax.y), IM_COL32(45, 45, 50, 255));
+
+		ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left + 4.0f, startCursorPos.y + rect.Top + 2.0f));
+
+		// 뷰포트 인덱스 배지
+		bool bIsActive = (this == InOutActiveViewport);
+		if (bIsActive)
+		{
+			ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.1f, 1.0f), "[#%d]", ViewportIndex + 1);
+		}
+		else
+		{
+			ImGui::TextDisabled("[#%d]", ViewportIndex + 1);
+		}
+		if (ImGui::IsItemClicked())
+		{
+			InOutActiveViewport = this;
+		}
+
+		ImGui::SameLine();
+
+		// 시점 드롭다운 (View Type)
+		const char* ViewTypeNames[] = { "Perspective", "Top", "Bottom", "Left", "Right", "Front", "Back" };
+		int CurrentViewType = static_cast<int>(ViewportType);
+		ImGui::SetNextItemWidth(110.0f);
+		if (ImGui::Combo("##ViewType", &CurrentViewType, ViewTypeNames, IM_ARRAYSIZE(ViewTypeNames)))
+		{
+			SetViewportType(static_cast<EViewportType>(CurrentViewType));
+			InOutActiveViewport = this;
+		}
+
+		ImGui::SameLine();
+
+		// 뷰 모드 드롭다운 (View Mode)
+		const char* ViewModes[] = { "Lit", "Unlit", "Wireframe" };
+		int CurrentViewMode = static_cast<int>(ViewMode);
+		ImGui::SetNextItemWidth(100.0f);
+		if (ImGui::Combo("##ViewMode", &CurrentViewMode, ViewModes, IM_ARRAYSIZE(ViewModes)))
+		{
+			ViewMode = static_cast<EViewModeIndex>(CurrentViewMode);
+			InOutActiveViewport = this;
+		}
+
+		ImGui::SameLine();
+
+		// 카메라 속도 조절
+		ImGui::SetNextItemWidth(48.0f);
+		if (ImGui::DragFloat("##Speed", &mCamera.Speed, 0.2f, 0.1f, 50.0f, "S:%.1f"))
+		{
+			InOutActiveViewport = this;
+		}
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("Camera Speed: %.1f", mCamera.Speed);
+		}
+
+		// 너비 여유에 따라 FOV, Sens를 인라인 또는 팝업으로 제공
+		const float maxBtnWidth = 22.0f;
+		const float rightButtonX = startCursorPos.x + rect.Right - maxBtnWidth - 4.0f;
+		const float spaceRemaining = rightButtonX - ImGui::GetCursorPosX();
+
+		if (spaceRemaining >= 150.0f)
+		{
+			ImGui::SameLine();
+			ImGui::SetNextItemWidth(50.0f);
+			if (ImGui::DragFloat("##FOV", &mCamera.mFovDegree, 0.5f, 5.0f, 170.0f, "FOV:%.0f"))
+			{
+				InOutActiveViewport = this;
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Field of View (FOV: %.1f deg)", mCamera.mFovDegree);
+			}
+
+			ImGui::SameLine();
+			ImGui::SetNextItemWidth(60.0f);
+			if (ImGui::DragFloat("##Sens", &mCamera.Sensitivity, 0.005f, 0.01f, 1.0f, "Sens:%.2f", ImGuiSliderFlags_AlwaysClamp))
+			{
+				InOutActiveViewport = this;
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Camera Sensitivity: %.3f", mCamera.Sensitivity);
+			}
+		}
+		else
+		{
+			ImGui::SameLine();
+			if (ImGui::Button("..."))
+			{
+				ImGui::OpenPopup("CamOptPopup");
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("Camera Settings (FOV, Sensitivity)");
+			}
+
+			if (ImGui::BeginPopup("CamOptPopup"))
+			{
+				ImGui::Text("Camera Settings [#%d]", ViewportIndex + 1);
+				ImGui::Separator();
+				ImGui::SliderFloat("FOV", &mCamera.mFovDegree, 5.0f, 170.0f, "%.1f deg");
+				ImGui::SliderFloat("Sensitivity", &mCamera.Sensitivity, 0.01f, 1.0f, "%.3f");
+				ImGui::DragFloat("Speed", &mCamera.Speed, 0.2f, 0.1f, 50.0f, "%.1f");
+				ImGui::EndPopup();
+			}
+		}
+
+		ImGui::SameLine();
+
+		// 포커스 버튼
+		if (ImGui::Button("F"))
+		{
+			FocusOnActor(SelectedActor);
+			InOutActiveViewport = this;
+		}
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("Focus on selected actor (F)");
+		}
+
+		// 최대화 토글 버튼
+		if (rightButtonX > ImGui::GetCursorPosX() + 4.0f)
+		{
+			ImGui::SetCursorPos(ImVec2(rightButtonX, startCursorPos.y + rect.Top + 2.0f));
+			const char* maxIcon = (InOutMaximizedIndex == ViewportIndex) ? "■" : "□";
+			if (ImGui::Button(maxIcon, ImVec2(maxBtnWidth, 0.0f)))
+			{
+				InOutMaximizedIndex = (InOutMaximizedIndex == ViewportIndex) ? -1 : ViewportIndex;
+				InOutActiveViewport = this;
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip(InOutMaximizedIndex == ViewportIndex ? "Restore Viewport" : "Maximize Viewport");
+			}
+		}
+	}
+
+	ImGui::PopID();
 }
 

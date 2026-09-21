@@ -9,6 +9,8 @@
 #include "FStatManager.h"
 #include "enum.h"
 
+#include "SWindow.h"
+
 class AActor;
 class FSceneManager;
 class URenderer;
@@ -17,6 +19,7 @@ class FFontAtlas;
 struct FRenderTarget2D;
 struct FDepthStencil;
 class FGraphicsManager;
+struct ImVec2;
 
 enum class EViewportType
 {
@@ -56,6 +59,17 @@ public:
 
 	void SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight);
 	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
+
+	void Draw(FGraphicsManager* GraphicsMgr, FSceneManager* SceneMgr);
+	void DrawViewportUI(
+		const FRect& rect,
+		int32 ViewportIndex,
+		FEditorViewportClient*& InOutActiveViewport,
+		int32& InOutMaximizedIndex,
+		AActor* SelectedActor,
+		const ImVec2& startCursorPos,
+		const ImVec2& screenCursorPos
+	);
 
 	void SetViewportType(EViewportType InType);
 	void FocusOnActor(AActor* TargetActor);
