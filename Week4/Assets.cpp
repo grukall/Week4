@@ -243,6 +243,7 @@ UAsset* FFontAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetS
 		FT_Done_Face(Face);
 		return nullptr;
 	}
+	FString AssetPath = AssetName.ToString();
 
 	return FObjectFactory::ConstructObject<UFont>(AssetName, Face, std::move(FileContent));
 }

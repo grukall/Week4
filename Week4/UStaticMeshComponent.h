@@ -41,6 +41,4 @@ public:
 	}
 protected:
 	UStaticMesh* StaticMesh = nullptr;
-	
-	TArray<UMaterial*> OverrideMaterials;
 };

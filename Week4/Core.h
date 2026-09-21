@@ -61,7 +61,6 @@ public:
 	inline operator std::string() const { return *mData; }
 	inline operator std::string_view() const { return *mData; }
 
-	FString& Append(std::string_view str);
 	FString& Append(const FString& str);
 	FString& AppendChar(char c);
 

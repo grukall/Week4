@@ -128,24 +128,21 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager->RegisterAsset(PlaneAsset);
 
 
-	FTexture2DAssetLoader* TextureLoader = new FTexture2DAssetLoader(*renderer);
-	FFontAssetLoader* FontLoader = new FFontAssetLoader(*mFontManager);
-
 	FFileAssetSource* FileAssetSource = new FFileAssetSource(*mFileManager, "Textures/Test.jpg");
-	mAssetManager->RegisterAsset(FName("TestTexture"), TextureLoader, FileAssetSource);
+	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("TestTexture"), FileAssetSource, *renderer);
 
 	FFileAssetSource* SpotLightIconAssetSource = new FFileAssetSource(*mFileManager, "Textures/Icon_SpotLight.png");
-	mAssetManager->RegisterAsset(FName("SpotLightIcon"), TextureLoader, SpotLightIconAssetSource);
+	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("SpotLightIcon"), SpotLightIconAssetSource, *renderer);
 
 	FFileAssetSource* ExplosionTextureSource = new FFileAssetSource(*mFileManager, "Textures/ExplosionAtlas.png");
-	mAssetManager->RegisterAsset(FName("ExplosionTexture"), TextureLoader, ExplosionTextureSource);
+	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("ExplosionTexture"), ExplosionTextureSource, *renderer);
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
 	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
 	mAssetManager->RegisterAsset(ExplosionSpriteAtlasAsset);
 
 	FFileAssetSource* FontAssetSource = new FFileAssetSource(*mFileManager, "Fonts/BMKkubulimTTF.ttf");
-	mAssetManager->RegisterAsset(FName("TestFont"), FontLoader, FontAssetSource);
+	mAssetManager->RegisterAsset<FFontAssetLoader>(FName("TestFont"), FontAssetSource, *mFontManager);
 	
 	UFont* TestFontAsset = mAssetManager->GetAssetAs<UFont>(FName("TestFont"), true);
 	UFontAtlas* FontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("TestFontAtlas"), *renderer, TestFontAsset, 512, 512, 2, 2);
@@ -153,7 +150,7 @@ void FEngineLoop::InitAssetManager()
 
 	// 스탯 HUD용 고정폭 폰트. 숫자가 바뀌어도 글자 폭이 같아야 표가 흔들리지 않는다.
 	FFileAssetSource* StatFontSource = new FFileAssetSource(*mFileManager, "Fonts/RobotoMono-Regular.ttf");
-	mAssetManager->RegisterAsset(FName("StatFont"), FontLoader, StatFontSource);
+	mAssetManager->RegisterAsset<FFontAssetLoader>(FName("StatFont"), StatFontSource ,*mFontManager);
 
 	UFont* StatFontAsset = mAssetManager->GetAssetAs<UFont>(FName("StatFont"), true);
 	UFontAtlas* StatFontAtlasAsset = FObjectFactory::ConstructObject<UFontAtlas>(FName("StatFontAtlas"), *renderer, StatFontAsset, 512, 512, 2, 2);

@@ -79,6 +79,10 @@ public:
 	}
 
 	uint32 AddMaterial(UMaterial* InMaterial);
+
+	// 슬롯만 비운다. 머티리얼 자체의 수명은 이 메시를 만든 로더가 책임진다.
+	inline void ClearMaterials() { Materials.Empty(); }
+
 	int32 FindMaterialSlot(UMaterial* InMaterial) const;
 
 	void SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial);

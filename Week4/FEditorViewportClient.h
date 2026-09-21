@@ -42,10 +42,12 @@ public:
 	FCamera mCamera;
 	FGizmo mGizmo;
 
-private:
-
+	// 뷰포트마다 자기 렌더타겟을 쓰므로, 이 뷰포트를 그리기 직전에 호출해야 한다.
+	// ViewportW/H는 그 렌더타겟 크기(= mWidth/mHeight)이고 원점은 (0,0)이다.
 	void DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas,
 		FRenderCollector& Collector, float ViewportW, float ViewportH);
+
+private:
 
 	void GatherStatFPS(TArray<FStatRow>& Rows);
 	void GatherStatUnit(TArray<FStatRow>& Rows);

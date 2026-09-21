@@ -5,11 +5,23 @@
 #include "TMap.h"
 #include "TArray.h"
 
+#include <typeinfo>
+#include <type_traits>
+#include <utility>
+
 struct FAssetMetaInfo
 {
+	// FAssetManager 조회 키. 경로처럼 유일성이 필요한 문자열이 들어올 수 있다.
 	FName AssetName;
+
+	// 사람이 읽는 표시 이름(파일 stem). UAsset::AssetName으로 그대로 넘어간다.
+	FName Stem;
+
 	FAssetLoader* AssetLoader = nullptr;
 	FAssetSource* AssetSource = nullptr;
+
+	// 지금 메모리에 로드돼 있으면 그 인스턴스, 아니면 nullptr.
+	UAsset* LoadedAsset = nullptr;
 };
 
 class FAssetManager
@@ -20,12 +32,37 @@ public:
 
 	static FAssetManager& Get();
 
-	// 로더와 소스의 소유권은 에셋 매니저가 가져간다. 같은 로더를 여러 에셋에 넘겨도 된다.
-	void RegisterAsset(const FName& AssetName, FAssetLoader* AssetLoader, FAssetSource* AssetSource);
+	template <typename TLoader, typename... TArgs>
+	void RegisterAsset(const FName& AssetName, FAssetSource* AssetSource, TArgs&&... Args)
+	{
+		RegisterAssetInternal(AssetName, GetOrCreateLoader<TLoader>(std::forward<TArgs>(Args)...), AssetSource);
+	}
+
 	void RegisterAsset(UAsset* Asset);
+
+	// 같은 타입의 로더를 이미 갖고 있으면 그걸 돌려주고, 없으면 Args로 만들어 소유 목록에 넣는다.
+	template <typename TLoader, typename... TArgs>
+	TLoader* GetOrCreateLoader(TArgs&&... Args)
+	{
+		static_assert(std::is_base_of_v<FAssetLoader, TLoader>, "TLoader must derive from FAssetLoader.");
+
+		for (FAssetLoader* loader : OwnedLoaders)
+		{
+			// 파생 타입이 기반 타입으로 잘못 잡히지 않도록 정확히 같은 타입만 재사용한다.
+			if (loader && typeid(*loader) == typeid(TLoader))
+			{
+				return static_cast<TLoader*>(loader);
+			}
+		}
+
+		TLoader* newLoader = new TLoader(std::forward<TArgs>(Args)...);
+		OwnedLoaders.Add(newLoader);
+
+		return newLoader;
+	}
 	void UnregisterAsset(const FName& AssetName);
 
-	UAsset* LoadAsset(const FName& AssetName);
+	UAsset* LoadAsset(const FName& AssetName, bool bImport = false);
 	UAsset* GetAsset(const FName& AssetName, bool loadIfNotLoaded = false);
 
 	template <typename T>
@@ -52,10 +89,15 @@ public:
 	}
 
 private:
-	TMap<FName, FAssetMetaInfo, FNameHasher> AssetMetaInfoMap;
-	TMap<FName, UAsset*, FNameHasher> LoadedAssets;
+	void RegisterAssetInternal(const FName& AssetName, FAssetLoader* AssetLoader, FAssetSource* AssetSource);
 
-	// 등록된 로더와 소스를 중복 없이 모아 두고 소멸 시점에 정리한다.
+	// 재임포트로 OldAsset이 통째로 새 인스턴스(NewAsset)로 바뀌었을 때,
+	// OldAsset을 직접 들고 있던 참조들을 찾아 NewAsset으로 다시 묶는다.
+	void RebindReferences(UAsset* OldAsset, UAsset* NewAsset);
+
+	TMap<FName, FAssetMetaInfo, FNameHasher> AssetMetaInfoMap;
+
+	// 로더는 타입 하나당 인스턴스 하나를 여러 에셋이 공유하므로 별도로 소유 목록을 둔다.
+	// 소스는 AssetMetaInfo 하나가 전용으로 소유하므로 별도 목록이 필요 없다.
 	TArray<FAssetLoader*> OwnedLoaders;
-	TArray<FAssetSource*> OwnedSources;
 };

@@ -84,6 +84,14 @@ void FFileManager::WriteStringToFile(const std::filesystem::path& requestedPath,
     fileStream << content;
 }
 
+std::filesystem::path FFileManager::MakeRelativeToRoot(const std::filesystem::path& filePath) const
+{
+    const auto absoluteFile = std::filesystem::weakly_canonical(filePath);
+    const auto absoluteRoot = std::filesystem::weakly_canonical(mRootPath);
+
+    return std::filesystem::relative(absoluteFile, absoluteRoot);
+}
+
 bool FFileManager::IsUnderRoot(const std::filesystem::path& filePath) const
 {
 	return IsUnder(filePath, mRootPath);

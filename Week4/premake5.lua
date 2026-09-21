@@ -11,6 +11,7 @@ project "Week4"
 
     files {
         "**.cpp",
+        "**.cc",
         "**.h",
         "../Assets/**",
     }

@@ -178,12 +178,8 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 	}
 
 	//Stat정보 표시가 켜져 있으면 드로우한다.
-	if (UFontAtlas* StatFontAtlas = GEngineLoop.GetAssetManager()->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
-	{
-		// 좌표계가 뷰포트(ImGui 패널) 기준이므로 창 크기가 아니라 패널 크기를 넘긴다.
-		DrawStatsHUD(FStatManager::Get(), StatFontAtlas, RenderCollector,
-			sceneManager->GetViewportWidth(), sceneManager->GetViewportHeight());
-	}
+	// 스탯 HUD는 여기가 아니라 렌더 루프에서 그린다.
+	// 뷰포트마다 렌더타겟과 2D 투영이 따로라, 그 뷰포트를 그리기 직전에 쿼드를 모아야 한다.
 }
 
 namespace
