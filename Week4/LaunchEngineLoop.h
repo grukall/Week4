@@ -31,6 +31,8 @@ public:
 
 	FAssetManager* GetAssetManager() { return mAssetManager; }
 	FStatManager* GetStatManager() { return mStatManager; }
+	TArray<FEditorViewportClient*>& GetViewportClients() { return ViewportClients; }
+	FEditorViewportClient* GetActiveViewportClient() { return ActiveViewportClient; }
 
 private:
 	void InitAssetManager();

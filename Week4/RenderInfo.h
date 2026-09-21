@@ -106,6 +106,14 @@ public:
 		Quad2DInfos.Empty();
 	}
 
+	// 2D 화면 오버레이(스탯 HUD 등)만 비운다. 뷰포트마다 렌더타겟이 따로라
+	// 한 뷰포트를 그린 직후 여기서 비우지 않으면, 다음 뷰포트를 그릴 때
+	// 이전 뷰포트용으로 쌓인 쿼드까지 같이 그려진다.
+	inline void ClearScreenQuads()
+	{
+		Quad2DInfos.Empty();
+	}
+
 	inline const TArray<FRenderQuadInfo>& GetOpaqueQuadInfos() const { return OpaqueQuadInfos; }
 	inline const TArray<FRenderQuadInfo>& GetTransparentQuadInfos() const { return TransparentQuadInfos; }
 	inline const TArray<FRenderQuadInfo>& GetOverlayQuadInfos() const { return OverlayQuadInfos; }

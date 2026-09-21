@@ -7,6 +7,7 @@
 #include "FLogManager.h"
 #include "Material.h"
 #include "UStaticMeshComponent.h"
+#include "FAssetManager.h"
 
 namespace
 {
@@ -197,15 +198,22 @@ namespace
 					}
 				}
 
-				// 해당 클래스와 그 파생만 나열된다.
-				for (TObjectIterator<UAsset> It(Property.ClassInfo); It; ++It)
+				// 로드 여부와 무관하게, FAssetManager가 아는 것(=디스크에서 스캔했거나 이미 로드된 것)을
+				// 전부 나열한다. 로드는 실제로 골랐을 때만 한다.
+				FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
 				{
-					UAsset* Asset = *It;
-					const bool bSelected = (Asset == CurrentAsset);
-
-					FString AssetName = Asset->GetAssetName().ToString();
-					if (ImGui::Selectable(AssetName.c_str(), bSelected))
+					if (!MetaInfo.AssetClass || !MetaInfo.AssetClass->IsChildOf(Property.ClassInfo))
 					{
+						return;
+					}
+
+					const bool bSelected = (MetaInfo.LoadedAsset == CurrentAsset);
+
+					FString AssetLabel = MetaInfo.Stem.ToString();
+					if (ImGui::Selectable(AssetLabel.c_str(), bSelected))
+					{
+						// 여기서 처음 로드될 수 있다 — 지금까지 존재만 알고 있던 걸 실제로 불러오는 시점.
+						UAsset* Asset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
 						*AssetSlot = Asset;
 
 						if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>()) {
@@ -226,7 +234,7 @@ namespace
 					{
 						ImGui::SetItemDefaultFocus();
 					}
-				}
+				});
 				ImGui::EndCombo();
 			}
 			break;
