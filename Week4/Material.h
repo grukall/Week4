@@ -228,6 +228,8 @@ public:
 	void SetUVSpeed(const FVector2& InSpeed)
 	{
 		UVSpeed = InSpeed;
+		if (UVSpeed.X == 0.0f && UVSpeed.Y == 0.0f)
+			UVScroll = FVector2(0.0f,0.0f);
 	}
 
 	const FVector2 GetUVSpeed() const

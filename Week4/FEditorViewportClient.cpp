@@ -111,7 +111,14 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 
 	if (bAllowMouse && Input.MouseWheelDelta != 0.0f) {
 		mViewerDistance *= FMath::Pow(1.2f, -Input.MouseWheelDelta);
-		mViewerDistance = FMath::Clamp(mViewerDistance, 0.1f, 100.0f);
+		float minDistance = mBaseRadius * 0.1f;
+		float maxDistance = mBaseRadius * 10.0f;
+		mViewerDistance = FMath::Clamp(mViewerDistance, minDistance, maxDistance);
+
+		if (mBaseRadius > KINDA_SMALL_NUMBER) {
+			mZoomFactor = mViewerDistance / mBaseRadius;
+		}
+
 		UpdateViewerCamera();
 	}
 
@@ -297,37 +304,6 @@ namespace
 	}
 }
 
-void FEditorViewportClient::FocusOnMesh(const UStaticMesh* StaticMesh)
-{
-	if (StaticMesh == nullptr) return;
-
-	const FAABB& Bounds = StaticMesh->GetLocalBoundingBox();
-
-	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
-	const FVector Extent = (Bounds.Max - Bounds.Min) * 0.5f;
-
-	const float Radius = Extent.Length();
-
-	if (Radius <= KINDA_SMALL_NUMBER) {
-		return;
-	}
-
-#if IS_OBJ_VIEWER
- 	mViewerTarget = Center;
-	mViewerDistance = Radius * 3.0f;
-	mViewerYaw = 0.0f;
-	mViewerPitch = 0.0f;
-	UpdateViewerCamera();
-#else
-
-
-	const float HalfFovRadians = mCamera.mFovDegree * 0.5f * PI / 180.0f;
-	const float Distance = Radius / tanf(HalfFovRadians) * 1.2f;
-	mCamera.Transform.Location = Center - mCamera.GetForwardVector() * Distance;
-	mCamera.Velocity = FVector(0.0f);
-#endif
-}
-
 void FEditorViewportClient::FocusOnViewerActor()
 {
 	if (mViewerActor == nullptr) return;
@@ -350,10 +326,10 @@ void FEditorViewportClient::FocusOnViewerActor()
 	{
 		return;
 	}
-
+	mBaseRadius = Radius;
 	mViewerTarget = Center;
-	mViewerDistance = Radius * 3.0f;
-
+	mViewerDistance = Radius * mZoomFactor;
+	mCamera.farZ = mViewerDistance + Radius * 10.f;
 	UpdateViewerCamera();
 }
 

@@ -78,7 +78,6 @@ public:
 	float mViewportLeft = 0.0f;
 	float mViewportTop = 0.0f;
 
-	void FocusOnMesh(const UStaticMesh* StaticMesh);
 	void FocusOnViewerActor();
 	void SetViewerActor(AActor* InActor);
 	void UpdateViewerCamera();
@@ -88,6 +87,8 @@ public:
 	float mViewerYaw = 0.0f;
 	float mViewerPitch = 0.0f;
 	float mViewerDistance = 5.0f;
+	float mBaseRadius = 1.0f;
+	float mZoomFactor = 3.0f;
 
 	// 이 뷰포트에서 어떤 stat 커맨드가 켜져 있는가(UE5처럼 뷰포트마다 따로 켤 수 있다).
 	// 콘솔의 "Stat X" 명령이 ActiveViewportClient의 이 맵을 바꾼다.

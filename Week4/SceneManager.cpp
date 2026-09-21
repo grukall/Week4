@@ -1193,8 +1193,8 @@ void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 				if (NewActor != nullptr) {
 					mCurrentWorld->AddActor(NewActor);
 					ViewportClient->SetViewerActor(NewActor);
+					ViewportClient->FocusOnViewerActor();
 					ViewportClient->Reset();
-					ViewportClient->FocusOnMesh(MeshAsset);
 				}
 			}
 
@@ -1243,7 +1243,6 @@ void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 		if (mPropertyPanel != nullptr) {
 			mPropertyPanel->OnPropertyChanged = [ViewportClient]() {
 				ViewportClient->FocusOnViewerActor();
-				ViewportClient->FocusOnMesh(ViewportClient->mViewerActor->GetRootComponent()->Cast<UStaticMeshComponent>()->GetStaticMesh());
 			};
 			mPropertyPanel->SetTarget(ViewportClient->mViewerActor);
 			mPropertyPanel->OnRender();

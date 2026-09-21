@@ -513,10 +513,10 @@ void FPropertyPanel::OnRender()
 
 		bool bTransformChanged = false;
 
-		bTransformChanged |= DrawVector3Controller("Location", Transform.Location, 0.0f, 10.0f);
+		DrawVector3Controller("Location", Transform.Location, 0.0f, 10.0f);
 
 		FVector Rotation = FVector(Transform.Rotation.Roll, Transform.Rotation.Pitch, Transform.Rotation.Yaw);
-		bTransformChanged |= DrawVector3Controller("Rotation", Rotation, 0.0f, 10.0f);
+		DrawVector3Controller("Rotation", Rotation, 0.0f, 10.0f);
 
 		Transform.Rotation = FRotator(Rotation.y, Rotation.z, Rotation.x);
 		bTransformChanged |= DrawVector3Controller("Scale", Transform.Scale, 0.0f, 10.0f);
@@ -543,11 +543,6 @@ void FPropertyPanel::OnRender()
 				if (StaticMeshComponent)
 				{
 					bool bStaticMeshChanged = DrawStaticMeshMaterials(StaticMeshComponent);
-
-					if (bStaticMeshChanged && OnPropertyChanged)
-					{
-						OnPropertyChanged();
-					}
 				}
 			}
 		}
