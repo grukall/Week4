@@ -168,16 +168,16 @@ void FGraphicsManager::Render()
 			mMeshPipeline->SetShaderResource(2, nullptr);
 			mMeshPipeline->SetShaderResource(3, nullptr);
 			if (AmbientTexture)
-				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV().Get());
 
 			if (DiffuseTexture)
-				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV().Get());
 
 			if (SpecularTexture)
-				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV().Get());
 
 			if (BumpTexture)
-				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV().Get());
 
 			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
 			mMeshPipeline->SetSamplerState(1, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);

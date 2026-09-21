@@ -106,6 +106,7 @@ void UStaticMesh::BuildRenderBuffers(URenderer& InRenderer)
 		const FVertexSimple& Vertex = Vertices[Indices[i]];
 		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
 	}
+
 }
 
 void UStaticMesh::SetData(const TArray<FVertexSimple>& InVertices, const TArray<uint32>& InIndices, const TArray<FStaticMeshSection>& InSections)
