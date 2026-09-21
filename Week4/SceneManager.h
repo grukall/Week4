@@ -111,6 +111,7 @@ private:
 	void drawAssetGrid();
 
 	SWindow* mRootWindow;
+	int mMaximizedViewportIndex = -1;
 
 	void updateControlPanelGUI(const FGuiReference& guiReference);
 

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Matrix.h"
 #include "Enum.h"
@@ -25,7 +25,7 @@ public:
 	FGraphicsManager(HWND hWindow);
 	~FGraphicsManager();
 
-	void Prepare(const FCamera* Camera,float viewportWidth, float viewportHeight);
+	void Prepare(const FCamera* Camera, float viewportWidth, float viewportHeight, float projectionRatio = 1.0f, EViewModeIndex viewMode = EViewModeIndex::VMI_Lit);
 	void Render();
 	void Display();
 	void Update(float deltaTime);
@@ -90,8 +90,11 @@ private:
 	// Prepare에서 갱신. 하이라이트 두께의 픽셀 → 월드 환산에 쓴다
 	FVector mCameraLocation;
 	FVector mCameraForward;
+	FRotator mCameraRotation;
 	float mCameraFovDegree = 60.0f;
 	float mCameraOrthoDistance = 10.0f;
+	float mCurrentProjectionRatio = 1.0f;
+	float mCurrentViewportHeight = 0.0f;
 
 	// Graphics config
 	// 이번 프레임에 쌓인 선분. 정점 2개가 선분 하나

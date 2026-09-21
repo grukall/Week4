@@ -51,6 +51,7 @@ public:
 		QuadInfo.BlendMode = mBlendMode;
 		QuadInfo.EnableDepthTest = mEnableDepthTest;
 		QuadInfo.EnableDepthWrite = mEnableDepthWrite;
+		QuadInfo.bIsBillboard = mbBillboard;
 
 		RenderCollector.AddQuadInfo(QuadInfo);
 	}

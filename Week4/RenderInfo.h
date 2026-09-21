@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Transform.h"
 #include "Object.h"
@@ -45,6 +45,12 @@ struct FRenderQuadInfo
 	ERenderBlendMode BlendMode = ERenderBlendMode::Opaque;
 	bool EnableDepthTest = true;
 	bool EnableDepthWrite = true;
+	bool bIsBillboard = false;
+
+	// 복합 빌보드(3D 텍스트 등): 피벗을 중심으로 평면 전체 회전 지원
+	bool bCustomPivot = false;
+	FVector PivotLocation = FVector(0.f);
+	FMatrix LocalTransform = FMatrix::Identity;
 };
 
 struct FRenderLineInfo

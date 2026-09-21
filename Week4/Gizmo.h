@@ -23,9 +23,10 @@ class FGizmo
 {
 public:
     FGizmo(URenderer& InRenderer);
-    void SetWorldMode(bool bInWorldMode);
-    void SetOperation(EGIZMO_TYPE Operation);
-    EGIZMO_TYPE GetOperation() const;
+    static void SetWorldMode(bool bInWorldMode);
+    static void SetOperation(EGIZMO_TYPE Operation);
+    static EGIZMO_TYPE GetOperation();
+    static bool IsWorldMode();
 
     void Update(FSceneManager* SceneManager, const FMatrix& ViewProjection, float ViewportAbsX, float ViewportAbsY, float ViewportWidth, float ViewportHeight);
     void Render(FSceneManager* SceneManager, const FVector& CameraPosition, const FMatrix& ViewProjection, float ViewportWidth, float ViewportHeight);
@@ -48,8 +49,8 @@ private:
 
     URenderer& Renderer;
 
-    EGIZMO_TYPE CurrentOperation = EGIZMO_TYPE::TRANSLATE;
-    bool bWorldMode = true;
+    static inline EGIZMO_TYPE CurrentOperation = EGIZMO_TYPE::TRANSLATE;
+    static inline bool bWorldMode = true;
     bool bIsSelected = false;
     bool bIsHoveredAxis = false;
 

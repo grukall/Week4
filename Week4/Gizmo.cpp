@@ -27,27 +27,22 @@ void FGizmo::BuildHandleSegments(const FVector& CameraLocation, const FMatrix& V
 
 void FGizmo::SetWorldMode(bool bInWorldMode)
 {
-	if (bWorldMode != bInWorldMode)
-	{
-		Reset();
-	}
-
     bWorldMode = bInWorldMode;
 }
 
 void FGizmo::SetOperation(EGIZMO_TYPE Operation)
 {
-    if (CurrentOperation != Operation) 
-	{
-		Reset();
-	}
-
     CurrentOperation = Operation;
 }
 
-EGIZMO_TYPE FGizmo::GetOperation() const 
+EGIZMO_TYPE FGizmo::GetOperation()
 { 
 	return CurrentOperation; 
+}
+
+bool FGizmo::IsWorldMode()
+{
+    return bWorldMode;
 }
 
 bool FGizmo::IsMouseOverHandle() const 
