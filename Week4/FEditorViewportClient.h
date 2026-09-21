@@ -60,7 +60,7 @@ public:
 	void SetViewportType(EViewportType InType);
 	void FocusOnActor(AActor* TargetActor);
 
-	float GetPerspectiveRatio() const { return bIsOrthographic ? 0.0f : 1.0f; }
+	float GetPerspectiveRatio(float GlobalPerspectiveRatio = 1.0f) const { return bIsOrthographic ? 0.0f : GlobalPerspectiveRatio; }
 
 	EViewportType ViewportType = EViewportType::Perspective;
 	EViewModeIndex ViewMode = EViewModeIndex::VMI_Lit;

@@ -93,6 +93,8 @@ private:
 	FRotator mCameraRotation;
 	float mCameraFovDegree = 60.0f;
 	float mCameraOrthoDistance = 10.0f;
+	float mCurrentProjectionRatio = 1.0f;
+	float mCurrentViewportHeight = 0.0f;
 
 	// Graphics config
 	// 이번 프레임에 쌓인 선분. 정점 2개가 선분 하나

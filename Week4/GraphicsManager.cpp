@@ -80,6 +80,8 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	mCameraRotation = mCamera->Transform.Rotation;
 	mCameraFovDegree = mCamera->mFovDegree;
 	mCameraOrthoDistance = mCamera->mOrthoDistance;
+	mCurrentProjectionRatio = projectionRatio;
+	mCurrentViewportHeight = viewportHeight;
 
 	// 그리는 순서가 중요하다: 가까운 것을 먼저, 먼 것을 나중에.
 	// 깊이 테스트가 켜져 있으면 나중에 그린 FarCube 가 깊이 비교에서 탈락해
@@ -358,11 +360,12 @@ void FGraphicsManager::RenderHighLight(const FRenderInfo& RI)
 	const float Depth = FVector::dot(ObjectLocation - mCameraLocation, mCameraForward);
 	const float TanHalfFov = tanf(FMath::DegreesToRadians(mCameraFovDegree * 0.5f));
 	const float effectiveDepth = FMath::Max(
-		(1.0f - mProjectionRatio) * mCameraOrthoDistance + mProjectionRatio * Depth
+		(1.0f - mCurrentProjectionRatio) * mCameraOrthoDistance + mCurrentProjectionRatio * Depth
 		, 0.01f);
 	//const float H = mbPerspectiveProjection ? 2.0f * Depth * TanHalfFov : 5.774f;
 	const float H = 2.0f * effectiveDepth * TanHalfFov;
-	const float WorldThickness = OUTLINE_PIXELS * H / mRenderer->GetHeight();
+	const float ViewportH = (mCurrentViewportHeight > 0.0f) ? mCurrentViewportHeight : static_cast<float>(mRenderer->GetHeight());
+	const float WorldThickness = OUTLINE_PIXELS * H / ViewportH;
 
 
 	// 축마다 월드 공간에서 WorldThickness 만큼만 자라도록 배율을 따로 구한다.
