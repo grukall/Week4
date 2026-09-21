@@ -94,6 +94,10 @@ FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath,
 		UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(Stem);
 		NewMesh->SetData(StaticMesh.Vertices, StaticMesh.Indices, StaticMesh.Sections);
 
+		// 원본 obj의 절대경로를 .uasset에 같이 저장해둔다 — 재시작 후 ScanBakedAssets가
+		// 이걸로 ImportSource를 복원해야 재임포트 판단(FindAssetByImportPath)이 세션을 넘어 유지된다.
+		NewMesh->SetAssetPath(FString(FileSource.GetFilePath().string()));
+
 		std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
 		TArray<FName> MaterialKeys;
 
@@ -277,6 +281,10 @@ UAsset* FMaterialAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& As
 	Material->SetSpecularColor(Data.SpecularColor);
 	Material->SetEmissiveColor(Data.EmissiveColor);
 	Material->SetTransmissionFilter(Data.TransmissionFilter);
+
+	
+	//이번 로드 호출 때 로드된 텍스쳐 목록
+	TArray<FName> TexturesLoadedThisCall;
 
 	auto LoadTexture = [&](const FString& Filename) -> UTexture2D* {
 		if (Filename.empty()) {
