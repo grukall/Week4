@@ -72,23 +72,23 @@ public:
 
 	void Tick(float DeltaTime) override
 	{
-		if (mBillboardCamera && mbBillboard)
-		{
-			// Match the camera's full orientation, including roll.
-			SetRelativeRotation(mBillboardCamera->Transform.Rotation);
-		}
-		
-		USceneComponent* RootComponent = mOwner->GetRootComponent();
-		if (RootComponent)
-		{
-			FVector Location = RootComponent->GetRelativeLocation();
-			// Place billboard labels above the actor along the camera's screen-up axis.
-			const FVector LabelUp = (mBillboardCamera && mbBillboard)
-				? mBillboardCamera->GetUpVector()
-				: FVector(0.f, 0.f, 1.f);
-			Location += LabelUp * 1.0f;
-			SetRelativeLocation(Location);
-		}
+		//if (mBillboardCamera && mbBillboard)
+		//{
+		//	// Match the camera's full orientation, including roll.
+		//	SetRelativeRotation(mBillboardCamera->Transform.Rotation);
+		//}
+		//
+		//USceneComponent* RootComponent = mOwner->GetRootComponent();
+		//if (RootComponent)
+		//{
+		//	FVector Location = RootComponent->GetRelativeLocation();
+		//	// Place billboard labels above the actor along the camera's screen-up axis.
+		//	const FVector LabelUp = (mBillboardCamera && mbBillboard)
+		//		? mBillboardCamera->GetUpVector()
+		//		: FVector(0.f, 0.f, 1.f);
+		//	Location += LabelUp * 1.0f;
+		//	SetRelativeLocation(Location);
+		//}
 	}
 
 	void Render(FRenderCollector& RenderCollector) override
@@ -175,9 +175,10 @@ public:
 			float WorldBearingY = Glyph.BearingY * WorldUnitPerPixel;
 
 			FVector GlyphCenter(TextLocation.x, TextLocation.y + WorldBearingX + WorldWidth * 0.5f, TextLocation.z + WorldBearingY - WorldHeight * 0.5f);
-			FMatrix TextModel = FMatrix::Scale(FVector3(1.0f, WorldWidth, WorldHeight)) * FMatrix::Translation(GlyphCenter);
+			FMatrix TextLocalModel = FMatrix::Scale(FVector3(1.0f, WorldWidth, WorldHeight)) * FMatrix::Translation(GlyphCenter);
+			TextLocalModel *= FMatrix::Scale(PivotTransform.Scale);
 
-			TextModel *= PivotTransform.MakeMatrix();
+			FMatrix TextModel = TextLocalModel * FMatrix::Rotate(PivotTransform.Rotation) * FMatrix::Translation(PivotTransform.Location);
 
 			FRenderQuadInfo QuadInfo;
 			QuadInfo.Model = TextModel;
@@ -187,6 +188,10 @@ public:
 			QuadInfo.BlendMode = ERenderBlendMode::Transparent;
 			QuadInfo.EnableDepthTest = mEnableDepthTest;
 			QuadInfo.EnableDepthWrite = mEnableDepthWrite;
+			QuadInfo.bIsBillboard = mbBillboard;
+			QuadInfo.bCustomPivot = true;
+			QuadInfo.PivotLocation = PivotTransform.Location;
+			QuadInfo.LocalTransform = TextLocalModel;
 
 			RenderCollector.AddQuadInfo(QuadInfo);
 

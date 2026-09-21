@@ -1,4 +1,4 @@
-﻿#include "GraphicsManager.h"
+#include "GraphicsManager.h"
 #include "Renderer.h"
 #include "Camera.h"
 #include "Console.h"
@@ -44,7 +44,7 @@ FGraphicsManager::~FGraphicsManager()
 	delete mRenderer;
 }
 
-void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight)
+void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight, float projectionRatio, EViewModeIndex viewMode)
 {
 	float d = mCamera->mOrthoDistance;
 	mAspect = viewportWidth / viewportHeight;
@@ -55,7 +55,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	FMatrix view = mCamera->GetViewMatrix();
 	FMatrix projection_u_p = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 1.0f);
 	FMatrix projection_u_o = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 0.0f);
-	FMatrix projection_u = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, mProjectionRatio);
+	FMatrix projection_u = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, projectionRatio);
 
 	mViewMatrix = view;
 	mProjectionMatrix = projection_u;
@@ -63,7 +63,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 
 	// 뷰 모드를 렌더러에 전달한다. BindPipeline이 드로우마다 이 값을 보고
 	// 솔리드/와이어프레임 래스터라이저를 고른다.
-	mRenderer->SetViewModeIndex(mViewModeIndex);
+	mRenderer->SetViewModeIndex(viewMode);
 
 	// 스탯 HUD 등 화면 좌표 오버레이용. 뷰포트 크기가 바뀌면 여기서 매 프레임 다시 만들어진다.
 	const FMatrix HUDProjection2D = FMatrix::Ortho(0.f, viewportWidth, viewportHeight, 0.f, 0.0f, 1.0f);
@@ -77,8 +77,11 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// 하이라이트 두께를 화면 픽셀 기준으로 환산할 때 쓴다
 	mCameraLocation = mCamera->Transform.Location;
 	mCameraForward = mCamera->GetForwardVector();
+	mCameraRotation = mCamera->Transform.Rotation;
 	mCameraFovDegree = mCamera->mFovDegree;
 	mCameraOrthoDistance = mCamera->mOrthoDistance;
+	mCurrentProjectionRatio = projectionRatio;
+	mCurrentViewportHeight = viewportHeight;
 
 	// 그리는 순서가 중요하다: 가까운 것을 먼저, 먼 것을 나중에.
 	// 깊이 테스트가 켜져 있으면 나중에 그린 FarCube 가 깊이 비교에서 탈락해
@@ -188,26 +191,49 @@ void FGraphicsManager::Render()
 		}
 	}
 
+	auto RenderQuadWithBillboard = [this](FRenderQuadInfo QuadInfo)
+	{
+		if (QuadInfo.bIsBillboard)
+		{
+			if (QuadInfo.bCustomPivot)
+			{
+				QuadInfo.Model = QuadInfo.LocalTransform * FMatrix::Rotate(mCameraRotation) * FMatrix::Translation(QuadInfo.PivotLocation);
+			}
+			else
+			{
+				const FVector Location(QuadInfo.Model.M[3][0], QuadInfo.Model.M[3][1], QuadInfo.Model.M[3][2]);
+
+				const FVector AxisX(QuadInfo.Model.M[0][0], QuadInfo.Model.M[0][1], QuadInfo.Model.M[0][2]);
+				const FVector AxisY(QuadInfo.Model.M[1][0], QuadInfo.Model.M[1][1], QuadInfo.Model.M[1][2]);
+				const FVector AxisZ(QuadInfo.Model.M[2][0], QuadInfo.Model.M[2][1], QuadInfo.Model.M[2][2]);
+				const FVector Scale(AxisX.Length(), AxisY.Length(), AxisZ.Length());
+
+				QuadInfo.Model = FMatrix::Scale(Scale) * FMatrix::Rotate(mCameraRotation) * FMatrix::Translation(Location);
+			}
+		}
+		mRenderer->RenderQuad(QuadInfo);
+	};
+
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOpaqueQuadInfos())
 	{
-		mRenderer->RenderQuad(QuadInfo);
+		RenderQuadWithBillboard(QuadInfo);
 	}
 
 	if (FShowFlags::Get().IsEnabled(EShowFlag::Grid))
 	{
 		// Match the grid's world-space half-width of 0.001.
 		mRenderer->RenderWorldAxis(mViewMatrix, mProjectionMatrix, FVector4(0.f, 0.f, 1.f, 1.f), FVector3(0.f, 0.f, 1.f), 0.002f);
-		mRenderer->RenderWorldGrid(mViewUnifiedProjectionMatrix, mCameraLocation, GridGap);
+		mRenderer->RenderWorldGrid(mViewUnifiedProjectionMatrix, mCameraLocation, static_cast<float>(GridGap));
 	}
 
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetTransparentQuadInfos())
 	{
-		mRenderer->RenderQuad(QuadInfo);
+		RenderQuadWithBillboard(QuadInfo);
 	}
 
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOverlayQuadInfos())
 	{
-		mRenderer->RenderQuad(QuadInfo);
+		RenderQuadWithBillboard(QuadInfo);
 	}
 
 	// 스탯 HUD 등 화면 좌표 오버레이. 씬 위에 덮어야 하므로 제일 마지막.
@@ -334,11 +360,12 @@ void FGraphicsManager::RenderHighLight(const FRenderInfo& RI)
 	const float Depth = FVector::dot(ObjectLocation - mCameraLocation, mCameraForward);
 	const float TanHalfFov = tanf(FMath::DegreesToRadians(mCameraFovDegree * 0.5f));
 	const float effectiveDepth = FMath::Max(
-		(1.0f - mProjectionRatio) * mCameraOrthoDistance + mProjectionRatio * Depth
+		(1.0f - mCurrentProjectionRatio) * mCameraOrthoDistance + mCurrentProjectionRatio * Depth
 		, 0.01f);
 	//const float H = mbPerspectiveProjection ? 2.0f * Depth * TanHalfFov : 5.774f;
 	const float H = 2.0f * effectiveDepth * TanHalfFov;
-	const float WorldThickness = OUTLINE_PIXELS * H / mRenderer->GetHeight();
+	const float ViewportH = (mCurrentViewportHeight > 0.0f) ? mCurrentViewportHeight : static_cast<float>(mRenderer->GetHeight());
+	const float WorldThickness = OUTLINE_PIXELS * H / ViewportH;
 
 
 	// 축마다 월드 공간에서 WorldThickness 만큼만 자라도록 배율을 따로 구한다.
