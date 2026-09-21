@@ -281,7 +281,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 								ImGui::SameLine();
 
-								// 포커스 버튼 (F)
+								// 포커스 버튼
 								if (ImGui::Button("F"))
 								{
 									Client->FocusOnActor(mSelectedActor);
@@ -292,12 +292,13 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 									ImGui::SetTooltip("Focus on selected actor (F)");
 								}
 
-								// 최대화 토글 버튼 [□] / [❐]
+								// 최대화 토글 버튼
 								const float maxBtnWidth = 22.0f;
-								if (rect.GetWidth() > 320.0f)
+								const float rightButtonX = startCursorPos.x + rect.Right - maxBtnWidth - 4.0f;
+								if (rightButtonX > ImGui::GetCursorPosX() + 4.0f)
 								{
-									ImGui::SameLine(rect.GetWidth() - maxBtnWidth - 4.0f);
-									const char* maxIcon = (mMaximizedViewportIndex == ViewportIndex) ? "❐" : "□";
+									ImGui::SetCursorPos(ImVec2(rightButtonX, startCursorPos.y + rect.Top + 2.0f));
+									const char* maxIcon = (mMaximizedViewportIndex == ViewportIndex) ? "■" : "□";
 									if (ImGui::Button(maxIcon, ImVec2(maxBtnWidth, 0.0f)))
 									{
 										mMaximizedViewportIndex = (mMaximizedViewportIndex == ViewportIndex) ? -1 : ViewportIndex;
