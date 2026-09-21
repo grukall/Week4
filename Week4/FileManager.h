@@ -22,6 +22,10 @@ public:
 
 	void WriteStringToFile(const std::filesystem::path& filePath,std::string_view content) const;
 
+	// 절대경로를 프로젝트 루트(mRootPath) 기준 상대경로로 바꾼다.
+	// 에셋 키처럼 다른 컴퓨터에서도 똑같이 재현돼야 하는 값은 절대경로가 아니라 이걸 써야 한다.
+	std::filesystem::path MakeRelativeToRoot(const std::filesystem::path& filePath) const;
+
 private:
 	std::filesystem::path mFileDirPath;
 	std::filesystem::path mRootPath;

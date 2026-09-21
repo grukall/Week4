@@ -93,6 +93,8 @@ private:
 	void DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas,
 		FRenderCollector& Collector, float ViewportW, float ViewportH);
 
+private:
+
 	void GatherStatFPS(TArray<FStatRow>& Rows);
 	void GatherStatUnit(TArray<FStatRow>& Rows);
 

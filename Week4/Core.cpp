@@ -56,12 +56,6 @@ FString& FString::operator=(FString&& other) noexcept
 	return *this;
 }
 
-FString& FString::Append(std::string_view str)
-{
-	mData->append(str);
-	return *this;
-}
-
 FString& FString::Append(const FString& str)
 {
 	mData->append(*str.mData);

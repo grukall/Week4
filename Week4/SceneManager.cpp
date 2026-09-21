@@ -715,12 +715,14 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			const std::filesystem::path& Path = selectedPath.value();
 			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
 			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
-			FTexture2DAssetLoader* Texture2DLoader = new FTexture2DAssetLoader(*Renderer);
-			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer, *guiReference.AssetManager, *Texture2DLoader);
-			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
-			FName AssetName = FName(selectedPath.value().stem().string().c_str());
-			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
-			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
+			FAssetManager* AssetManager = guiReference.AssetManager;
+
+			// Import()가 obj/mtl을 파싱해서 .uasset으로 굽고 등록까지 한다.
+			// 같은 원본을 다시 고르면 재임포트로 판단해 같은 키에 다시 굽는다.
+			FStaticMeshAssetLoader* Loader = AssetManager->GetOrCreateLoader<FStaticMeshAssetLoader>(*Renderer, *AssetManager);
+			FName AssetName = Loader->Import(Path, FileManager);
+
+			AssetManager->LoadAsset(AssetName, true);
 		}
 	}
 
@@ -863,109 +865,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	ImGui::Begin("Jungle Property Window", nullptr, flags);
 
 	mPanelWidth = ImGui::GetWindowWidth();
-
 	mPropertyPanel->OnRender();
-
-	//if (mSelectedActor)
-	//{
-	//	UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
-	//	for (UActorComponent* component : mSelectedActor->GetComponents())
-	//	{
-	//		if (component->IsA<UAtlasAnimationComponent>())
-	//		{
-	//			atlasAnimationComponent = component->Cast<UAtlasAnimationComponent>();
-	//		}
-	//	}
-
-	//	if (atlasAnimationComponent)
-	//	{
-	//		// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
-	//		TArray<FString> spriteAtlasAssetNames;
-	//		FAssetManager* assetManager = guiReference.AssetManager;
-	//		assetManager->ForEachMetaInfo([&spriteAtlasAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
-	//			UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
-	//			if (!asset || !asset->IsA<USpriteAtlas>())
-	//			{
-	//				return;
-	//			}
-	//			spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
-	//			});
-
-	//		USpriteAtlas* currentAtlas = atlasAnimationComponent->GetAtlas();
-	//		FString currentAtlasName = currentAtlas ? currentAtlas->GetAssetName().ToString() : "None";
-
-	//		if (ImGui::BeginCombo("Sprite Atlas", currentAtlasName.CStr()))
-	//		{
-	//			for (const FString& assetName : spriteAtlasAssetNames)
-	//			{
-	//				bool isSelected = (currentAtlasName == assetName);
-	//				if (ImGui::Selectable(assetName.CStr(), isSelected))
-	//				{
-	//					atlasAnimationComponent->SetAtlas(guiReference.AssetManager->GetAssetAs<USpriteAtlas>(FName(assetName), true));
-	//				}
-	//				if (isSelected)
-	//				{
-	//					ImGui::SetItemDefaultFocus();
-	//				}
-	//			}
-	//			ImGui::EndCombo();
-	//		}
-	//	}
-
-	//	// 메쉬 컴포넌트 처리
-	//	USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
-	//	if (rootComponent && rootComponent->GetRuntimeClass()->IsChildOf(UMeshComponent::GetClass()) && !rootComponent->IsA<UAtlasAnimationComponent>())
-	//	{
-	//		UMeshComponent* MeshComponent = rootComponent->Cast<UMeshComponent>();
-
-	//		UTexture2D* currentTexture = MeshComponent->GetTexture();
-	//		FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
-	//		if (ImGui::BeginCombo("Texture", currentTextureName.CStr()))
-	//		{
-	//			for (TObjectIterator<UTexture2D> It; It; ++It)
-	//			{
-	//				FName AssetName = It->GetAssetName();
-	//				bool isSelected = (currentTextureName == AssetName);
-	//				if (ImGui::Selectable(AssetName.ToString().CStr(), isSelected))
-	//				{
-	//					UTexture2D* textureAsset = guiReference.AssetManager->GetAssetAs<UTexture2D>(AssetName, true);
-	//					MeshComponent->SetTexture(textureAsset);
-	//				}
-	//				if (isSelected)
-	//				{
-	//					ImGui::SetItemDefaultFocus();
-	//				}
-	//			}
-	//			ImGui::EndCombo();
-	//		}
-
-	//		if (MeshComponent->IsA<UStaticMeshComponent>())
-	//		{
-	//			UStaticMeshComponent* StaticMeshComponent = static_cast<UStaticMeshComponent*>(MeshComponent);
-
-	//			UStaticMesh* currentMesh = StaticMeshComponent->GetStaticMesh();
-	//			FString currentMeshName = currentMesh ? currentMesh->GetAssetName().ToString() : "None";
-	//			if (ImGui::BeginCombo("Static Mesh", currentMeshName.CStr()))
-	//			{
-	//				for (TObjectIterator<UStaticMesh> It; It; ++It)
-	//				{
-	//					FName AssetName = It->GetAssetName();
-	//					bool isSelected = (currentMeshName == AssetName);
-	//					if (ImGui::Selectable(AssetName.ToString().CStr(), isSelected))
-	//					{
-	//						UStaticMesh* MeshAsset = guiReference.AssetManager->GetAssetAs<UStaticMesh>(AssetName, true);
-	//						StaticMeshComponent->SetStaticMesh(MeshAsset);
-	//					}
-	//					if (isSelected)
-	//					{
-	//						ImGui::SetItemDefaultFocus();
-	//					}
-	//				}
-	//				ImGui::EndCombo();
-	//			}
-	//		}
-	//	}
-	//}
 	ImGui::End();
 }
 

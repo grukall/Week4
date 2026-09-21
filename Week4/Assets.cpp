@@ -127,6 +127,7 @@ void UStaticMesh::Serialize(FArchive& Ar)
 	Ar << Vertices;
 	Ar << Indices;
 	Ar << Sections;
+	Ar << MaterialKeys;
 }
 
 void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
@@ -281,6 +282,7 @@ UAsset* FFontAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetS
 		FT_Done_Face(Face);
 		return nullptr;
 	}
+	FString AssetPath = AssetName.ToString();
 
 	return FObjectFactory::ConstructObject<UFont>(AssetName, Face, std::move(FileContent));
 }
