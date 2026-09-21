@@ -226,4 +226,20 @@ struct FVertexSimple
 	float nx, ny, nz; // Normal
 
 	FVector GetPosition() const { return FVector(x, y, z); }
+
+	const FString GetKey() const
+	{
+		char Buffer[128];
+		std::snprintf
+		(
+			Buffer,
+			sizeof(Buffer),
+			"%.4f,%.4f,%.4f|%.4f,%.4f,%.4f,%.4f|%.4f,%.4f|%.4f,%.4f,%.4f",
+			x, y, z,
+			r, g, b, a,
+			u, v,
+			nx, ny, nz
+		);
+		return FString(Buffer);
+	}
 };

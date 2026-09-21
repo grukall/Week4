@@ -80,7 +80,14 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	mCameraFovDegree = mCamera->mFovDegree;
 	mCameraOrthoDistance = mCamera->mOrthoDistance;
 
-	mRenderer->BindRenderTarget(mSceneRenderTarget, mSceneDepthStencil);
+	// 그리는 순서가 중요하다: 가까운 것을 먼저, 먼 것을 나중에.
+	// 깊이 테스트가 켜져 있으면 나중에 그린 FarCube 가 깊이 비교에서 탈락해
+	// NearCube(주황)가 앞에 남고, 꺼져 있으면 FarCube(파랑)가 그 위를 덮어쓴다.
+	//mRenderer->UpdateConstantViewProjection(viewProjection);
+
+	// The caller selects the render target.  Rebinding the legacy scene target here
+	// would make every viewport render into the same texture instead of the
+	// FEditorViewportClient render target that was bound for this draw.
 }
 
 void FGraphicsManager::Render()
@@ -208,8 +215,6 @@ void FGraphicsManager::Render()
 	{
 		mRenderer->RenderQuad2D(QuadInfo);
 	}
-
-	mRenderCollector.Clear();
 }
 
 void FGraphicsManager::DrawLine(const FVector& start, const FVector& end, const FVector4& color)

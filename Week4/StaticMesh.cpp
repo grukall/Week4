@@ -9,14 +9,19 @@
 
 UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
+	UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(AssetName);
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
-	FString FileContent = FileSource.ReadFileToString();
-	FObjImporter Importer = FObjImporter{};
-	FStaticMesh StaticMesh{};
-	TArray<FString> MaterialFiles;
+	std::filesystem::path BinaryPath = "Assets/Baked/" + std::string(AssetName.ToString().CStr()) + ".uasset";
 
-	StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
-	Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
+	if (ShouldImport(AssetName, FileSource.GetFilePath(), BinaryPath))
+	{
+		FString FileContent = FileSource.ReadFileToString();
+		FObjImporter Importer = FObjImporter{};
+		FStaticMesh StaticMesh{};
+		TArray<FString> MaterialFiles;
+
+		StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
+		Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
 
 	// MaterialDatas[i]가 어느 mtl 파일(절대경로)에서 왔는지 같은 인덱스로 같이 들고 있는다.
 	// 머티리얼의 진짜 출처는 obj가 아니라 mtl이라, 키를 만들 때 obj 디렉토리가 아니라 이걸 써야 한다.
@@ -93,6 +98,20 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 
 	UE_LOG("[StaticMeshLoader] mesh loaded: name=%s materials=%u sections=%u",
 		AssetName.ToString().CStr(), NewMesh->GetMaterialCount(), NewMesh->GetSectionCount());
+
+	std::filesystem::create_directories(BinaryPath.parent_path());
+	FArchiveFileWriter Writer(BinaryPath);
+	NewMesh->Serialize(Writer);
+	NewMesh->MarkDirty(false);
+	}
+	else
+	{
+		FArchiveFileReader Reader(BinaryPath);
+		NewMesh->Serialize(Reader);
+		NewMesh->MarkDirty(false);
+	}
+
+	NewMesh->BuildRenderBuffers(Renderer);
 
 	return NewMesh;
 }
@@ -175,16 +194,33 @@ void FMaterialAssetLoader::UnloadAsset(UAsset* Asset)
 	// 텍스처는 FAssetManager가 이름으로 따로 관리하므로 여기서 건드리지 않는다.
 }
 
-void FStaticMeshAssetLoader::ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices)
+bool FStaticMeshAssetLoader::ShouldImport(
+	const FName AssetName,
+	const std::filesystem::path& SourcePath,
+	const std::filesystem::path& BinaryPath
+)
 {
-	for (auto& NormalVertice : NormalVertices)
+	FString NameStr = AssetName.ToString();
+
+	bool bRequiresImport = true;
+
+	if (std::filesystem::exists(BinaryPath))
 	{
-		Vertices.Add
-		({
-			NormalVertice.Pos.x, NormalVertice.Pos.y, NormalVertice.Pos.z,
-			0.0f, 0.0f, 0.0f, 0.0f,
-			NormalVertice.UV.X, NormalVertice.UV.Y,
-			NormalVertice.Normal.x, NormalVertice.Normal.y, NormalVertice.Normal.z
-		});
+		if (std::filesystem::exists(SourcePath))
+		{
+			auto SourceTime = std::filesystem::last_write_time(SourcePath);
+			auto BinaryTime = std::filesystem::last_write_time(BinaryPath);
+
+			if (BinaryTime >= SourceTime)
+				bRequiresImport = false;
+			else
+				bRequiresImport = true;
+		}
+		else
+		{
+			bRequiresImport = false;
+		}
 	}
+
+	return bRequiresImport;
 }

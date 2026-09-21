@@ -11,7 +11,7 @@ project "Week4"
 
     files {
         "**.cpp",
-        "**.cc",
+        "**.cc",   -- CityHash 등 외부에서 가져온 원본 이름 유지용
         "**.h",
         "../Assets/**",
     }

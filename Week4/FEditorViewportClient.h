@@ -13,6 +13,9 @@ class FSceneManager;
 class URenderer;
 class UFontAtlas;
 class FFontAtlas;
+struct FRenderTarget2D;
+struct FDepthStencil;
+class FGraphicsManager;
 
 // 스탯 HUD 한 줄. 라벨은 우측 정렬, 값은 좌측 정렬로 두 열을 이룬다.
 struct FStatRow
@@ -39,8 +42,20 @@ public:
 
 	FCamera& GetCamera() { return mCamera; }
 
+	void SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight);
+	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
+
 	FCamera mCamera;
 	FGizmo mGizmo;
+	TSharedPtr<FRenderTarget2D> mRenderTarget;
+	TSharedPtr<FDepthStencil> mDepthStencil;
+	uint32 mWidth = 800;
+	uint32 mHeight = 600;
+	float mViewportX = 0.0f;
+	float mViewportY = 0.0f;
+	// 자신의 스플리터 영역 내 상대 위치
+	float mViewportLeft = 0.0f;
+	float mViewportTop = 0.0f;
 
 	// 뷰포트마다 자기 렌더타겟을 쓰므로, 이 뷰포트를 그리기 직전에 호출해야 한다.
 	// ViewportW/H는 그 렌더타겟 크기(= mWidth/mHeight)이고 원점은 (0,0)이다.

@@ -30,20 +30,25 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 	for (const FFaceGroupData& FaceGroup : RawData.FaceGroups)
 	{
 		int SlotIndex = -1;
-
-		for (int i = 0; i < Mesh.Materials.Num(); ++i)
+		if (RawData.MaterialFiles.IsEmpty())
 		{
-			if (Mesh.Materials[i] == FaceGroup.MaterialName)
-			{
-				SlotIndex = i;
-				break;
-			}
+			SlotIndex = 0;
 		}
+		else {
+			for (int i = 0; i < Mesh.Materials.Num(); ++i)
+			{
+				if (Mesh.Materials[i] == FaceGroup.MaterialName)
+				{
+					SlotIndex = i;
+					break;
+				}
+			}
 
-		if (SlotIndex == -1)
-		{
-			Mesh.Materials.Add(FaceGroup.MaterialName);
-			SlotIndex = Mesh.Materials.Num() - 1;
+			if (SlotIndex == -1)
+			{
+				Mesh.Materials.Add(FaceGroup.MaterialName);
+				SlotIndex = Mesh.Materials.Num() - 1;
+			}
 		}
 
 		FStaticMeshSection Section;
@@ -56,23 +61,28 @@ void FObjImporter::BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh)
 
 			for (int i = 1; i <= TriangleCount; ++i)
 			{
-				for (int j : { 0, i, i + 1 })
+				for (int j : { 0, i + 1, i }) // flip winding order
 				{
 					int VertexIndex = Face.Vertices[j].VertexIndex;
 					int UVIndex = Face.Vertices[j].UVIndex;
 					int NormalIndex = Face.Vertices[j].NormalIndex;
 
-					FNormalVertex NormalVertex
+					FVector Pos = Positions[VertexIndex];
+					FVector2 UV = UVIndex >= 0 ? UVs[UVIndex] : FVector2{ 0.0f, 0.0f };
+					FVector Norm = NormalIndex >= 0 ? Normals[NormalIndex] : FVector{ 0.0f, 0.0f, 0.0f };
+
+					FVertexSimple Vertex
 					{
-						Positions[VertexIndex],
-						UVIndex >= 0 ? UVs[UVIndex] : FVector2{ 0.0f, 0.0f },
-						NormalIndex >= 0 ? Normals[NormalIndex] : FVector{ 0.0f, 0.0f, 0.0f }
+						Pos.x, Pos.y, Pos.z,
+						1.0f, 1.0f, 1.0f, 1.0f,
+						UV.X, UV.Y,
+						Norm.x, Norm.y, Norm.z
 					};
-					FString Key = NormalVertex.GetKey();
+					FString Key = Vertex.GetKey();
 
 					if (!VertexIndices.Contains(Key))
 					{
-						Mesh.Vertices.Add(NormalVertex);
+						Mesh.Vertices.Add(Vertex);
 						int NewIndex = Mesh.Vertices.Num() - 1;
 						Mesh.Indices.Add(NewIndex);
 						VertexIndices.Add(Key, NewIndex);
@@ -120,7 +130,7 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 			{
 				float vx, vy, vz;
 				iss >> vx >> vy >> vz;
-				Data.Positions.Add({ vx, vy, vz });
+				Data.Positions.Add(PositionToUEBasis({ vx, vy, vz }));
 			}
 			else if (prefix == "vt")
 			{
@@ -142,11 +152,10 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 			}
 			else if (prefix == "mtllib") // material library
 			{
+				iss >> std::ws;
 				std::string MtlFilename;
-				if (iss >> MtlFilename)
-				{
-					Data.MaterialFiles.Add(FString(MtlFilename));
-				}
+				std::getline(iss, MtlFilename);
+				Data.MaterialFiles.Add(FString(MtlFilename));
 			}
 			else if (prefix == "usemtl") // group material
 			{

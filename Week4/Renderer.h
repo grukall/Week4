@@ -418,6 +418,8 @@ public:
 
 	TSharedPtr<FRenderTarget2D> CreateRenderTarget2D(uint32 Width, uint32 Height, DXGI_FORMAT Format);
 	TSharedPtr<FDepthStencil> CreateDepthStencil(uint32 Width, uint32 Height);
+	void ClearRenderTarget(ID3D11RenderTargetView* RTV, ID3D11DepthStencilView* DSV, const float ClearColor[4]);
+
 
 	//Rendering
 	// HUDProjection2D는 뷰포트(ImGui 패널) 크기 기준 직교 투영. 씬 RT가 패널 크기로 늘어나

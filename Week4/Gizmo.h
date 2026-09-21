@@ -27,11 +27,13 @@ public:
     void SetOperation(EGIZMO_TYPE Operation);
     EGIZMO_TYPE GetOperation() const;
 
-    void Update(FSceneManager* SceneManager, const FMatrix& ViewProjection);
-    void Render(FSceneManager* SceneManager, const FVector& CameraPosition, const FMatrix& ViewProjection);
+    void Update(FSceneManager* SceneManager, const FMatrix& ViewProjection, float ViewportAbsX, float ViewportAbsY, float ViewportWidth, float ViewportHeight);
+    void Render(FSceneManager* SceneManager, const FVector& CameraPosition, const FMatrix& ViewProjection, float ViewportWidth, float ViewportHeight);
     bool IsMouseOverHandle() const;
     bool IsDragging() const { return bIsSelected; }
     void Reset();
+
+    void BuildHandleSegments(const FVector& CameraLocation, const FMatrix& ViewProjection, float ViewportWidth, float ViewportHeight);
 
 private:
     // Draw에서 그린 선분과 해당 축만 입력 단계에 공유한다.
