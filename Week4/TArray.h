@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "Core.h"
+#include "Archive.h"
 
 template<typename T>
 class TArray
@@ -277,9 +278,21 @@ inline void TArray<T>::RemoveLast()
 
 }
 
+template<typename T>
+FArchive& operator<<(FArchive& Ar, TArray<T>& Array)
+{
+	int32 ArrayNum = Array.Num();
+	Ar << ArrayNum;
 
+	if (Ar.IsLoading())
+	{
+		Array.SetNum(ArrayNum);
+	}
 
+	for (int32 i = 0; i < ArrayNum; ++i)
+	{
+		Ar << Array[i];
+	}
 
-
-
-
+	return Ar;
+}

@@ -46,20 +46,17 @@ FGraphicsManager::~FGraphicsManager()
 
 void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight)
 {
-	// Cache view and projection matrices for rendering
-	const float nearZ = 0.1f;
-	const float farZ = 2000.0f;
-
 	float d = mCamera->mOrthoDistance;
-	
 	mAspect = viewportWidth / viewportHeight;
+
+	float nearZ = mCamera->nearZ;
+	float farZ = mCamera->farZ;
 
 	FMatrix view = mCamera->GetViewMatrix();
 	FMatrix projection_u_p = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 1.0f);
 	FMatrix projection_u_o = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 0.0f);
 	FMatrix projection_u = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, mProjectionRatio);
 
-	//mViewProjectionMatrix = view * mCamera->GetProjectionMatrix(mAspect, mCamera->mFovDegree, nearZ, farZ);
 	mViewMatrix = view;
 	mProjectionMatrix = projection_u;
 	mViewProjectionMatrix = view * projection_u_p;
@@ -68,11 +65,12 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// 솔리드/와이어프레임 래스터라이저를 고른다.
 	mRenderer->SetViewModeIndex(mViewModeIndex);
 
-	mRenderer->Prepare(view * projection_u);
+	// 스탯 HUD 등 화면 좌표 오버레이용. 뷰포트 크기가 바뀌면 여기서 매 프레임 다시 만들어진다.
+	const FMatrix HUDProjection2D = FMatrix::Ortho(0.f, viewportWidth, viewportHeight, 0.f, 0.0f, 1.0f);
+	mRenderer->Prepare(view * projection_u, HUDProjection2D);
 
 	float orthoHeight = mCamera->mOrthoHeight;
 	float orthoWidth = orthoHeight * mAspect;
-	//mViewOrthogonalProjectionMatrix = view * mCamera->GetOrthographicMatrix(orthoWidth, orthoHeight, nearZ, farZ);
 	mViewOrthogonalProjectionMatrix = view * projection_u_o;
 	mViewUnifiedProjectionMatrix = view * projection_u;
 
@@ -87,17 +85,13 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// NearCube(주황)가 앞에 남고, 꺼져 있으면 FarCube(파랑)가 그 위를 덮어쓴다.
 	//mRenderer->UpdateConstantViewProjection(viewProjection);
 
-	mRenderer->BindRenderTarget(mSceneRenderTarget, mSceneDepthStencil);
+	// The caller selects the render target.  Rebinding the legacy scene target here
+	// would make every viewport render into the same texture instead of the
+	// FEditorViewportClient render target that was bound for this draw.
 }
 
-void FGraphicsManager::GizmoPrepare()
-{
-	mRenderer->RSUpdateState();
-
-}
 void FGraphicsManager::Render()
 {
-	INC_DWORD_STAT_BY("Lines", mRenderCollector.LineInfos.Num());
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
 
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
@@ -221,8 +215,6 @@ void FGraphicsManager::Render()
 	{
 		mRenderer->RenderQuad2D(QuadInfo);
 	}
-
-	mRenderCollector.Clear();
 }
 
 void FGraphicsManager::DrawLine(const FVector& start, const FVector& end, const FVector4& color)
@@ -308,8 +300,6 @@ void FGraphicsManager::OnResize(UINT width, UINT height)
 	{
 		mSceneDepthStencil = mRenderer->CreateDepthStencil(width, height);
 	}
-
-	mRenderer->OnResize(width, height);
 }
 
 // 테두리가 화면에서 차지할 두께(픽셀). 물체 크기와 카메라 거리 어느 쪽에도 영향받지 않는다.

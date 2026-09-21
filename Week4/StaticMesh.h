@@ -17,7 +17,7 @@ struct FStaticMeshSection
 struct FStaticMesh
 {
 	FString PathFileName;
-	TArray<FNormalVertex> Vertices;
+	TArray<FVertexSimple> Vertices;
 	TArray<uint32> Indices;
 	TArray<FStaticMeshSection> Sections;
 	TArray<FString> Materials;
@@ -26,15 +26,15 @@ struct FStaticMesh
 struct FMaterialData
 {
 	FString Name;
-	float SpecularPower;
-	float OpticalDensity;
-	float Transparency;
+	float SpecularPower = 0.0f;
+	float OpticalDensity = 1.0f;
+	float Transparency = 1.0f;
 	FVector3 TransmissionFilter;
-	int IlluminationModel;
-	FVector3 AmbientColor;
-	FVector3 DiffuseColor;
-	FVector3 SpecularColor;
-	FVector3 EmissiveColor;
+	int IlluminationModel = 2;
+	FVector3 AmbientColor = FVector3(1.0f, 1.0f, 1.0f);
+	FVector3 DiffuseColor = FVector3(1.0f, 1.0f, 1.0f);
+	FVector3 SpecularColor = FVector3(0.0f, 0.0f, 0.0f);
+	FVector3 EmissiveColor = FVector3(0.0f, 0.0f, 0.0f);
 	FString AmbientColorMapFilename;
 	FString DiffuseColorMapFilename;
 	FString SpecularColorMapFilename;
@@ -54,5 +54,6 @@ private:
 	URenderer& Renderer;
 	FAssetManager* AssetManager;
 	FTexture2DAssetLoader* TextureLoader;
-	void ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices);
+
+	bool ShouldImport(const FName AssetName, const std::filesystem::path& SourcePath, const std::filesystem::path& BinaryPath);
 };

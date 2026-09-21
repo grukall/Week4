@@ -2,13 +2,14 @@
 
 #include <string_view>
 #include <filesystem>
+#include <string>
 #include "SceneData.h"
 #include "TArray.h"
 #include "RenderInfo.h"
 #include "enum.h"
 #include "FAssetManager.h"
 #include "PropertyPanel.h"
-#include <string>
+#include "SWindow.h"
 
 inline constexpr std::string_view kSceneDataDir = "SceneData\\";
 inline constexpr std::string_view kSceneDataSuffix = ".Scene";
@@ -23,7 +24,8 @@ struct FGuiReference
 {
 	const FFrameTimer& FrameTimer;
 	FGraphicsManager* GraphicsManager;
-	FEditorViewportClient* ViewportClient;
+	const TArray<FEditorViewportClient*>* ViewportClients;
+	FEditorViewportClient*& ActiveViewport;
 	const FFileManager* FileManager;
 	FAssetManager* AssetManager;
 };
@@ -76,6 +78,7 @@ public:
 	float GetViewportWidth() const { return mViewportWidth; }
 	float GetViewportHeight() const { return mViewportHeight; }
 	bool IsViewportHovered() const { return mbViewportHovered; }
+	SWindow* GetRootWindow() const { return mRootWindow; }
 
 private:
 	static constexpr float MIN_WIDTH_RATIO = 0.2f;
@@ -107,6 +110,8 @@ private:
 	void updateContentBrowserGUI(const FGuiReference& guiReference);
 	void drawFolderTree(const std::filesystem::path& currentPath);
 	void drawAssetGrid();
+
+	SWindow* mRootWindow;
 
 	void updateControlPanelGUI(const FGuiReference& guiReference);
 

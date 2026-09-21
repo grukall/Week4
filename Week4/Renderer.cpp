@@ -115,8 +115,37 @@ void URenderer::Create(HWND hWindow)
 	Quad2DPipeline->AddConstantBuffer<FQuadConstants>();
 	Quad2DPipeline->AddConstantBuffer<FMatrix>();
 	Quad2DPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_WRAP);
+
+	//GPU Time 측정을 위한 Query
+	D3D11_QUERY_DESC DisjointDesc = {};
+	DisjointDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+
+	D3D11_QUERY_DESC StampDesc = {};
+	StampDesc.Query = D3D11_QUERY_TIMESTAMP;
+
+	for (uint32 i = 0; i < GpuTimerSlotCount; ++i)
+	{
+		Device->CreateQuery(&DisjointDesc, GpuTimers[i].Disjoint.GetAddressOf());
+		Device->CreateQuery(&StampDesc, GpuTimers[i].StartStamp.GetAddressOf());
+		Device->CreateQuery(&StampDesc, GpuTimers[i].EndStamp.GetAddressOf());
+	}
 }
 
+bool URenderer::GetVideoMemoryInfo(uint64& OutUsed, uint64& OutBudget) const
+{
+	if (!DxgiAdapter) return false;
+
+	DXGI_QUERY_VIDEO_MEMORY_INFO Info = {};
+	if (FAILED(DxgiAdapter->QueryVideoMemoryInfo(
+		0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &Info)))
+	{
+		return false;
+	}
+
+	OutUsed = Info.CurrentUsage;
+	OutBudget = Info.Budget;
+	return true;
+}
 void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 {
 	D3D_FEATURE_LEVEL FeatureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
@@ -147,7 +176,19 @@ void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 	Width = SwapChainDesc.BufferDesc.Width;
 	Height = SwapChainDesc.BufferDesc.Height;
 	ViewportInfo = { 0.0f, 0.0f, (float)Width, (float)Height, 0.0f, 1.0f };
-	Projection2D = FMatrix::Ortho(0.f, Width, Height, 0.f, 0.0f, 1.0f);
+	Projection2D = FMatrix::Ortho(0.0f, (float)Width, (float)Height, 0.0f, 0.0f, 1.0f);   // Left, Right, Bottom, Top, Near, Far
+
+	//Adapter 가져오기
+	//ID3D11Device → IDXGIDevice → IDXGIAdapter → IDXGIAdapter3
+	Microsoft::WRL::ComPtr<IDXGIDevice> DxgiDevice;
+	if (SUCCEEDED(Device->QueryInterface(IID_PPV_ARGS(&DxgiDevice))))
+	{
+		Microsoft::WRL::ComPtr<IDXGIAdapter> Adapter;
+		if (SUCCEEDED(DxgiDevice->GetAdapter(&Adapter)))
+		{
+			Adapter.As(&DxgiAdapter);
+		}
+	}
 }
 
 void URenderer::ReleaseDeviceAndSwapChain()
@@ -202,35 +243,6 @@ void URenderer::ReleaseFrameBuffer()
 	}
 }
 
-#if 0
-// 선분은 매 프레임 내용이 바뀌므로 IMMUTABLE로는 만들 수 없다.
-// DYNAMIC + CPU_ACCESS_WRITE 라야 Map으로 덮어쓸 수 있다. (상수 버퍼와 같은 조합)
-void URenderer::CreateLineVertexBuffer(uint32 maxVertices)
-{
-	D3D11_BUFFER_DESC vertexbufferdesc = {};
-	vertexbufferdesc.ByteWidth = maxVertices * sizeof(FVertexSimple);
-	vertexbufferdesc.Usage = D3D11_USAGE_DYNAMIC;
-	vertexbufferdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vertexbufferdesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	if (SUCCEEDED(Device->CreateBuffer(&vertexbufferdesc, nullptr, &LineVertexBuffer)))
-	{
-		LineVertexCapacity = maxVertices;
-	}
-}
-
-void URenderer::ReleaseLineVertexBuffer()
-{
-	if (LineVertexBuffer)
-	{
-		LineVertexBuffer->Release();
-		LineVertexBuffer = nullptr;
-	}
-
-	LineVertexCapacity = 0;
-}
-#endif
-
 void URenderer::Release()
 {
 	DeviceContext->ClearState();
@@ -274,19 +286,33 @@ void URenderer::Release()
 
 void URenderer::SwapBuffer()
 {
-	SwapChain->Present(1, 0);
+	if (bGpuTimerActive)
+	{
+		FGpuTimerSlot& Slot = GpuTimers[GpuTimerIndex];
+		DeviceContext->End(Slot.EndStamp.Get());
+		DeviceContext->End(Slot.Disjoint.Get());
+		Slot.bInFlight = true;
+		GpuTimerIndex = (GpuTimerIndex + 1) % GpuTimerSlotCount;
+	}
+
+	SET_CYCLE_COUNTER("GPU Time", LastGpuMs);   // 건너뛴 프레임도 이전 값 유지
+	SwapChain->Present(0, 0);
 }
 
-void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
+void URenderer::Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D)
 {
-	DeviceContext->ClearRenderTargetView(FrameBufferRTV, ClearColor);
-	DeviceContext->ClearDepthStencilView(DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+	FGpuTimerSlot& Slot = GpuTimers[GpuTimerIndex];
+
+	// 아직 안 끝난 슬롯이면 이번 프레임은 재지 않는다. 인덱스도 그대로 둔다.
+	bGpuTimerActive = !Slot.bInFlight || ResolveGpuTimer(Slot);
+
+	if (bGpuTimerActive)
+	{
+		DeviceContext->Begin(Slot.Disjoint.Get());
+		DeviceContext->End(Slot.StartStamp.Get());
+	}
 
 	DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	DeviceContext->RSSetViewports(1, &ViewportInfo);
-
-	DeviceContext->OMSetRenderTargets(1, &FrameBufferRTV, DepthStencilView);
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 
 	FCameraConstants CameraConstants;
@@ -298,9 +324,7 @@ void URenderer::Prepare(const FMatrix& ViewProjectionMatrix)
 	StencilMarkPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	StencilOutlinePipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	QuadPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
-
-	// 2D 쿼드는 카메라와 무관하게 화면 픽셀 좌표계를 쓴다.
-	Quad2DPipeline->UpdateConstantBuffer(1, Projection2D);
+	Quad2DPipeline->UpdateConstantBuffer(1, HUDProjection2D);
 }
 
 Microsoft::WRL::ComPtr<ID3D11Buffer> URenderer::CreateIndexBuffer(const uint32* Indices, UINT Count)
@@ -423,6 +447,7 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline) const
 	// RSSetState는 드로우 직전마다 갈아치워지므로 뷰 모드 선택은 여기서 해야 한다.
 	// 이 모드를 지원하지 않는 파이프라인(2D/기즈모)은 Lit 상태로 폴백된다.
 	DeviceContext->RSSetState(Pipeline->GetRasterizerState(ViewModeIndex));
+
 	DeviceContext->OMSetDepthStencilState(Pipeline->DepthStencilState, Pipeline->StencilRef);
 	DeviceContext->OMSetBlendState(Pipeline->BlendState, nullptr, 0xffffffff);
 	DeviceContext->IASetPrimitiveTopology(Pipeline->PrimitiveTopology);
@@ -461,12 +486,6 @@ void URenderer::BindPipeline(const TSharedPtr<FRenderPipeline>& Pipeline) const
 		DeviceContext->PSSetSamplers(0, 0, nullptr);
 	}
 }
-
-void URenderer::RSUpdateState()
-{
-	DeviceContext->RSSetState(RasterizerState[0]);
-}
-
 
 void URenderer::BindFrameBuffer()
 {
@@ -513,6 +532,8 @@ void URenderer::RenderLines(const TArray<FRenderLineInfo>& Lines) const
 		UINT OffsetIndex = 0;
 		DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &OffsetIndex);
 		DeviceContext->DrawInstanced(6, BatchSize, 0, 0);
+		INC_DWORD_STAT("Draws");
+		INC_DWORD_STAT_BY("Prims", BatchSize * 2);
 
 		Remaining -= BatchSize;
 		Offset += BatchSize;
@@ -566,8 +587,8 @@ void URenderer::RenderQuad(const FRenderQuadInfo& Info) const
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 2);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 2);
 }
 
 void URenderer::RenderQuad2D(const FRenderQuadInfo& Info) const
@@ -581,6 +602,7 @@ void URenderer::RenderQuad2D(const FRenderQuadInfo& Info) const
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC Desc{};
 		Info.TextureSRV->GetDesc(&Desc);
+
 		// 폰트 아틀라스는 R8이라 R 채널이 알파다.
 		bGrayscale = (Desc.Format == DXGI_FORMAT_R8_UNORM);
 	}
@@ -594,8 +616,8 @@ void URenderer::RenderQuad2D(const FRenderQuadInfo& Info) const
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 2);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 2);
 }
 
 void URenderer::RenderPrimitive(const TSharedPtr<FRenderPipeline>& Pipeline, Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer, UINT NumVertices) const
@@ -605,8 +627,8 @@ void URenderer::RenderPrimitive(const TSharedPtr<FRenderPipeline>& Pipeline, Mic
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 1, Buffer.GetAddressOf(), &Pipeline->Stride, &Offset);
 	DeviceContext->Draw(NumVertices, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", NumVertices / 3);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", NumVertices / 3);
 }
 
 
@@ -632,8 +654,8 @@ void URenderer::RenderPrimitiveIndexed(const TSharedPtr<FRenderPipeline>& Pipeli
 	DeviceContext->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &Pipeline->Stride, &Offset);
 	DeviceContext->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 	DeviceContext->DrawIndexed(NumIndices, StartIndex, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", NumIndices / 3);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", NumIndices / 3);
 }
 
 void URenderer::RenderPrimitiveIndexed(Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer, Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer, UINT NumIndices, const FMatrix& Model, UINT StartIndex) const
@@ -652,8 +674,8 @@ void URenderer::RenderLine2D(const FVector2& Start, const FVector2& End, const F
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 2);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 2);
 }
 
 void URenderer::RenderCircle2D(const FVector2& Center, const FVector4& Color, float Radius) const
@@ -665,8 +687,8 @@ void URenderer::RenderCircle2D(const FVector2& Center, const FVector4& Color, fl
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 2);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 2);
 }
 
 void URenderer::RenderTriangle2D(const FVector2& Center, const FVector4& Color, float Size, float Rotation) const
@@ -678,8 +700,8 @@ void URenderer::RenderTriangle2D(const FVector2& Center, const FVector4& Color, 
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(3, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 1);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 1);
 }
 
 void URenderer::RenderWorldAxis(const FMatrix& View, const FMatrix& Projection, const FVector4& Color, const FVector& Axis, float Thickness) const
@@ -696,8 +718,8 @@ void URenderer::RenderWorldAxis(const FMatrix& View, const FMatrix& Projection, 
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 2);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 2);
 }
 
 void URenderer::RenderWorldGrid(const FMatrix& ViewProjection, const FVector& CameraLocation, float GridGap) const
@@ -709,8 +731,8 @@ void URenderer::RenderWorldGrid(const FMatrix& ViewProjection, const FVector& Ca
 	UINT Offset = 0;
 	DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &Offset);
 	DeviceContext->Draw(6, 0);
-	INC_DWORD_STAT("DrawCalls");
-	INC_DWORD_STAT_BY("Triangles", 2);
+	INC_DWORD_STAT("Draws");
+	INC_DWORD_STAT_BY("Prims", 2);
 }
 
 //=============================================
@@ -734,99 +756,30 @@ void URenderer::CreateDepthStencilBuffer()
 	Device->CreateDepthStencilView(DepthStencilBuffer, &DsvDesc, &DepthStencilView);
 }
 
-#if 0
-void URenderer::CreateStencilMarkState()
+bool URenderer::ResolveGpuTimer(FGpuTimerSlot& Slot)
 {
-	D3D11_DEPTH_STENCIL_DESC desc = {};
-	// 아웃라인 패스가 깊이를 무시하므로 마킹도 깊이를 무시해야 짝이 맞는다.
-	// 가려진 픽셀까지 전부 마킹해야 실루엣 내부가 비지 않는다.
-	desc.DepthEnable = FALSE;
-	desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;  // 깊이는 건드리지 않는다
-	desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+	D3D11_QUERY_DATA_TIMESTAMP_DISJOINT DisjointData = {};
 
-	desc.StencilEnable = TRUE;							// 스텐실 사용
-	desc.StencilReadMask = 0xFF;
-	desc.StencilWriteMask = 0xFF;
+	// Disjoint의 End가 제일 마지막에 발행되므로, 얘가 준비됐으면 타임스탬프 둘도 준비됐다.
+	const HRESULT Hr = DeviceContext->GetData(
+		Slot.Disjoint.Get(), &DisjointData, sizeof(DisjointData),
+		D3D11_ASYNC_GETDATA_DONOTFLUSH);
 
-	// 실루엣에 덮이는 모든 픽셀에 StencilRef를 기록
-	desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-	desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
-	desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_REPLACE;
-	desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-	desc.BackFace = desc.FrontFace;
+	if (Hr != S_OK)
+	{
+		return false;   // S_FALSE = 아직 GPU가 안 끝냄. bInFlight 유지하고 다음에 다시 시도
+	}
 
-	Device->CreateDepthStencilState(&desc, &StencilMarkState);
+	UINT64 StartTick = 0, EndTick = 0;
+	DeviceContext->GetData(Slot.StartStamp.Get(), &StartTick, sizeof(StartTick), 0);
+	DeviceContext->GetData(Slot.EndStamp.Get(), &EndTick, sizeof(EndTick), 0);
+
+	// 구간 중 클럭이 바뀌었으면 두 틱의 기준이 달라 비교 불가. 버린다.
+	if (!DisjointData.Disjoint && DisjointData.Frequency != 0)
+	{
+		LastGpuMs = (EndTick - StartTick) * 1000.0 / DisjointData.Frequency;
+	}
+
+	Slot.bInFlight = false;
+	return true;
 }
-
-void URenderer::CreateStencilOutlineState()
-{
-	D3D11_DEPTH_STENCIL_DESC desc = {};
-	desc.DepthEnable = FALSE;							// 항상 위에 그린다
-	desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-
-	desc.StencilEnable = TRUE;
-	desc.StencilReadMask = 0xFF;
-	desc.StencilWriteMask = 0x00;						// 읽기만, 쓰지 않는다
-
-	// 마킹된 곳(=원본 실루엣)은 통과 못 함 -> 바깥 테두리만 남는다
-	desc.FrontFace.StencilFunc = D3D11_COMPARISON_NOT_EQUAL;
-	desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-	desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
-	desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-	desc.BackFace = desc.FrontFace;
-
-	Device->CreateDepthStencilState(&desc, &StencilOutlineState);
-}
-
-// 렌더타겟에 색을 전혀 쓰지 않는 상태. 스텐실 마킹 전용 패스에 쓴다
-void URenderer::CreateNoColorWriteBlendState()
-{
-	D3D11_BLEND_DESC desc = {};
-	desc.RenderTarget[0].BlendEnable = FALSE;
-	desc.RenderTarget[0].RenderTargetWriteMask = 0;
-
-	Device->CreateBlendState(&desc, &NoColorWriteBlendState);
-}
-#endif
-
-void URenderer::OnResize(UINT width, UINT height)
-{
-	if (!SwapChain || width == 0 || height == 0) return;
-
-#if 0
-	//해상도에 의존하는 프레임 버퍼와 뎁스 스텐실 버퍼를 재생성한다.
-	DeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
-	ReleaseFrameBuffer();
-	ReleaseDepthStencilBuffer();
-
-	HRESULT hr = SwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-	if (FAILED(hr)) return;
-
-	DXGI_SWAP_CHAIN_DESC desc;
-	SwapChain->GetDesc(&desc);
-
-	ViewportInfo = { viewportWidth, 0.0f, static_cast<float>(width) - viewportWidth, viewportHeight, 0.0f, 1.0f };
-
-	//상태는 이전에 생성한 걸 그대로 재사용
-	CreateFrameBuffer();
-	CreateDepthStencilBuffer(width, height);
-#else
-	DeviceContext->OMSetRenderTargets(0, 0, 0);
-
-	FrameBuffer->Release();
-	FrameBufferRTV->Release();
-	DepthStencilBuffer->Release();
-	DepthStencilView->Release();
-
-	SwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
-
-	Width = width;
-	Height = height;
-	ViewportInfo = { 0.0f, 0.0f, (float)width, (float)height, 0.0f, 1.0f };
-	Projection2D = FMatrix::Ortho(0.f, Width, Height, 0.f, 0.0f, 1.0f);
-
-	CreateFrameBuffer();
-	CreateDepthStencilBuffer();
-#endif
-}
-

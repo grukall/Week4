@@ -16,6 +16,9 @@ struct FDeferredMessage
 	// 그래서 WndProc 에서 미리 풀어 여기에 담아 둔다.
 	long   RawMouseDX = 0;
 	long   RawMouseDY = 0;
+
+	//도착 시간
+	LARGE_INTEGER ArrivalTime = {};
 };
 
 
@@ -23,10 +26,16 @@ class FWindowApplication
 {
 public:
 	bool bPendingResize = false;
+	bool bHasPendingInput = false;
 	UINT PendingWidth = 0, PendingHeight = 0;
 	FInputState Input;
+	LARGE_INTEGER PendingInputTime = {};
 
-	void Defer(const FDeferredMessage& M) { Deferred.push_back(M); }
+	void Defer(FDeferredMessage& M)
+	{
+		QueryPerformanceCounter(&M.ArrivalTime);
+		Deferred.push_back(M);
+	}
 
 	// 게임 루프에서 프레임당 1회 — 여기가 유일한 해석 지점
 	void ProcessDeferredEvents()
@@ -39,6 +48,12 @@ public:
 
 		for (const FDeferredMessage& M : Local)
 		{
+			if (!bHasPendingInput)
+			{
+				PendingInputTime = M.ArrivalTime;
+				bHasPendingInput = true;
+			}
+
 			switch (M.Message)
 			{
 			case WM_KEYDOWN: case WM_SYSKEYDOWN:

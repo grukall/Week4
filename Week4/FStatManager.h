@@ -20,7 +20,8 @@ struct FStatEntry
     bool bEnabled = false;
     double Accum = 0.0;
     int32 Calls = 0;
-    int32 Order = 0;    // 등록 순서. TMap은 순서가 없어서 표시 정렬에 쓴다.
+    int32 Order = 0;    //표시 정렬
+    double Avg = 0.0, Max = 0.0;
 
     // HUD는 프레임 중간에 그려지므로 Accum은 아직 미완성이다.
     // ResetFrame이 직전 프레임의 완성된 값을 여기로 옮겨두고, 표시는 이쪽을 읽는다.
@@ -100,17 +101,33 @@ struct FStatId
 
 struct FScopeCycleCounter
 {
+
+    static inline FScopeCycleCounter* Current = nullptr;
+    FScopeCycleCounter* Parent = nullptr;
+    double ChildMs = 0.0;   // 내 직속 자식들이 먹은 시간
+
     FScopeCycleCounter(const FName& InName) : Name(InName)
     {
         bActive = FStatManager::Get().IsCollecting(Name);
-        if (bActive) QueryPerformanceCounter(&Start);
+        if (!bActive) return;
+        Parent = Current;
+        Current = this;
+        QueryPerformanceCounter(&Start);
     }
     ~FScopeCycleCounter()
     {
         if (!bActive) return;
         LARGE_INTEGER End; QueryPerformanceCounter(&End);
-        FStatManager::Get().Accumulate(Name, (End.QuadPart - Start.QuadPart) * GetMsPerCount());
+        const double Ms = GetMsPerCount();
+        FStatManager::Get().Accumulate(Name, (End.QuadPart - Start.QuadPart) * Ms);
+
+        Current = Parent;                                         // 원래대로 복구
+        FStatManager::Get().Accumulate(Name, Ms);                 // Inclusive
+        FStatManager::Get().Accumulate(Name, -ChildMs);           // Exclusive
+        if (Parent) Parent->ChildMs += Ms;                        // 부모에게 "나 이만큼 썼어" 보고
+
     }
+
     FName Name; LARGE_INTEGER Start; bool bActive;
 };
 
@@ -121,8 +138,19 @@ struct FScopeCycleCounter
     static const FStatId PP_CAT(_StatId_, Tag)(StatName, EStatType::Cycle);         \
     FScopeCycleCounter PP_CAT(_StatScope_, Tag)(PP_CAT(_StatId_, Tag).Name)
 
+//스코프를 사용하여 사용 시간 기록
 #define SCOPE_CYCLE_COUNTER(StatName) SCOPE_CYCLE_COUNTER_IMPL(__COUNTER__, StatName)
 
+//이미 계산된 ms를 대입해야 하는 경우 사용
+#define SET_CYCLE_COUNTER_IMPL(Tag, StatName, Ms)                                \
+    do {                                                                         \
+        static const FStatId PP_CAT(_StatId_, Tag)(StatName, EStatType::Cycle);  \
+        if (FStatManager::Get().IsCollecting(PP_CAT(_StatId_, Tag).Name))        \
+            FStatManager::Get().Accumulate(PP_CAT(_StatId_, Tag).Name, (Ms));    \
+    } while (0)
+
+//계산된 사용시간을 기록
+#define SET_CYCLE_COUNTER(StatName, Ms) SET_CYCLE_COUNTER_IMPL(__COUNTER__, StatName, Ms)
 
 // Counter
 // do-while(0)으로 감싸 전체를 문장 하나로 만든다. if/else 안에서도 안전.
@@ -136,7 +164,10 @@ struct FScopeCycleCounter
         }                                                                           \
     } while (0)
 
+//StatName의 스텟에 카운트 증가
 #define INC_DWORD_STAT(StatName)       INC_DWORD_STAT_BY_IMPL(__COUNTER__, StatName, 1)
+
+//StatName의 스텟에 카운트를 N만큼 증가
 #define INC_DWORD_STAT_BY(StatName, N) INC_DWORD_STAT_BY_IMPL(__COUNTER__, StatName, N)
 
 
@@ -148,7 +179,10 @@ struct FScopeCycleCounter
         FStatManager::Get().Accumulate(PP_CAT(_StatId_, Tag).Name, (SignedSize));   \
     } while (0)
 
+//StatName의 스텟에 사이즈 증가
 #define INC_MEMORY_STAT_BY(StatName, Size) \
     MEMORY_STAT_BY_IMPL(__COUNTER__, StatName,  static_cast<double>(Size))
+
+//StatName의 스텟에 사이즈 감소
 #define DEC_MEMORY_STAT_BY(StatName, Size) \
     MEMORY_STAT_BY_IMPL(__COUNTER__, StatName, -static_cast<double>(Size))

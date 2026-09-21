@@ -3,6 +3,8 @@
 #include "Core.h"
 #include "city.h"
 
+class FArchive;
+
 // Max size of name, including the null terminator
 enum { NAME_SIZE = 1024 };
 
@@ -129,3 +131,5 @@ struct FNameHasher
 		return Hash;
 	}
 };
+
+FArchive& operator<<(FArchive& Ar, FName& Name);
