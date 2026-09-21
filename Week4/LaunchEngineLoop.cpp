@@ -139,31 +139,37 @@ void FEngineLoop::InitAssetManager()
 
 	UMaterial::InitDefaultMaterial(renderer);
 
-	// Register built-in asset types
-	UStaticMesh* cubeAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("CubeMesh"), *renderer, Cube_vertices, sizeof(Cube_vertices) / sizeof(FVertexSimple), Cube_indices, sizeof(Cube_indices) / sizeof(uint32));
+	// 엔진 내장 프리미티브도 obj로 임포트한 메시와 같은 .uasset 파이프라인을 태운다.
+	// (Import()가 아니라 ImportPrimitive() — obj 소스가 없어서 재임포트 판단이 필요 없다.)
+	FStaticMeshAssetLoader* PrimitiveLoader = mAssetManager->GetOrCreateLoader<FStaticMeshAssetLoader>(*renderer, *mAssetManager);
+
+	auto ImportPrimitiveMesh = [&](const FName& Name, const std::filesystem::path& SourceFilePath, const FVertexSimple* Vertices, size_t VertexBytes, const uint32* Indices, size_t IndexBytes) -> UStaticMesh*
+	{
+		FName Key = PrimitiveLoader->ImportPrimitive(Name, SourceFilePath, *mFileManager, Vertices, static_cast<uint32>(VertexBytes / sizeof(FVertexSimple)), Indices, static_cast<uint32>(IndexBytes / sizeof(uint32)));
+		return mAssetManager->GetAssetAs<UStaticMesh>(Key, true);
+	};
+
+	UStaticMesh* cubeAsset = ImportPrimitiveMesh(FName("CubeMesh"), "Week4/Cube.h", Cube_vertices, sizeof(Cube_vertices), Cube_indices, sizeof(Cube_indices));
 	cubeAsset->SetMaterial(0, UMaterial::DefaultMaterial);
-	mAssetManager->RegisterAsset(cubeAsset);
 
-	UStaticMesh* sphereAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("SphereMesh"), *renderer, Sphere_vertices, sizeof(Sphere_vertices) / sizeof(FVertexSimple), Sphere_indices, sizeof(Sphere_indices) / sizeof(uint32));
+	UStaticMesh* sphereAsset = ImportPrimitiveMesh(FName("SphereMesh"), "Week4/Sphere.h", Sphere_vertices, sizeof(Sphere_vertices), Sphere_indices, sizeof(Sphere_indices));
 	sphereAsset->SetMaterial(0, UMaterial::DefaultMaterial);
-	mAssetManager->RegisterAsset(sphereAsset);
 
-	UStaticMesh* circleAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("CircleMesh"), *renderer, Circle_vertices, sizeof(Circle_vertices) / sizeof(FVertexSimple), Circle_indices, sizeof(Circle_indices) / sizeof(uint32));
+	UStaticMesh* circleAsset = ImportPrimitiveMesh(FName("CircleMesh"), "Week4/Circle.h", Circle_vertices, sizeof(Circle_vertices), Circle_indices, sizeof(Circle_indices));
 	circleAsset->SetMaterial(0, UMaterial::DefaultMaterial);
-	mAssetManager->RegisterAsset(circleAsset);
 
-	UStaticMesh* triangleAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("TriangleMesh"), *renderer, Triangle_vertices, sizeof(Triangle_vertices) / sizeof(FVertexSimple), Triangle_indices, sizeof(Triangle_indices) / sizeof(uint32));
+	UStaticMesh* triangleAsset = ImportPrimitiveMesh(FName("TriangleMesh"), "Week4/Triangle.h", Triangle_vertices, sizeof(Triangle_vertices), Triangle_indices, sizeof(Triangle_indices));
 	triangleAsset->SetMaterial(0, UMaterial::DefaultMaterial);
-	mAssetManager->RegisterAsset(triangleAsset);
 
-	UStaticMesh* gizmoArrowAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("GizmoArrowMesh"), *renderer, GizmoArrow_vertices, sizeof(GizmoArrow_vertices) / sizeof(FVertexSimple), GizmoArrow_indices, sizeof(GizmoArrow_indices) / sizeof(uint32));
+	UStaticMesh* gizmoArrowAsset = ImportPrimitiveMesh(FName("GizmoArrowMesh"), "Week4/GizmoArrow.h", GizmoArrow_vertices, sizeof(GizmoArrow_vertices), GizmoArrow_indices, sizeof(GizmoArrow_indices));
 	gizmoArrowAsset->SetMaterial(0, UMaterial::DefaultMaterial);
-	mAssetManager->RegisterAsset(gizmoArrowAsset);
 
-	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
+	UStaticMesh* PlaneAsset = ImportPrimitiveMesh(FName("PlaneMesh"), "Week4/Plane.h", Plane_vertices, sizeof(Plane_vertices), Plane_indices, sizeof(Plane_indices));
 	PlaneAsset->SetMaterial(0, UMaterial::DefaultMaterial);
-	mAssetManager->RegisterAsset(PlaneAsset);
 
+	// 사용자가 obj를 임포트해서 만든 .uasset들(프리미티브는 위에서 이미 등록됐으니 건너뛴다)을
+	// 로드 없이 미리 등록해서, 이번 세션에서 한 번도 안 불러온 것도 에셋 드롭다운에 뜨게 한다.
+	mAssetManager->ScanBakedAssets("Assets/Baked", *renderer, *mFileManager);
 
 	FFileAssetSource* FileAssetSource = new FFileAssetSource(*mFileManager, "Textures/Test.jpg");
 	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("TestTexture"), FileAssetSource, *renderer);
@@ -345,8 +351,15 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
 
+			if (UFontAtlas* StatFontAtlas = mAssetManager->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
+			{
+				CurrentClient->DrawStatsHUD(CurrentClient->StatCommands, StatFontAtlas,
+					mGraphicsManager->GetRenderCollector(), currentWidth, currentHeight);
+			}
+
 			mGraphicsManager->FlushLines();
 			mGraphicsManager->Render();
+			mGraphicsManager->GetRenderCollector().ClearScreenQuads();
 		}
 #else
 
@@ -365,8 +378,16 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			const float CurrentRatio = CurrentClient->GetPerspectiveRatio(mGraphicsManager->GetPerspectiveRatio());
 
 			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight, CurrentRatio, CurrentClient->ViewMode);
+
+			if (UFontAtlas* StatFontAtlas = mAssetManager->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
+			{
+				CurrentClient->DrawStatsHUD(CurrentClient->StatCommands, StatFontAtlas,
+					mGraphicsManager->GetRenderCollector(), currentWidth, currentHeight);
+			}
+
 			mGraphicsManager->FlushLines();
 			mGraphicsManager->Render();
+			mGraphicsManager->GetRenderCollector().ClearScreenQuads();
 
 			if (mSceneManager->GetSelectedActor())
 			{

@@ -26,6 +26,10 @@ public:
 	virtual void Serialize(FArchive& Ar) override
 	{
 		UObject::Serialize(Ar);
+
+		FString ClassName = Ar.IsSaving() ? FString(GetRuntimeClass()->Name) : FString();
+		Ar << ClassName;
+
 		Ar << AssetName;
 		Ar << AssetPath;
 	}

@@ -49,10 +49,11 @@ public:
         return false;
     }
 
-    // StatCommands(어떤 stat 명령이 켜져 있나)로부터 각 스탯의 수집 여부를 다시 계산한다.
-    // 명령끼리 같은 스탯을 공유하므로(FPS와 UNIT이 둘 다 Frame을 쓴다) 개별로 켜고 끄면
-    // 나중에 끈 쪽이 상대를 덮어쓴다. 항상 전체를 다시 계산해야 한다.
-    void RefreshEnabled();
+    // 어떤 스탯 커맨드가 켜져 있는지는(뷰포트마다 다를 수 있으므로) 더 이상 여기서 들고 있지 않는다.
+    // 호출자(FEditorViewportClient)가 모든 뷰포트를 OR로 합쳐 넘겨준다 - 실측 코드(SCOPE_CYCLE_COUNTER 등)는
+    // 뷰포트 구분 없이 전역으로 한 번만 도니, 어느 뷰포트든 하나라도 요구하면 수집은 켜져야 한다.
+    // 명령끼리 같은 스탯을 공유하므로(FPS와 UNIT이 둘 다 Frame을 쓴다) 항상 전체를 다시 계산해야 한다.
+    void RefreshEnabled(bool bUnit, bool bFps, bool bMemory);
 
     // 직전 프레임의 완성된 값. 없으면 0.
     double GetDisplay(const FName& Name) const
@@ -66,7 +67,6 @@ public:
     void ResetFrame(); // 매 프레임 시작 시 Accum/Calls를 0으로 (Memory 제외)
 
     TMap<FName, FStatEntry, FNameHasher> Stats;
-    TMap<FName, bool, FNameHasher> StatCommands;
 
 private:
     int32 NextOrder = 0;
