@@ -205,16 +205,6 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								{
 									guiReference.ActiveViewport = Client;
 								}
-
-								// ActiveViewport 주황색 테두리 표시 (전체 뷰포트 영역 둘레)
-								if (Client == guiReference.ActiveViewport)
-								{
-									ImDrawList* drawList = ImGui::GetWindowDrawList();
-									const ImVec2 pMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
-									const ImVec2 pMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Bottom);
-
-									drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, 2.0f);
-								}
 							}
 
 							// 2. 상단 툴바 (Toolbar Bar) 렌더링
@@ -420,6 +410,40 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 							if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 							{
 								QuadSplitter->OnMouseUp();
+							}
+
+							// 활성화 뷰포트 테두리 렌더링
+							if (guiReference.ActiveViewport != nullptr)
+							{
+								// 활성화된 클라이언트를 소유한 SWindow 찾기
+								SWindow* ActiveWindow = nullptr;
+								if (mMaximizedViewportIndex >= 0 && mMaximizedViewportIndex < 4)
+								{
+									ActiveWindow = Leaves[mMaximizedViewportIndex];
+								}
+								else
+								{
+									for (int i = 0; i < 4; ++i)
+									{
+										if (Leaves[i] && Leaves[i]->OwningClient == guiReference.ActiveViewport)
+										{
+											ActiveWindow = Leaves[i];
+											break;
+										}
+									}
+								}
+								if (ActiveWindow != nullptr)
+								{
+									ImDrawList* drawList = ImGui::GetWindowDrawList();
+									const FRect& r = ActiveWindow->Rect;
+									// 선 두께(2px)의 절반(1px)만큼 안쪽으로 인셋하여 경계선 침범/클리핑 방지
+									const float BorderThickness = 2.0f;
+									const float Half = BorderThickness * 0.5f;
+									const ImVec2 pMin(screenCursorPos.x + r.Left + Half, screenCursorPos.y + r.Top + Half);
+									const ImVec2 pMax(screenCursorPos.x + r.Right - Half, screenCursorPos.y + r.Bottom - Half);
+									// 툴바와 다른 뷰포트 이미지보다 항상 위에 주황색 테두리가 선명하게 그려짐
+									drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, BorderThickness);
+								}
 							}
 						}
 					}
