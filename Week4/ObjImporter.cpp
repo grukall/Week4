@@ -152,11 +152,10 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 			}
 			else if (prefix == "mtllib") // material library
 			{
+				iss >> std::ws;
 				std::string MtlFilename;
-				if (iss >> MtlFilename)
-				{
-					Data.MaterialFiles.Add(FString(MtlFilename));
-				}
+				std::getline(iss, MtlFilename);
+				Data.MaterialFiles.Add(FString(MtlFilename));
 			}
 			else if (prefix == "usemtl") // group material
 			{
