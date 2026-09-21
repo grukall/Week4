@@ -10,8 +10,10 @@
 #include "enum.h"
 
 #include "SWindow.h"
+#include "FViewportClient.h"
 
 class AActor;
+class FViewport;
 class FSceneManager;
 class URenderer;
 class UFontAtlas;
@@ -40,7 +42,7 @@ struct FStatRow
 	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
 };
 
-struct FEditorViewportClient
+struct FEditorViewportClient : public FViewportClient
 {
 public:
 	FEditorViewportClient(URenderer& InRenderer);
@@ -50,7 +52,7 @@ public:
 	// 광선은 ImGui 뷰포트 이미지 기준으로 만든다. 렌더러의 D3D11_VIEWPORT(백버퍼 전체)가 아니다.
 	AActor* PerformMousePicking(float perspectiveRatio, const FRenderCollector& RenderCollector, FSceneManager& SceneManager);
 	float GetFov() const { return mCamera.mFovDegree; }
-	void Update(float deltaTime, FSceneManager* sceneManager, float perspectiveRatio, FRenderCollector& RenderCollector);
+	virtual void Update(float deltaTime, FSceneManager* sceneManager, float perspectiveRatio, FRenderCollector& RenderCollector) override;
 	bool IsMouseHit() const { return bMouseHit; }
 
 	void Reset();
@@ -58,10 +60,25 @@ public:
 	FCamera& GetCamera() { return mCamera; }
 
 	void SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight);
-	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
 
+	// FViewportClient 인터페이스 구현
+	virtual void Draw(FViewport* Viewport, FGraphicsManager* GraphicsMgr, FSceneManager* SceneMgr) override;
+
+	// 하위 호환성을 위한 오버로드
 	void Draw(FGraphicsManager* GraphicsMgr, FSceneManager* SceneMgr);
 	void DrawViewportUI(
+		const FRect& rect,
+		int32 ViewportIndex,
+		FEditorViewportClient*& InOutActiveViewport,
+		int32& InOutMaximizedIndex,
+		AActor* SelectedActor,
+		const ImVec2& startCursorPos,
+		const ImVec2& screenCursorPos
+	);
+
+	// 상단 툴바 UI 렌더링 (FViewport::DrawViewportUI에서 위임)
+	void DrawToolbar(
+		FViewport* Viewport,
 		const FRect& rect,
 		int32 ViewportIndex,
 		FEditorViewportClient*& InOutActiveViewport,
@@ -76,14 +93,21 @@ public:
 
 	float GetPerspectiveRatio(float GlobalPerspectiveRatio = 1.0f) const { return bIsOrthographic ? 0.0f : GlobalPerspectiveRatio; }
 
+	void SetViewport(FViewport* InViewport) { mViewport = InViewport; }
+	FViewport* GetViewport() const { return mViewport; }
+
+	uint32 GetWidth() const;
+	uint32 GetHeight() const;
+	float GetViewportLeft() const;
+	float GetViewportTop() const;
+
 	EViewportType ViewportType = EViewportType::Perspective;
 	EViewModeIndex ViewMode = EViewModeIndex::VMI_Lit;
 	bool bIsOrthographic = false;
 
 	FCamera mCamera;
 	FGizmo mGizmo;
-	TSharedPtr<FRenderTarget2D> mRenderTarget;
-	TSharedPtr<FDepthStencil> mDepthStencil;
+	FViewport* mViewport = nullptr;
 	uint32 mWidth = 800;
 	uint32 mHeight = 600;
 	float mViewportX = 0.0f;

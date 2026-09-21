@@ -11,6 +11,7 @@
 #include "PrimitiveComponent.h"
 #include "TArray.h"
 #include "World.h"
+#include "FViewport.h"
 #include "FEditorViewportClient.h"
 #include "Camera.h"
 #include "Console.h"
@@ -42,7 +43,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
+FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -54,12 +55,12 @@ FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
 	mPropertyPanel = new FPropertyPanel();
 	mPropertyPanel->Init();
 
-	// 4개의 리프 노드(뷰포트) 생성 후 대응 클라이언트를 바로 꽂는다.
+	// 4개의 리프 노드(뷰포트) 생성 후 대응 뷰포트를 바로 꽂는다.
 	// 순서: TopLeft=0, TopRight=1, BottomLeft=2, BottomRight=3
-	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->OwningClient     = clients[0];
-	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->OwningClient    = clients[1];
-	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->OwningClient  = clients[2];
-	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->OwningClient = clients[3];
+	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->Viewport     = inViewports[0]; VP_TopLeft->OwningClient     = inViewports[0]->GetClientAs<FEditorViewportClient>();
+	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->Viewport    = inViewports[1]; VP_TopRight->OwningClient    = inViewports[1]->GetClientAs<FEditorViewportClient>();
+	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->Viewport  = inViewports[2]; VP_BottomLeft->OwningClient  = inViewports[2]->GetClientAs<FEditorViewportClient>();
+	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->Viewport = inViewports[3]; VP_BottomRight->OwningClient = inViewports[3]->GetClientAs<FEditorViewportClient>();
 
 	// 4분할 루트 스플리터 생성 및 조립
 	SSplitterQuad* RootSplitter = new SSplitterQuad();
@@ -173,8 +174,8 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 						// 각 리프 뷰포트 및 상단 툴바 렌더링
 						auto ProcessLeaf = [&](SWindow* W, int32 ViewportIndex)
 						{
-							if (!W || !W->OwningClient) return;
-							W->OwningClient->DrawViewportUI(
+							if (!W || !W->Viewport) return;
+							W->Viewport->DrawViewportUI(
 								W->Rect,
 								ViewportIndex,
 								guiReference.ActiveViewport,
