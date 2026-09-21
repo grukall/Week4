@@ -1244,10 +1244,10 @@ void FSceneManager::InitObjViewer(const char* CmdLine)
 
 void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 {
-	if (guiReference.ViewportClients == nullptr)	return;
-	if (guiReference.ViewportClients->IsEmpty())	return;
+	if (guiReference.ActiveViewport == nullptr)	return;
+	//if (guiReference.ActiveViewport->IsEmpty())	return;
 
-	FEditorViewportClient* ViewportClient = (*guiReference.ViewportClients)[0];
+	FEditorViewportClient* ViewportClient = (guiReference.ActiveViewport);
 	if (ViewportClient == nullptr) return;
 	
 	const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
