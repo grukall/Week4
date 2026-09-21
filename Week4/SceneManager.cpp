@@ -188,12 +188,22 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
 								ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
 
-								// ActiveViewport 갱신: 좌클릭 순간에만 변경 (IsMouseClicked = 누른 첫 프레임만 true)
+								// ActiveViewport 갱신
 								if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
 									MouseXInViewport >= rect.Left && MouseXInViewport <= (rect.Left + rect.GetWidth()) &&
 									MouseYInViewport >= rect.Top  && MouseYInViewport <= (rect.Top  + rect.GetHeight()))
 								{
 									guiReference.ActiveViewport = Client;
+								}
+
+								// ActiveViewport 주황색으로 표시
+								if (Client == guiReference.ActiveViewport)
+								{
+									ImDrawList* drawList = ImGui::GetWindowDrawList();
+									const ImVec2 pMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
+									const ImVec2 pMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Bottom);
+
+									drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, 2.0f);
 								}
 							}
 						};

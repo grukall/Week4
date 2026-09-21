@@ -1,4 +1,4 @@
-﻿#include "GraphicsManager.h"
+#include "GraphicsManager.h"
 #include "Renderer.h"
 #include "Camera.h"
 #include "Console.h"
@@ -77,6 +77,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	// 하이라이트 두께를 화면 픽셀 기준으로 환산할 때 쓴다
 	mCameraLocation = mCamera->Transform.Location;
 	mCameraForward = mCamera->GetForwardVector();
+	mCameraRotation = mCamera->Transform.Rotation;
 	mCameraFovDegree = mCamera->mFovDegree;
 	mCameraOrthoDistance = mCamera->mOrthoDistance;
 
@@ -188,26 +189,49 @@ void FGraphicsManager::Render()
 		}
 	}
 
+	auto RenderQuadWithBillboard = [this](FRenderQuadInfo QuadInfo)
+	{
+		if (QuadInfo.bIsBillboard)
+		{
+			if (QuadInfo.bCustomPivot)
+			{
+				QuadInfo.Model = QuadInfo.LocalTransform * FMatrix::Rotate(mCameraRotation) * FMatrix::Translation(QuadInfo.PivotLocation);
+			}
+			else
+			{
+				const FVector Location(QuadInfo.Model.M[3][0], QuadInfo.Model.M[3][1], QuadInfo.Model.M[3][2]);
+
+				const FVector AxisX(QuadInfo.Model.M[0][0], QuadInfo.Model.M[0][1], QuadInfo.Model.M[0][2]);
+				const FVector AxisY(QuadInfo.Model.M[1][0], QuadInfo.Model.M[1][1], QuadInfo.Model.M[1][2]);
+				const FVector AxisZ(QuadInfo.Model.M[2][0], QuadInfo.Model.M[2][1], QuadInfo.Model.M[2][2]);
+				const FVector Scale(AxisX.Length(), AxisY.Length(), AxisZ.Length());
+
+				QuadInfo.Model = FMatrix::Scale(Scale) * FMatrix::Rotate(mCameraRotation) * FMatrix::Translation(Location);
+			}
+		}
+		mRenderer->RenderQuad(QuadInfo);
+	};
+
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOpaqueQuadInfos())
 	{
-		mRenderer->RenderQuad(QuadInfo);
+		RenderQuadWithBillboard(QuadInfo);
 	}
 
 	if (FShowFlags::Get().IsEnabled(EShowFlag::Grid))
 	{
 		// Match the grid's world-space half-width of 0.001.
 		mRenderer->RenderWorldAxis(mViewMatrix, mProjectionMatrix, FVector4(0.f, 0.f, 1.f, 1.f), FVector3(0.f, 0.f, 1.f), 0.002f);
-		mRenderer->RenderWorldGrid(mViewUnifiedProjectionMatrix, mCameraLocation, GridGap);
+		mRenderer->RenderWorldGrid(mViewUnifiedProjectionMatrix, mCameraLocation, static_cast<float>(GridGap));
 	}
 
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetTransparentQuadInfos())
 	{
-		mRenderer->RenderQuad(QuadInfo);
+		RenderQuadWithBillboard(QuadInfo);
 	}
 
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetOverlayQuadInfos())
 	{
-		mRenderer->RenderQuad(QuadInfo);
+		RenderQuadWithBillboard(QuadInfo);
 	}
 
 	// 스탯 HUD 등 화면 좌표 오버레이. 씬 위에 덮어야 하므로 제일 마지막.

@@ -175,9 +175,10 @@ public:
 			float WorldBearingY = Glyph.BearingY * WorldUnitPerPixel;
 
 			FVector GlyphCenter(TextLocation.x, TextLocation.y + WorldBearingX + WorldWidth * 0.5f, TextLocation.z + WorldBearingY - WorldHeight * 0.5f);
-			FMatrix TextModel = FMatrix::Scale(FVector3(1.0f, WorldWidth, WorldHeight)) * FMatrix::Translation(GlyphCenter);
+			FMatrix TextLocalModel = FMatrix::Scale(FVector3(1.0f, WorldWidth, WorldHeight)) * FMatrix::Translation(GlyphCenter);
+			TextLocalModel *= FMatrix::Scale(PivotTransform.Scale);
 
-			TextModel *= PivotTransform.MakeMatrix();
+			FMatrix TextModel = TextLocalModel * FMatrix::Rotate(PivotTransform.Rotation) * FMatrix::Translation(PivotTransform.Location);
 
 			FRenderQuadInfo QuadInfo;
 			QuadInfo.Model = TextModel;
@@ -187,6 +188,10 @@ public:
 			QuadInfo.BlendMode = ERenderBlendMode::Transparent;
 			QuadInfo.EnableDepthTest = mEnableDepthTest;
 			QuadInfo.EnableDepthWrite = mEnableDepthWrite;
+			QuadInfo.bIsBillboard = mbBillboard;
+			QuadInfo.bCustomPivot = true;
+			QuadInfo.PivotLocation = PivotTransform.Location;
+			QuadInfo.LocalTransform = TextLocalModel;
 
 			RenderCollector.AddQuadInfo(QuadInfo);
 

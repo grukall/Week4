@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Matrix.h"
 #include "Enum.h"
@@ -90,6 +90,7 @@ private:
 	// Prepare에서 갱신. 하이라이트 두께의 픽셀 → 월드 환산에 쓴다
 	FVector mCameraLocation;
 	FVector mCameraForward;
+	FRotator mCameraRotation;
 	float mCameraFovDegree = 60.0f;
 	float mCameraOrthoDistance = 10.0f;
 
