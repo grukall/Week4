@@ -247,7 +247,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								// 시점 드롭다운 (View Type)
 								const char* ViewTypeNames[] = { "Perspective", "Top", "Bottom", "Left", "Right", "Front", "Back" };
 								int CurrentViewType = static_cast<int>(Client->ViewportType);
-								ImGui::SetNextItemWidth(90.0f);
+								ImGui::SetNextItemWidth(110.0f);
 								if (ImGui::Combo("##ViewType", &CurrentViewType, ViewTypeNames, IM_ARRAYSIZE(ViewTypeNames)))
 								{
 									Client->SetViewportType(static_cast<EViewportType>(CurrentViewType));
@@ -259,7 +259,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								// 뷰 모드 드롭다운 (View Mode)
 								const char* ViewModes[] = { "Lit", "Unlit", "Wireframe" };
 								int CurrentViewMode = static_cast<int>(Client->ViewMode);
-								ImGui::SetNextItemWidth(78.0f);
+								ImGui::SetNextItemWidth(100.0f);
 								if (ImGui::Combo("##ViewMode", &CurrentViewMode, ViewModes, IM_ARRAYSIZE(ViewModes)))
 								{
 									Client->ViewMode = static_cast<EViewModeIndex>(CurrentViewMode);
@@ -269,14 +269,66 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								ImGui::SameLine();
 
 								// 카메라 속도 조절
-								ImGui::SetNextItemWidth(56.0f);
+								ImGui::SetNextItemWidth(48.0f);
 								if (ImGui::DragFloat("##Speed", &Client->GetCamera().Speed, 0.2f, 0.1f, 50.0f, "S:%.1f"))
 								{
 									guiReference.ActiveViewport = Client;
 								}
 								if (ImGui::IsItemHovered())
 								{
-									ImGui::SetTooltip("Camera Speed");
+									ImGui::SetTooltip("Camera Speed: %.1f", Client->GetCamera().Speed);
+								}
+
+								// 너비 여유에 따라 FOV, Sens를 인라인 또는 팝업으로 제공
+								const float maxBtnWidth = 22.0f;
+								const float rightButtonX = startCursorPos.x + rect.Right - maxBtnWidth - 4.0f;
+								const float spaceRemaining = rightButtonX - ImGui::GetCursorPosX();
+
+								if (spaceRemaining >= 150.0f)
+								{
+									ImGui::SameLine();
+									ImGui::SetNextItemWidth(50.0f);
+									if (ImGui::DragFloat("##FOV", &Client->GetCamera().mFovDegree, 0.5f, 5.0f, 170.0f, "FOV:%.0f"))
+									{
+										guiReference.ActiveViewport = Client;
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip("Field of View (FOV: %.1f deg)", Client->GetCamera().mFovDegree);
+									}
+
+									ImGui::SameLine();
+									ImGui::SetNextItemWidth(60.0f);
+									if (ImGui::DragFloat("##Sens", &Client->GetCamera().Sensitivity, 0.005f, 0.01f, 1.0f, "Sens:%.2f", ImGuiSliderFlags_AlwaysClamp))
+									{
+										guiReference.ActiveViewport = Client;
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip("Camera Sensitivity: %.3f", Client->GetCamera().Sensitivity);
+									}
+								}
+								else
+								{
+									ImGui::SameLine();
+									if (ImGui::Button("..."))
+									{
+										ImGui::OpenPopup("CamOptPopup");
+									}
+									if (ImGui::IsItemHovered())
+									{
+										ImGui::SetTooltip("Camera Settings (FOV, Sensitivity)");
+									}
+
+									if (ImGui::BeginPopup("CamOptPopup"))
+									{
+										ImGui::Text("Camera Settings [#%d]", ViewportIndex + 1);
+										ImGui::Separator();
+										ImGui::SliderFloat("FOV", &Client->GetCamera().mFovDegree, 5.0f, 170.0f, "%.1f deg");
+										ImGui::SliderFloat("Sensitivity", &Client->GetCamera().Sensitivity, 0.01f, 1.0f, "%.3f");
+										ImGui::DragFloat("Speed", &Client->GetCamera().Speed, 0.2f, 0.1f, 50.0f, "%.1f");
+										ImGui::EndPopup();
+									}
 								}
 
 								ImGui::SameLine();
@@ -293,8 +345,6 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								}
 
 								// 최대화 토글 버튼
-								const float maxBtnWidth = 22.0f;
-								const float rightButtonX = startCursorPos.x + rect.Right - maxBtnWidth - 4.0f;
 								if (rightButtonX > ImGui::GetCursorPosX() + 4.0f)
 								{
 									ImGui::SetCursorPos(ImVec2(rightButtonX, startCursorPos.y + rect.Top + 2.0f));
@@ -676,23 +726,9 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::SeparatorText("Camera Control");
 
 	FCamera& camera = guiReference.ActiveViewport->GetCamera();
-	URenderer* renderer = guiReference.GraphicsManager->GetRenderer();
 
-	const char* viewModeNames[] = { "Lit", "Unlit", "Wireframe" };
-
-	EViewModeIndex currentViewMode = guiReference.GraphicsManager->GetViewModeIndex();
-	int32 currentViewModeIndex = static_cast<int32>(currentViewMode);
-	// Combo는 선택이 바뀐 프레임에만 true를 돌려주고, 바뀐 값은 이미
-	// currentViewModeIndex에 들어 있다. 그 안에서 Checkbox를 그리면
-	// 한 프레임만 나타났다 사라져 클릭할 수 없다.
-	if (ImGui::Combo("View Mode", &currentViewModeIndex, viewModeNames, IM_ARRAYSIZE(viewModeNames)))
-	{
-		guiReference.GraphicsManager->SetViewModeIndex(static_cast<EViewModeIndex>(currentViewModeIndex));
-	}
 	if (ImGui::BeginCombo("##ShowFlags", "Show Flags"))
 	{
-		// 표시 옵션은 표를 그대로 훑어 체크박스를 만든다.
-		// 옵션을 추가할 때 ShowFlags.h의 GShowFlagInfos에만 한 줄 적으면 여기 바로 나온다.
 		FShowFlags& showFlags = FShowFlags::Get();
 		for (const FShowFlagInfo& flagInfo : GShowFlagInfos)
 		{
@@ -712,6 +748,7 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 
 		ImGui::EndCombo();
 	}
+
 	{
 		static constexpr int32 GridGapValues[] = { 1, 5, 10, 50, 100, 500 };
 		static constexpr const char* GridGapLabels[] = { "(1)", "(5)", "(10)", "(50)", "(100)", "(500)" };
@@ -778,16 +815,6 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 		}
 	}
 
-	ImGui::Text("FOV     ");
-	ImGui::SameLine();
-	ImGui::SliderFloat("##FOV", &camera.mFovDegree, 0.0f, 180.0f);
-
-	ImGui::Text("Sensitivity");
-	ImGui::SameLine();
-	ImGui::SliderFloat("##CameraSensitivity", &camera.Sensitivity, 0.01f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-	
-
-
 	// 1) 라벨 텍스트를 먼저 그리고 같은 줄로
 	ImGui::Text("Location");
 	ImGui::SameLine();
@@ -815,41 +842,6 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(itemWidth);
 	ImGui::DragFloat("##CamRotZ", &camera.Transform.Rotation.Yaw, 0.1f, 180.0f);
-
-	/* Memory Info */
-	ImGui::SeparatorText("Memory Info");
-
-	ImGui::Text("Total allocated memory count: %d", UEngineStatics::sTotalAllocationCount);
-	ImGui::Text("Total allocated memory size: %d bytes", UEngineStatics::sTotalAllocationBytes);
-
-	/* Gizmo Control */
-	ImGui::SeparatorText("Gizmo Control");
-
-	// Display the current gizmo mode dropdown
-	const char* gizmoModeNames[] = { "Translate", "Rotate", "Scale" };
-
-	EGIZMO_TYPE currentGizmoType = guiReference.ActiveViewport->mGizmo.GetOperation();
-	int32 currentGizmoIndex = static_cast<int32>(currentGizmoType);
-	if (ImGui::Combo("Gizmo Mode", &currentGizmoIndex, gizmoModeNames, IM_ARRAYSIZE(gizmoModeNames)))
-	{
-		if (currentGizmoIndex == 0)
-		{
-			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::TRANSLATE);
-		}
-		else if (currentGizmoIndex == 1)
-		{
-			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::ROTATE);
-		}
-		else if (currentGizmoIndex == 2)
-		{
-			guiReference.ActiveViewport->mGizmo.SetOperation(EGIZMO_TYPE::SCALE);
-		}
-	}
-	if (ImGui::Button("Next Gizmo Mode"))
-	{
-		guiReference.ActiveViewport->mGizmo.SetOperation(static_cast<EGIZMO_TYPE>((currentGizmoIndex + 1) % 3));
-	}
-
 
 	ImGui::End();
 }
