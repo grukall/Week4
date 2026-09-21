@@ -139,8 +139,8 @@ public:
 		}
 	}
 
-	inline Microsoft::WRL::ComPtr<ID3D11Texture2D> GetTexture() const { return Texture; }
-	inline Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> GetSRV() const { return SRV; }
+	inline const Microsoft::WRL::ComPtr<ID3D11Texture2D>& GetTexture() const { return Texture; }
+	inline const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& GetSRV() const { return SRV; }
 
 	inline uint32 GetWidth() const { return Width; }
 	inline uint32 GetHeight() const { return Height; }

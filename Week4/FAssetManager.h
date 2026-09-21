@@ -92,6 +92,11 @@ public:
 		return nullptr;
 	}
 
+	bool HasAsset(const FName& AssetName) const
+	{
+		return AssetMetaInfoMap.Contains(AssetName);
+	}
+
 	void UnloadAsset(const FName& AssetName);
 
 	template <typename Func>

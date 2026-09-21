@@ -240,20 +240,19 @@ UAsset* FMaterialAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& As
 		FString TexturePathString(MaterialSource.GetFileManager().MakeRelativeToRoot(TexturePath).string());
 		FName TextureAssetName(TexturePathString);
 
-		FFileAssetSource* TextureSource = new FFileAssetSource(MaterialSource.GetFileManager(), TexturePath);
-
 		FAssetManager& AssetManager = FAssetManager::Get();
-		AssetManager.RegisterAsset<FTexture2DAssetLoader>(TextureAssetName, TextureSource, Renderer);
+		if (!AssetManager.HasAsset(TextureAssetName))
+		{
+			FFileAssetSource* TextureSource = new FFileAssetSource(MaterialSource.GetFileManager(), TexturePath);
+			AssetManager.RegisterAsset<FTexture2DAssetLoader>(TextureAssetName, TextureSource, Renderer);
+		}
 
-		// bImport=true: 재임포트로 텍스처 파일이 바뀌었으면 이미 로드된 것도 강제로 다시 읽는다.
-		// 주의: 이미 이 텍스처를 참조 중인 다른 머티리얼이 있으면 그쪽은 옛 포인터가 댕글링된다(위와 동일한 임시 상태).
-		UAsset* TextureAsset = AssetManager.LoadAsset(TextureAssetName, true);
-		UTexture2D* Texture = TextureAsset ? TextureAsset->Cast<UTexture2D>() : nullptr;
+		UTexture2D* Texture = AssetManager.GetAssetAs<UTexture2D>(TextureAssetName, true);
 
 		UE_LOG("[MaterialLoader] texture: file=%s key=%s texture=%p", Filename.CStr(), TexturePathString.CStr(), (void*)Texture);
 
 		return Texture;
-		};
+	};
 
 	Material->SetAmbientTexture(LoadTexture(Data.AmbientColorMapFilename));
 	Material->SetDiffuseTexture(LoadTexture(Data.DiffuseColorMapFilename));

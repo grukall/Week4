@@ -169,13 +169,13 @@ void FRenderPipeline::SetShader(const FString& ShaderPath)
 	PixelShaderCSO->Release();
 }
 
-void FRenderPipeline::SetShaderResource(uint32 Slot, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV)
+void FRenderPipeline::SetShaderResource(uint32 Slot, ID3D11ShaderResourceView* SRV)
 {
 	if (Slot >= ShaderResourceViews.Num())
 	{
 		ShaderResourceViews.SetNum(Slot + 1);
 	}
-	ShaderResourceViews[Slot] = SRV.Get();
+	ShaderResourceViews[Slot] = SRV;
 }
 
 void FRenderPipeline::ClearShaderResource()

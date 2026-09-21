@@ -31,7 +31,11 @@ public:
 	void SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY Topology);
 	void SetShader(const FString& ShaderPath);
 	
-	void SetShaderResource(uint32 Slot, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV);
+	void SetShaderResource(uint32 Slot, ID3D11ShaderResourceView* SRV);
+	void SetShaderResource(uint32 Slot, const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& SRV)
+	{
+		SetShaderResource(Slot, SRV.Get());
+	}
 	void ClearShaderResource();
 
 	void SetSamplerState(uint32 Slot, D3D11_FILTER Filter, D3D11_TEXTURE_ADDRESS_MODE AddressU, D3D11_TEXTURE_ADDRESS_MODE AddressV);
