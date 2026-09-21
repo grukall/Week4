@@ -20,6 +20,9 @@ public:
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
 
+	static UMaterial* DefaultMaterial;
+	static void InitDefaultMaterial(URenderer* Renderer);
+
 public:
 	float GetSpecularPower() const
 	{

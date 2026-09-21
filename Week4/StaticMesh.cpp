@@ -5,104 +5,113 @@
 #include "FileManager.h"
 #include "Material.h"
 #include "FAssetManager.h"
+
 UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
+	UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(AssetName);
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
-	FString FileContent = FileSource.ReadFileToString();
-	FObjImporter Importer = FObjImporter{};
-	FStaticMesh StaticMesh{};
-	TArray<FString> MaterialFiles;
+	std::filesystem::path BinaryPath = "Assets/Cooked/" + std::string(AssetName.ToString().CStr()) + ".smesh";
 
-	StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
-	Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
-
-	TArray<FMaterialData> MaterialDatas;
-	for (FString filename : MaterialFiles)
+	if (ShouldImport(AssetName, FileSource.GetFilePath(), BinaryPath))
 	{
-		std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
-		std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
-		FString MaterialFileContent = FileSource.GetFileManager().ReadFileToString(MtlPath);
-		Importer.ParseMtlFile(MaterialFileContent, MaterialDatas);
-	}
+		FString FileContent = FileSource.ReadFileToString();
+		FObjImporter Importer = FObjImporter{};
+		FStaticMesh StaticMesh{};
+		TArray<FString> MaterialFiles;
 
-	TArray<FVertexSimple> Vertices;
-	ToFVertexSimple(StaticMesh.Vertices, Vertices);
+		StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
+		Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
 
-	UStaticMesh* NewMesh = FObjectFactory::ConstructObject<UStaticMesh>(
-		AssetName,
-		Renderer,
-		Vertices.Data(),
-		Vertices.Num(),
-		StaticMesh.Indices.Data(),
-		StaticMesh.Indices.Num(),
-		StaticMesh.Sections.Data(),
-		StaticMesh.Sections.Num()
-	);
-
-	for (const FString& MaterialName : StaticMesh.Materials) {
-		const FMaterialData* FoundMaterial = nullptr;
-
-		for (const FMaterialData& MaterialData : MaterialDatas) {
-			if (MaterialData.Name == MaterialName) {
-				FoundMaterial = &MaterialData;
-				break;
-			}
+		TArray<FMaterialData> Materials;
+		for (FString filename : MaterialFiles)
+		{
+			std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
+			std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
+			FString MaterialFileContent = FileSource.GetFileManager().ReadFileToString(MtlPath);
+			Importer.ParseMtlFile(MaterialFileContent, Materials);
 		}
 
-		UMaterial* Material = nullptr;
+		for (const FString& MaterialName : StaticMesh.Materials) {
+			const FMaterialData* FoundMaterial = nullptr;
 
-		if (FoundMaterial != nullptr) {
-			Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
-
-			Material->SetSpecularPower(FoundMaterial->SpecularPower);
-
-			Material->SetOpticalDensity(FoundMaterial->OpticalDensity);
-
-			Material->SetTransparency(FoundMaterial->Transparency);
-
-			Material->SetIlluminationModel(FoundMaterial->IlluminationModel);
-
-			Material->SetAmbientColor(FoundMaterial->AmbientColor);
-
-			Material->SetDiffuseColor({ FoundMaterial->DiffuseColor, 1.0f });
-
-			Material->SetSpecularColor(FoundMaterial->SpecularColor);
-
-			Material->SetEmissiveColor(FoundMaterial->EmissiveColor);
-
-			Material->SetTransmissionFilter(FoundMaterial->TransmissionFilter);
-
-			auto LoadTexture = [&](const FString& Filename) -> UTexture2D* {
-				if (Filename.empty()) {
-					return nullptr;
+			for (const FMaterialData& MaterialData : Materials) {
+				if (MaterialData.Name == MaterialName) {
+					FoundMaterial = &MaterialData;
+					break;
 				}
+			}
 
-				std::filesystem::path TexturePath = FileSource.GetFilePath().parent_path() / Filename.CStr();
+			UMaterial* Material = nullptr;
 
-				FString TexturePathString(TexturePath.string());
-				FName TextureAssetName(TexturePathString);
+			if (FoundMaterial != nullptr) {
+				Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
 
-				FFileAssetSource* TextureSource = new FFileAssetSource(FileSource.GetFileManager(), TexturePath);
+				Material->SetSpecularPower(FoundMaterial->SpecularPower);
 
-				AssetManager->RegisterAsset(TextureAssetName, TextureLoader, TextureSource);
+				Material->SetOpticalDensity(FoundMaterial->OpticalDensity);
 
-				return AssetManager->GetAssetAs<UTexture2D>(TextureAssetName, true);
-				};
+				Material->SetTransparency(FoundMaterial->Transparency);
 
-			Material->SetAmbientTexture(LoadTexture(FoundMaterial->AmbientColorMapFilename));
+				Material->SetIlluminationModel(FoundMaterial->IlluminationModel);
 
-			Material->SetDiffuseTexture(LoadTexture(FoundMaterial->DiffuseColorMapFilename));
+				Material->SetAmbientColor(FoundMaterial->AmbientColor);
 
-			Material->SetSpecularTexture(LoadTexture(FoundMaterial->SpecularColorMapFilename));
+				Material->SetDiffuseColor({ FoundMaterial->DiffuseColor, 1.0f });
 
-			Material->SetBumpTexture(LoadTexture(FoundMaterial->BumpMapFilename));
+				Material->SetSpecularColor(FoundMaterial->SpecularColor);
+
+				Material->SetEmissiveColor(FoundMaterial->EmissiveColor);
+
+				Material->SetTransmissionFilter(FoundMaterial->TransmissionFilter);
+
+				auto LoadTexture = [&](const FString& Filename) -> UTexture2D* {
+					if (Filename.empty()) {
+						return nullptr;
+					}
+
+					std::filesystem::path TexturePath = FileSource.GetFilePath().parent_path() / Filename.CStr();
+
+					FString TexturePathString(TexturePath.string());
+					FName TextureAssetName(TexturePathString);
+
+					FFileAssetSource* TextureSource = new FFileAssetSource(FileSource.GetFileManager(), TexturePath);
+
+					AssetManager->RegisterAsset(TextureAssetName, TextureLoader, TextureSource);
+
+					return AssetManager->GetAssetAs<UTexture2D>(TextureAssetName, true);
+					};
+
+				Material->SetAmbientTexture(LoadTexture(FoundMaterial->AmbientColorMapFilename));
+
+				Material->SetDiffuseTexture(LoadTexture(FoundMaterial->DiffuseColorMapFilename));
+
+				Material->SetSpecularTexture(LoadTexture(FoundMaterial->SpecularColorMapFilename));
+
+				Material->SetBumpTexture(LoadTexture(FoundMaterial->BumpMapFilename));
+			}
+			else {
+				Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
+			}
+
+			NewMesh->AddMaterial(Material);
 		}
-		else {
-			Material = FObjectFactory::ConstructObject<UMaterial>(FName(MaterialName), Renderer);
-		}
 
-		NewMesh->AddMaterial(Material);
+		NewMesh->SetData(
+			StaticMesh.Vertices,
+			StaticMesh.Indices,
+			StaticMesh.Sections
+		);
+
+		NewMesh->MarkDirty(true);
 	}
+	else
+	{
+		FArchiveFileReader Reader(BinaryPath);
+		NewMesh->Serialize(Reader);
+		NewMesh->MarkDirty(false);
+	}
+
+	NewMesh->BuildRenderBuffers(Renderer);
 
 	return NewMesh;
 }
@@ -112,16 +121,33 @@ void FStaticMeshAssetLoader::UnloadAsset(UAsset* Asset)
 	// TODO
 }
 
-void FStaticMeshAssetLoader::ToFVertexSimple(const TArray<FNormalVertex>& NormalVertices, TArray<FVertexSimple>& Vertices)
+bool FStaticMeshAssetLoader::ShouldImport(
+	const FName AssetName,
+	const std::filesystem::path& SourcePath,
+	const std::filesystem::path& BinaryPath
+)
 {
-	for (auto& NormalVertice : NormalVertices)
+	FString NameStr = AssetName.ToString();
+
+	bool bRequiresImport = true;
+
+	if (std::filesystem::exists(BinaryPath))
 	{
-		Vertices.Add
-		({
-			NormalVertice.Pos.x, NormalVertice.Pos.y, NormalVertice.Pos.z,
-			0.0f, 0.0f, 0.0f, 0.0f,
-			NormalVertice.UV.X, NormalVertice.UV.Y,
-			NormalVertice.Normal.x, NormalVertice.Normal.y, NormalVertice.Normal.z
-		});
+		if (std::filesystem::exists(SourcePath))
+		{
+			auto SourceTime = std::filesystem::last_write_time(SourcePath);
+			auto BinaryTime = std::filesystem::last_write_time(BinaryPath);
+
+			if (BinaryTime >= SourceTime)
+				bRequiresImport = false;
+			else
+				bRequiresImport = true;
+		}
+		else
+		{
+			bRequiresImport = false;
+		}
 	}
+
+	return bRequiresImport;
 }

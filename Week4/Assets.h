@@ -83,6 +83,10 @@ public:
 
 	void SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial);
 
+	void BuildRenderBuffers(URenderer& InRenderer);
+	void SetData(const TArray<FVertexSimple>& InVertices, const TArray<uint32>& InIndices, const TArray<FStaticMeshSection>& InSections);
+	void Serialize(FArchive& Ar) override;
+
 private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
 	uint32 VertexCount = 0;

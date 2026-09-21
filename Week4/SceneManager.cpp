@@ -98,7 +98,9 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
-
+#if IS_OBJ_VIEWER
+	UpdateObjViewerGUI(guiReference);
+#else
 	{
 		// Docking
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -428,12 +430,12 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 		ImGui::PopStyleVar();
 	}
-
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
 	updateOutlinerGUI(guiReference);
 	updateContentBrowserGUI(guiReference);
 	ConsoleWindow::Get().Process(mPanelWidth);
+#endif
 }
 
 void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
@@ -1077,6 +1079,8 @@ void FSceneManager::updateOutlinerGUI(const FGuiReference& guiReference)
 
 void FSceneManager::NewScene()
 {
+	mPropertyPanel->SetTarget(nullptr);
+
 	if (mCurrentWorld != nullptr)
 	{
 		delete mCurrentWorld;
@@ -1201,6 +1205,7 @@ void FSceneManager::LoadScene(
 	}
 
 	// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
+	mPropertyPanel->SetTarget(nullptr);
 	delete mCurrentWorld;
 	mCurrentWorld = newWorld;
 	mPropertyPanel->SetWorld(mCurrentWorld);
@@ -1229,6 +1234,133 @@ void  FSceneManager::SetSelectedActor(AActor* actor)
 float FSceneManager::GetPanelWidth() const
 {
 	return mPanelWidth;
+}
+
+void FSceneManager::InitObjViewer(const char* CmdLine)
+{
+	NewScene();
+	UE_LOG("OBJ Viewer Path: %s", CmdLine);
+}
+
+void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
+{
+	if (guiReference.ViewportClients == nullptr)	return;
+	if (guiReference.ViewportClients->IsEmpty())	return;
+
+	FEditorViewportClient* ViewportClient = (*guiReference.ViewportClients)[0];
+	if (ViewportClient == nullptr) return;
+	
+	const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+
+	ImGui::SetNextWindowPos(MainViewport->Pos, ImGuiCond_Always);
+
+	ImGui::SetNextWindowSize(MainViewport->Size, ImGuiCond_Always);
+
+	const ImGuiWindowFlags WindowFlags =ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+											ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+
+	ImGui::Begin("OBJ Viewer", nullptr, WindowFlags);
+
+	if (ImGui::Button("Open OBJ")) {
+		const std::filesystem::path sceneDirectory = std::filesystem::absolute(std::filesystem::path(kDefaultAssetsPath) / std::filesystem::path(kSceneDataDir));
+		void* ownerWindow = ImGui::GetMainViewport()->PlatformHandleRaw;
+
+		const std::optional<std::filesystem::path> selectedPath = FNativeFileDialog::OpenObjFile(ownerWindow, sceneDirectory);
+
+		if (selectedPath.has_value()) {
+			const std::filesystem::path& Path = selectedPath.value();
+			
+			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
+
+			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+
+			FTexture2DAssetLoader* Texture2DLoader = new FTexture2DAssetLoader(*Renderer);
+
+			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer, *guiReference.AssetManager, *Texture2DLoader);
+
+			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
+
+			FName AssetName = FName(selectedPath.value().stem().string().c_str());
+
+			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
+
+			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
+
+			NewScene();
+
+			UStaticMesh* MeshAsset = guiReference.AssetManager->GetAssetAs<UStaticMesh>(AssetName, true);
+
+			if (MeshAsset != nullptr) {
+				const FAABB& Bounds = MeshAsset->GetLocalBoundingBox();
+				const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+				AActor* NewActor = FObjectFactory::SpawnPrimitiveActor(AssetName, -Center, FRotator(0.0f, 0.0f, 0.0f), FVector(1.0f, 1.0f, 1.0f));
+				if (NewActor != nullptr) {
+					mCurrentWorld->AddActor(NewActor);
+					ViewportClient->SetViewerActor(NewActor);
+					ViewportClient->Reset();
+					ViewportClient->FocusOnMesh(MeshAsset);
+				}
+			}
+
+		}
+	}
+
+	ImGui::Separator();
+	ImVec2 ContentSize = ImGui::GetContentRegionAvail();
+	float PropertyPanelWidth = 350.0f;
+	float ViewportWidth = ContentSize.x - PropertyPanelWidth - 8.0f;
+
+	if (ImGui::BeginChild("ViewportRegion", ImVec2(ViewportWidth, ContentSize.y), false)) {
+		const ImVec2 Size = ImGui::GetContentRegionAvail();
+
+		if (Size.x > 0.0f && Size.y > 0.0f) {
+			ImVec2 ScreenPos = ImGui::GetCursorScreenPos();
+
+			mViewportX = ScreenPos.x;
+			mViewportY = ScreenPos.y;
+			mViewportWidth = Size.x;
+			mViewportHeight = Size.y;
+
+			ViewportClient->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+
+			guiReference.ActiveViewport = ViewportClient;
+
+			if (ViewportClient->mRenderTarget && ViewportClient->mRenderTarget->SRV) {
+				ImTextureID SRV = (ImTextureID)(intptr_t)ViewportClient->mRenderTarget->SRV.Get();
+
+				ImGui::Image(SRV, Size);
+
+				mbViewportHovered = ImGui::IsWindowHovered();
+			}
+			else {
+				mbViewportHovered = false;
+			}
+		}
+	}
+	ImGui::EndChild();
+	ImGui::SameLine();
+
+	if (ImGui::BeginChild("PropertiesRegion", ImVec2(PropertyPanelWidth, ContentSize.y), true)) {
+		ImGui::Text("Details");
+		ImGui::Separator();
+
+		if (mPropertyPanel != nullptr) {
+			mPropertyPanel->OnTransformChanged = [ViewportClient]() {
+				ViewportClient->FocusOnViewerActor();
+			};
+			mPropertyPanel->SetTarget(ViewportClient->mViewerActor);
+			mPropertyPanel->OnRender();
+		}
+		else {
+			ImGui::TextDisabled("PropertyPanel is uninitialized.");
+		}
+	}
+	ImGui::EndChild();
+	
+	ImGui::End();
+	ImGui::PopStyleVar();
 }
 
 const TArray<FRenderInfo> FSceneManager::GetAxisRenderInfos()

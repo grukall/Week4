@@ -20,10 +20,20 @@ public:
 	}
 
 	inline const FName& GetAssetName() const { return AssetName; }
+	inline void MarkDirty(bool bDirty = true) { bIsDirty = bDirty; }
+	inline const bool IsDirty() const { return bIsDirty; }
+
+	virtual void Serialize(FArchive& Ar) override
+	{
+		UObject::Serialize(Ar);
+		Ar << AssetName;
+		Ar << AssetPath;
+	}
 
 protected:
 	FName AssetName;
 	FString AssetPath;
+	bool bIsDirty = false;
 };
 
 class FAssetSource

@@ -255,9 +255,7 @@ namespace
 				if (ImGui::BeginCombo("##Material",CurrentName.c_str()))
 				{
 					// None
-					if (ImGui::Selectable(
-						"None",
-						CurrentMaterial == nullptr))
+					if (ImGui::Selectable("None",CurrentMaterial == nullptr))
 					{
 						(*Materials)[Index] = nullptr;
 					}
@@ -354,22 +352,13 @@ namespace
 
 		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont);
 	}
+
 	void DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
 		if (!Component) {
 			return;
 		}
 
-		UStaticMesh* StaticMesh = Component->GetStaticMesh();
-
-		if (!StaticMesh) {
-			return;
-		}
-
-		const TArray<FStaticMeshSection>& Sections = StaticMesh->GetSections();
-
-		if (Sections.IsEmpty()) {
-			return;
-		}
+		TArray<UMaterial*> ComponentMaterials = Component->GetMaterials();
 
 		ImGui::Separator();
 
@@ -377,39 +366,40 @@ namespace
 			return;
 		}
 
-		for (uint32 SectionIndex = 0;SectionIndex < Sections.Num();++SectionIndex) {
-			const FStaticMeshSection& Section = Sections[SectionIndex];
+		for (int32 SlotIndex = 0; SlotIndex < ComponentMaterials.Num(); ++SlotIndex) {
+			UMaterial* CurrentMaterial = ComponentMaterials[SlotIndex];
 
-			ImGui::PushID(static_cast<int>(SectionIndex));
+			const bool bNoneSelected =
+				(CurrentMaterial == nullptr || CurrentMaterial == UMaterial::DefaultMaterial);
 
-			ImGui::Text("Section %u", SectionIndex);
+			FString CurrentMaterialName = bNoneSelected
+				? FString("None")
+				: CurrentMaterial->GetAssetName().ToString();
 
-			ImGui::Text("Start Index : %u", Section.StartIndex);
+			ImGui::PushID(SlotIndex);
 
-			ImGui::Text("Index Count : %u", Section.IndexCount);
-
-			ImGui::Text("Material Slot : %u", Section.MaterialSlotIndex);
-
-			UMaterial* CurrentMaterial = Component->GetMaterial(Section.MaterialSlotIndex);
-
-			FString CurrentMaterialName = CurrentMaterial ? CurrentMaterial->GetAssetName().ToString() : FString("None");
+			ImGui::Text("Slot %d", SlotIndex);
 
 			ImGui::Text("Material");
 			ImGui::SameLine(120.0f);
 			ImGui::SetNextItemWidth(-1.0f);
 
 			if (ImGui::BeginCombo("##Material", CurrentMaterialName.c_str())) {
-				const bool bNoneSelected = (CurrentMaterial == nullptr);
+
+				// None
 				if (ImGui::Selectable("None", bNoneSelected)) {
-					FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
-					Component->SetMaterial(MutableSection.MaterialSlotIndex, nullptr);
+					Component->SetMaterial(
+						SlotIndex,
+						UMaterial::DefaultMaterial
+					);
 				}
 
 				if (bNoneSelected) {
 					ImGui::SetItemDefaultFocus();
 				}
 
-				for (TObjectIterator<UAsset> It(UMaterial::GetClass());It;++It) {
+				// 모든 Material 표시
+				for (TObjectIterator<UAsset> It(UMaterial::GetClass()); It; ++It) {
 					UAsset* Asset = *It;
 
 					if (!Asset) {
@@ -422,55 +412,49 @@ namespace
 						continue;
 					}
 
+					// DefaultMaterial은 None으로 표시하므로 제외
+					if (Material == UMaterial::DefaultMaterial) {
+						continue;
+					}
+
 					const bool bSelected = (Material == CurrentMaterial);
 
 					FString MaterialName = Material->GetAssetName().ToString();
 
 					if (ImGui::Selectable(MaterialName.c_str(), bSelected)) {
-						TArray<UMaterial*> MeshMaterials = Component->GetMaterials();
-						uint32 FoundSlotIndex = -1;
-						bool bFound = false;
-						for (uint32 i = 0; i < MeshMaterials.Num(); ++i) {
-							if (MeshMaterials[i] == Material) {
-								FoundSlotIndex = i;
-								bFound = true;
-								break;
-							}
-						}
-						if (!bFound) {
-							FoundSlotIndex = MeshMaterials.Num();
-						}
-
-						FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
-						MutableSection.MaterialSlotIndex = FoundSlotIndex;
-
-						Component->SetMaterial(FoundSlotIndex, Material);
-						CurrentMaterial = Material;
+						Component->SetMaterial(
+							SlotIndex,
+							Material
+						);
 					}
 
 					if (bSelected) {
 						ImGui::SetItemDefaultFocus();
 					}
 				}
+
 				ImGui::EndCombo();
 			}
 
-			if (CurrentMaterial)
-			{
+			if (CurrentMaterial && CurrentMaterial != UMaterial::DefaultMaterial) {
 				ImGui::Spacing();
 
-				// Get 함수를 사용해 현재 UV Speed 값을 가져옴
 				FVector2 CurrentSpeed = CurrentMaterial->GetUVSpeed();
-				float Speed[2] = { static_cast<float>(CurrentSpeed.X), static_cast<float>(CurrentSpeed.Y) };
 
-				// ImGui에서 드래그로 값 수정 시 Set 함수 호출
-				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f))
-				{
-					CurrentMaterial->SetUVSpeed(FVector2(Speed[0], Speed[1]));
+				float Speed[2] = {
+					static_cast<float>(CurrentSpeed.X),
+					static_cast<float>(CurrentSpeed.Y)
+				};
+
+				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f)) {
+					CurrentMaterial->SetUVSpeed(
+						FVector2(Speed[0], Speed[1])
+					);
 				}
 			}
 
 			ImGui::Separator();
+
 			ImGui::PopID();
 		}
 	}
@@ -508,17 +492,24 @@ void FPropertyPanel::OnRender()
 	if (Target)
 	{
 		FTransform Transform = Target->GetTransform();
-		DrawVector3Controller("Location", Transform.Location, 0.0f, 10.0f);
+
+		bool bTransformChanged = false;
+
+		bTransformChanged |= DrawVector3Controller("Location", Transform.Location, 0.0f, 10.0f);
 
 		FVector Rotation = FVector(Transform.Rotation.Roll, Transform.Rotation.Pitch, Transform.Rotation.Yaw);
-		DrawVector3Controller("Rotation", Rotation, 0.0f, 10.0f);
+		bTransformChanged |= DrawVector3Controller("Rotation", Rotation, 0.0f, 10.0f);
 
 		Transform.Rotation = FRotator(Rotation.y, Rotation.z, Rotation.x);
-		DrawVector3Controller("Scale", Transform.Scale, 0.0f, 10.0f);
+		bTransformChanged |= DrawVector3Controller("Scale", Transform.Scale, 0.0f, 10.0f);
 
 		Target->SetLocation(Transform.Location);
 		Target->SetRotation(Transform.Rotation);
 		Target->SetScale(Transform.Scale);
+
+		if (bTransformChanged && OnTransformChanged) {
+			OnTransformChanged();
+		}
 
 		if (Target)
 		{

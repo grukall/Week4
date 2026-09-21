@@ -7,6 +7,7 @@
 #include "TSparseArray.h"
 #include "ObjectFactory.h"
 #include "Property.h"
+#include "Archive.h"
 
 namespace json { class JSON; }
 
@@ -93,6 +94,8 @@ public:
 	static TObject* GetObjectByInternalIndex(uint32 internalIndex);
 
 	inline static uint64 GetGObjectRevision() { return GUObjectRevision; }
+
+	virtual void Serialize(FArchive& Ar) {}
 
 public:
 	static TSparseArray<UObject*> GUObjectArray;

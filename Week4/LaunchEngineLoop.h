@@ -25,7 +25,7 @@ public:
 	}
 	~FEngineLoop() {};
 
-	void Init(HINSTANCE hInstance, WNDPROC WndProc);
+	void Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine);
 	void Tick(bool bPumpMessages);
 	void End();
 

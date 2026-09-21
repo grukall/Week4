@@ -25,7 +25,7 @@
 #include "FStatManager.h"
 
 #include "Material.h"
-void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
+void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine)
 {
 	// Initialize window infos
 	WCHAR WindowClass[] = L"JungleWindowClass";
@@ -124,7 +124,11 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 	int32 GridGap = 1;
 	sscanf_s(Value, "%d", &	GridGap);
 	mGraphicsManager->SetGridGap(GridGap);
+#if IS_OBJ_VIEWER
+	mSceneManager->InitObjViewer(CmdLine);
+#else
 	mSceneManager->NewScene();
+#endif
 }
 
 void FEngineLoop::InitAssetManager()
@@ -132,24 +136,32 @@ void FEngineLoop::InitAssetManager()
 	mAssetManager = new FAssetManager();
 
 	URenderer* renderer = mGraphicsManager->GetRenderer();
-	
+
+	UMaterial::InitDefaultMaterial(renderer);
+
 	// Register built-in asset types
 	UStaticMesh* cubeAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("CubeMesh"), *renderer, Cube_vertices, sizeof(Cube_vertices) / sizeof(FVertexSimple), Cube_indices, sizeof(Cube_indices) / sizeof(uint32));
+	cubeAsset->SetMaterial(0, UMaterial::DefaultMaterial);
 	mAssetManager->RegisterAsset(cubeAsset);
 
 	UStaticMesh* sphereAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("SphereMesh"), *renderer, Sphere_vertices, sizeof(Sphere_vertices) / sizeof(FVertexSimple), Sphere_indices, sizeof(Sphere_indices) / sizeof(uint32));
+	sphereAsset->SetMaterial(0, UMaterial::DefaultMaterial);
 	mAssetManager->RegisterAsset(sphereAsset);
 
 	UStaticMesh* circleAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("CircleMesh"), *renderer, Circle_vertices, sizeof(Circle_vertices) / sizeof(FVertexSimple), Circle_indices, sizeof(Circle_indices) / sizeof(uint32));
+	circleAsset->SetMaterial(0, UMaterial::DefaultMaterial);
 	mAssetManager->RegisterAsset(circleAsset);
 
 	UStaticMesh* triangleAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("TriangleMesh"), *renderer, Triangle_vertices, sizeof(Triangle_vertices) / sizeof(FVertexSimple), Triangle_indices, sizeof(Triangle_indices) / sizeof(uint32));
+	triangleAsset->SetMaterial(0, UMaterial::DefaultMaterial);
 	mAssetManager->RegisterAsset(triangleAsset);
 
 	UStaticMesh* gizmoArrowAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("GizmoArrowMesh"), *renderer, GizmoArrow_vertices, sizeof(GizmoArrow_vertices) / sizeof(FVertexSimple), GizmoArrow_indices, sizeof(GizmoArrow_indices) / sizeof(uint32));
+	gizmoArrowAsset->SetMaterial(0, UMaterial::DefaultMaterial);
 	mAssetManager->RegisterAsset(gizmoArrowAsset);
 
 	UStaticMesh* PlaneAsset = FObjectFactory::ConstructObject<UStaticMesh>(FName("PlaneMesh"), *renderer, Plane_vertices, sizeof(Plane_vertices) / sizeof(FVertexSimple), Plane_indices, sizeof(Plane_indices) / sizeof(uint32));
+	PlaneAsset->SetMaterial(0, UMaterial::DefaultMaterial);
 	mAssetManager->RegisterAsset(PlaneAsset);
 
 
@@ -223,7 +235,11 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	ConsoleWindow& console = ConsoleWindow::Get();
 	FRenderCollector& RenderCollector = mGraphicsManager->GetRenderCollector();
 	const FInputState& Input = WindowApplication.Input;
-
+#if IS_OBJ_VIEWER
+	if (!ViewportClients.IsEmpty()) {
+		ActiveViewportClient = ViewportClients[0];
+	}
+#endif
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
 	// Input Threads & Active Viewport Update
@@ -319,6 +335,24 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 		mGraphicsManager->Update(deltaTime);
 
+#if IS_OBJ_VIEWER
+		if (!ViewportClients.IsEmpty()) {
+			FEditorViewportClient* CurrentClient = ViewportClients[0];
+
+			CurrentClient->ResizeRenderTarget(mGraphicsManager);
+
+			mGraphicsManager->GetRenderer()->BindRenderTarget(CurrentClient->mRenderTarget, CurrentClient->mDepthStencil, true);
+
+			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
+			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
+
+			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
+
+			mGraphicsManager->FlushLines();
+			mGraphicsManager->Render();
+		}
+#else
+
 		// 4개의 뷰포트 드로우콜
 		for (int i = 0; i < 4; ++i)
 		{
@@ -357,7 +391,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 				currentHeight
 			);
 		}
-
+#endif
 
 		// ImGui
 		SCOPE_CYCLE_COUNTER("ImGui");

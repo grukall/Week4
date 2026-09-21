@@ -137,8 +137,13 @@ void ProcessMessage(bool& bIsExit)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
-	GEngineLoop.Init(hInstance, WndProc);
 
+	GEngineLoop.Init(hInstance, WndProc, lpCmdLine);
+#if IS_OBJ_VIEWER
+
+	UE_LOG("HELLO OBJ VIEW");
+
+#endif
 	// Main Loop
 	bool bIsExit = false;
 	while (bIsExit == false)

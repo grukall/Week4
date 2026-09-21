@@ -91,6 +91,44 @@ void UStaticMesh::Initialize(const FName& InAssetName, URenderer& InRenderer, co
 	}
 }
 
+void UStaticMesh::BuildRenderBuffers(URenderer& InRenderer)
+{
+	VertexCount = Vertices.Num();
+	IndexCount = Indices.Num();
+
+	VertexBuffer = InRenderer.CreateVertexBuffer(Vertices.Data(), VertexCount);
+	IndexBuffer = InRenderer.CreateIndexBuffer(Indices.Data(), IndexCount);
+
+	BoundingBox = FAABB();
+
+	for (uint32 i = 0; i < IndexCount; ++i)
+	{
+		const FVertexSimple& Vertex = Vertices[Indices[i]];
+		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
+	}
+}
+
+void UStaticMesh::SetData(const TArray<FVertexSimple>& InVertices, const TArray<uint32>& InIndices, const TArray<FStaticMeshSection>& InSections)
+{
+	Vertices = InVertices;
+	Indices = InIndices;
+	Sections = InSections;
+	BoundingBox = FAABB();
+	for (uint32 i = 0; i < Indices.Num(); ++i) {
+		const FVertexSimple& Vertex = Vertices[Indices[i]];
+		BoundingBox.ExpandToInclude(FVector(Vertex.x, Vertex.y, Vertex.z));
+	}
+}
+
+void UStaticMesh::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	Ar << Vertices;
+	Ar << Indices;
+	Ar << Sections;
+}
+
 void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
 {
 	if (MaterialSlotIndex >= Materials.Num()) {

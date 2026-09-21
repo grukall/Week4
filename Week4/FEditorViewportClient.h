@@ -78,6 +78,16 @@ public:
 	float mViewportLeft = 0.0f;
 	float mViewportTop = 0.0f;
 
+	void FocusOnMesh(const UStaticMesh* StaticMesh);
+	void FocusOnViewerActor();
+	void SetViewerActor(AActor* InActor);
+	void UpdateViewerCamera();
+	AActor* mViewerActor = nullptr;
+
+	FVector mViewerTarget = FVector(0.0f, 0.0f, 0.0f);
+	float mViewerYaw = 0.0f;
+	float mViewerPitch = 0.0f;
+	float mViewerDistance = 5.0f;
 private:
 
 	void DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas,
