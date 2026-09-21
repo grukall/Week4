@@ -95,7 +95,19 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 
 		ViewportClients.Add(NewClient);
 	}
-	ActiveViewportClient = ViewportClients[0];
+	ViewportClients[0]->SetViewportType(EViewportType::Top);
+	ViewportClients[0]->ViewMode = EViewModeIndex::VMI_Wireframe;
+
+	ViewportClients[1]->SetViewportType(EViewportType::Perspective);
+	ViewportClients[1]->ViewMode = EViewModeIndex::VMI_Lit;
+
+	ViewportClients[2]->SetViewportType(EViewportType::Front);
+	ViewportClients[2]->ViewMode = EViewModeIndex::VMI_Wireframe;
+
+	ViewportClients[3]->SetViewportType(EViewportType::Right);
+	ViewportClients[3]->ViewMode = EViewModeIndex::VMI_Wireframe;
+
+	ActiveViewportClient = ViewportClients[1];
 
 	const FVector4 NearTint(1.0f, 0.65f, 0.15f, 0.85f); // 주황 = 가까운 쪽
 	const FVector4 FarTint(0.25f, 0.55f, 1.0f, 0.85f); // 파랑 = 먼 쪽
@@ -217,7 +229,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	// Input Threads & Active Viewport Update
 	WindowApplication.ProcessDeferredEvents();
 	mGraphicsManager->UpdateProjectionTransition(deltaTime);
-	ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
+	ActiveViewportClient->Update(deltaTime, mSceneManager, ActiveViewportClient->GetPerspectiveRatio(), RenderCollector);
 	if (WindowApplication.Input.WasPressed(VK_OEM_3))
 	{
 		console.RequestFocus();
@@ -234,13 +246,13 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	const float ActiveAspect = static_cast<float>(ActiveViewportClient->mWidth) / static_cast<float>(ActiveViewportClient->mHeight);
 	const FMatrix ActiveViewProjMatrix =
 		ActiveViewportClient->GetCamera().GetViewMatrix() *
-		ActiveViewportClient->GetCamera().GetProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, 0.1f, 1000.f);
+		ActiveViewportClient->GetCamera().GetUnifiedProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, ActiveViewportClient->GetCamera().mOrthoDistance, 0.1f, 1000.f, ActiveViewportClient->GetPerspectiveRatio());
 
 
 	// Mouse Picking & Gizmo
 	{
 		// 피킹 로직
-		AActor* HitActor = ActiveViewportClient->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
+		AActor* HitActor = ActiveViewportClient->PerformMousePicking(ActiveViewportClient->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
 
 		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) &&
 			!ActiveViewportClient->mGizmo.IsDragging() && !ActiveViewportClient->mGizmo.IsMouseOverHandle())
@@ -319,7 +331,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
 			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
 
-			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
+			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight, CurrentClient->GetPerspectiveRatio(), CurrentClient->ViewMode);
 			mGraphicsManager->FlushLines();
 			mGraphicsManager->Render();
 
@@ -333,7 +345,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			// 각 뷰포트별 렌더링용 ViewProj 계산 및 기즈모 렌더링
 			const float Aspect = currentWidth / currentHeight;
 			const FMatrix CurrentViewProj = CurrentClient->mCamera.GetViewMatrix() *
-				CurrentClient->mCamera.GetProjectionMatrix(Aspect, CurrentClient->mCamera.mFovDegree, 0.1f, 1000.f);
+				CurrentClient->mCamera.GetUnifiedProjectionMatrix(Aspect, CurrentClient->mCamera.mFovDegree, CurrentClient->mCamera.mOrthoDistance, 0.1f, 1000.f, CurrentClient->GetPerspectiveRatio());
 
 			CurrentClient->mGizmo.Render(
 				mSceneManager,

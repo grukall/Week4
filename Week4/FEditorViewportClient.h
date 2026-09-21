@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Vector.h"
 
 #include <d3d11.h>
@@ -7,6 +7,7 @@
 #include "RenderInfo.h"
 #include "Gizmo.h"
 #include "FStatManager.h"
+#include "enum.h"
 
 class AActor;
 class FSceneManager;
@@ -16,6 +17,17 @@ class FFontAtlas;
 struct FRenderTarget2D;
 struct FDepthStencil;
 class FGraphicsManager;
+
+enum class EViewportType
+{
+	Perspective,
+	Top,
+	Bottom,
+	Left,
+	Right,
+	Front,
+	Back
+};
 
 // 스탯 HUD 한 줄. 라벨은 우측 정렬, 값은 좌측 정렬로 두 열을 이룬다.
 struct FStatRow
@@ -44,6 +56,15 @@ public:
 
 	void SetViewportArea(float InLeft, float InTop, float InWidth, float InHeight);
 	void ResizeRenderTarget(FGraphicsManager* GraphicsMgr);
+
+	void SetViewportType(EViewportType InType);
+	void FocusOnActor(AActor* TargetActor);
+
+	float GetPerspectiveRatio() const { return bIsOrthographic ? 0.0f : 1.0f; }
+
+	EViewportType ViewportType = EViewportType::Perspective;
+	EViewModeIndex ViewMode = EViewModeIndex::VMI_Lit;
+	bool bIsOrthographic = false;
 
 	FCamera mCamera;
 	FGizmo mGizmo;

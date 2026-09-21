@@ -44,7 +44,7 @@ FGraphicsManager::~FGraphicsManager()
 	delete mRenderer;
 }
 
-void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight)
+void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, float viewportHeight, float projectionRatio, EViewModeIndex viewMode)
 {
 	float d = mCamera->mOrthoDistance;
 	mAspect = viewportWidth / viewportHeight;
@@ -55,7 +55,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 	FMatrix view = mCamera->GetViewMatrix();
 	FMatrix projection_u_p = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 1.0f);
 	FMatrix projection_u_o = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, 0.0f);
-	FMatrix projection_u = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, mProjectionRatio);
+	FMatrix projection_u = mCamera->GetUnifiedProjectionMatrix(mAspect, mCamera->mFovDegree, d, nearZ, farZ, projectionRatio);
 
 	mViewMatrix = view;
 	mProjectionMatrix = projection_u;
@@ -63,7 +63,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 
 	// 뷰 모드를 렌더러에 전달한다. BindPipeline이 드로우마다 이 값을 보고
 	// 솔리드/와이어프레임 래스터라이저를 고른다.
-	mRenderer->SetViewModeIndex(mViewModeIndex);
+	mRenderer->SetViewModeIndex(viewMode);
 
 	// 스탯 HUD 등 화면 좌표 오버레이용. 뷰포트 크기가 바뀌면 여기서 매 프레임 다시 만들어진다.
 	const FMatrix HUDProjection2D = FMatrix::Ortho(0.f, viewportWidth, viewportHeight, 0.f, 0.0f, 1.0f);

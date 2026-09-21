@@ -25,7 +25,7 @@ public:
 	FGraphicsManager(HWND hWindow);
 	~FGraphicsManager();
 
-	void Prepare(const FCamera* Camera,float viewportWidth, float viewportHeight);
+	void Prepare(const FCamera* Camera, float viewportWidth, float viewportHeight, float projectionRatio = 1.0f, EViewModeIndex viewMode = EViewModeIndex::VMI_Lit);
 	void Render();
 	void Display();
 	void Update(float deltaTime);
