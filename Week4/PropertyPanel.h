@@ -18,7 +18,7 @@ public:
 	void SetTarget(AActor* InTarget) { Target = InTarget; }
 	void SetWorld(UWorld* InWorld) { World = InWorld; }
 
-	std::function<void()> OnTransformChanged;
+	std::function<void()> OnPropertyChanged;
 private:
 	UWorld* World;
 	AActor* Target;

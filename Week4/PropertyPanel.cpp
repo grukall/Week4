@@ -92,7 +92,7 @@ namespace
 		return isVectorChanged;
 	}
 	// UClass에 등록된 프로퍼티를 타입에 맞는 위젯으로 그린다
-	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
+	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont, const std::function<void()>& OnPropertyChanged)
 	{
 		void* ValuePtr = reinterpret_cast<char*>(Object) + Property.Offset;
 		const char* Label = Property.WidgetId.c_str(); // 등록 시점에 만들어 둔 "##Name"
@@ -217,6 +217,10 @@ namespace
 								}
 							}
 						}
+						if (OnPropertyChanged)
+						{
+							OnPropertyChanged();
+						}
 					}
 					if (bSelected)
 					{
@@ -318,14 +322,14 @@ namespace
 	// 클래스 계층을 따라 올라가며 각 단계의 프로퍼티를 표시.
 	// 기반 클래스부터 그려야 하므로 재귀로 먼저 최상위까지 올라간다.
 	// (계층을 배열에 모아 뒤집으면 매 프레임 TArray 할당이 생긴다)
-	void DrawProperties(UObject* Object, const FClassInfo* Class, ImFont* CustomFont)
+	void DrawProperties(UObject* Object, const FClassInfo* Class, ImFont* CustomFont, const std::function<void()>& OnPropertyChanged)
 	{
 		if (!Class)
 		{
 			return;
 		}
 
-		DrawProperties(Object, Class->SuperClass, CustomFont);
+		DrawProperties(Object, Class->SuperClass, CustomFont, OnPropertyChanged);
 
 		if (Class->GetProperties().IsEmpty())
 		{
@@ -337,33 +341,35 @@ namespace
 		{
 			for (const FProperty& Property : Class->GetProperties())
 			{
-				DrawProperty(Object, Property, CustomFont);
+				DrawProperty(Object, Property, CustomFont, OnPropertyChanged);
 			}
 		}
 		ImGui::PopID();
 	}
 
-	void DrawProperties(UObject* Object, ImFont* CustomFont)
+	void DrawProperties(UObject* Object, ImFont* CustomFont, const std::function<void()>& OnPropertyChanged)
 	{
 		if (!Object)
 		{
 			return;
 		}
 
-		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont);
+		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont, OnPropertyChanged);
 	}
 
-	void DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
+	bool DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
 		if (!Component) {
-			return;
+			return false;
 		}
+
+		bool bChanged = false;
 
 		TArray<UMaterial*> ComponentMaterials = Component->GetMaterials();
 
 		ImGui::Separator();
 
 		if (!ImGui::CollapsingHeader("Static Mesh Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
-			return;
+			return false;
 		}
 
 		for (int32 SlotIndex = 0; SlotIndex < ComponentMaterials.Num(); ++SlotIndex) {
@@ -392,6 +398,7 @@ namespace
 						SlotIndex,
 						UMaterial::DefaultMaterial
 					);
+					bChanged = true;
 				}
 
 				if (bNoneSelected) {
@@ -426,6 +433,7 @@ namespace
 							SlotIndex,
 							Material
 						);
+						bChanged = true;
 					}
 
 					if (bSelected) {
@@ -450,6 +458,7 @@ namespace
 					CurrentMaterial->SetUVSpeed(
 						FVector2(Speed[0], Speed[1])
 					);
+					bChanged = true;
 				}
 			}
 
@@ -457,6 +466,7 @@ namespace
 
 			ImGui::PopID();
 		}
+		return bChanged;
 	}
 }
 
@@ -507,24 +517,29 @@ void FPropertyPanel::OnRender()
 		Target->SetRotation(Transform.Rotation);
 		Target->SetScale(Transform.Scale);
 
-		if (bTransformChanged && OnTransformChanged) {
-			OnTransformChanged();
+		if (bTransformChanged && OnPropertyChanged) {
+			OnPropertyChanged();
 		}
 
 		if (Target)
 		{
-			DrawProperties(Target, CustomFont);
+			DrawProperties(Target, CustomFont, OnPropertyChanged);
 
 			const TArray<UActorComponent*>& Components = Target->GetComponents();
 			for (UActorComponent* Component : Components)
 			{
-				DrawProperties(Component, CustomFont);
+				DrawProperties(Component, CustomFont, OnPropertyChanged);
 
 				UStaticMeshComponent* StaticMeshComponent = Component->Cast<UStaticMeshComponent>();
 
 				if (StaticMeshComponent)
 				{
-					DrawStaticMeshMaterials(StaticMeshComponent);
+					bool bStaticMeshChanged = DrawStaticMeshMaterials(StaticMeshComponent);
+
+					if (bStaticMeshChanged && OnPropertyChanged)
+					{
+						OnPropertyChanged();
+					}
 				}
 			}
 		}

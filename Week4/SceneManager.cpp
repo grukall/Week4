@@ -1171,22 +1171,16 @@ void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 
 		if (selectedPath.has_value()) {
 			const std::filesystem::path& Path = selectedPath.value();
-			
 			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
-
 			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+			FAssetManager* AssetManager = guiReference.AssetManager;
 
-			FTexture2DAssetLoader* Texture2DLoader = new FTexture2DAssetLoader(*Renderer);
+			// Import()가 obj/mtl을 파싱해서 .uasset으로 굽고 등록까지 한다.
+			// 같은 원본을 다시 고르면 재임포트로 판단해 같은 키에 다시 굽는다.
+			FStaticMeshAssetLoader* Loader = AssetManager->GetOrCreateLoader<FStaticMeshAssetLoader>(*Renderer, *AssetManager);
+			FName AssetName = Loader->Import(Path, FileManager);
 
-			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer, *guiReference.AssetManager, *Texture2DLoader);
-
-			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
-
-			FName AssetName = FName(selectedPath.value().stem().string().c_str());
-
-			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
-
-			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
+			AssetManager->LoadAsset(AssetName, true);
 
 			NewScene();
 
@@ -1247,8 +1241,9 @@ void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 		ImGui::Separator();
 
 		if (mPropertyPanel != nullptr) {
-			mPropertyPanel->OnTransformChanged = [ViewportClient]() {
+			mPropertyPanel->OnPropertyChanged = [ViewportClient]() {
 				ViewportClient->FocusOnViewerActor();
+				ViewportClient->FocusOnMesh(ViewportClient->mViewerActor->GetRootComponent()->Cast<UStaticMeshComponent>()->GetStaticMesh());
 			};
 			mPropertyPanel->SetTarget(ViewportClient->mViewerActor);
 			mPropertyPanel->OnRender();
