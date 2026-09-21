@@ -178,7 +178,9 @@ UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& 
 		UMaterial* Material = AssetManager->GetAssetAs<UMaterial>(Key, true);
 		NewMesh->AddMaterial(Material);
 	}
-
+	if (NewMesh->GetMaterialCount() == 0) {
+		NewMesh->AddMaterial(UMaterial::DefaultMaterial);
+	}
 	NewMesh->BuildRenderBuffers(Renderer);
 
 	UE_LOG("[StaticMeshLoader] loaded from uasset: name=%s materials=%u sections=%u",

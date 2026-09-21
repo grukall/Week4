@@ -95,7 +95,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 
 void FGraphicsManager::Render()
 {
-	mRenderer->RenderLines(mRenderCollector.LineInfos);
+	//mRenderer->RenderLines(mRenderCollector.LineInfos);
 
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
