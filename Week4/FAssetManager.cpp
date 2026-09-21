@@ -49,6 +49,7 @@ FAssetManager::~FAssetManager()
 		}
 
 		delete metaInfo.AssetSource;
+		delete metaInfo.ImportSource;
 	}
 	AssetMetaInfoMap.Empty();
 
@@ -129,7 +130,47 @@ void FAssetManager::UnregisterAsset(const FName& AssetName)
 	UnloadAsset(AssetName);
 
 	delete AssetMetaInfoMap[AssetName].AssetSource;
+	delete AssetMetaInfoMap[AssetName].ImportSource;
 	AssetMetaInfoMap.Remove(AssetName);
+}
+
+bool FAssetManager::FindAssetByImportPath(const std::filesystem::path& ImportPath, FName& OutAssetName) const
+{
+	std::filesystem::path Normalized = std::filesystem::weakly_canonical(ImportPath);
+
+	for (const auto& pair : AssetMetaInfoMap)
+	{
+		const FAssetMetaInfo& metaInfo = pair.second;
+		if (!metaInfo.ImportSource)
+		{
+			continue;
+		}
+
+		if (std::filesystem::weakly_canonical(metaInfo.ImportSource->GetFilePath()) == Normalized)
+		{
+			OutAssetName = metaInfo.AssetName;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void FAssetManager::SetImportSource(const FName& AssetName, FFileAssetSource* ImportSource)
+{
+	if (!AssetMetaInfoMap.Contains(AssetName))
+	{
+		delete ImportSource;
+		return;
+	}
+
+	FAssetMetaInfo& metaInfo = AssetMetaInfoMap[AssetName];
+	if (metaInfo.ImportSource && metaInfo.ImportSource != ImportSource)
+	{
+		delete metaInfo.ImportSource;
+	}
+
+	metaInfo.ImportSource = ImportSource;
 }
 
 void FAssetManager::UnloadAsset(const FName& AssetName)

@@ -51,12 +51,18 @@ public:
 		: Renderer(InRenderer), AssetManager(&InAssetManager) { }
 	~FStaticMeshAssetLoader() = default;
 
+	// FAssetLoader 인터페이스: .uasset을 읽어 UObject로 복원만 한다. 텍스트 파싱은 하지 않는다.
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
+
+	// obj/mtl을 파싱해서 .uasset으로 굽고 FAssetManager에 등록한다. 이미 같은 원본을 임포트한 적
+	// 있으면(ImportSource로 판단) 그 자리에 재임포트, 처음 보는 원본이면 새 .uasset을 만든다.
+	// 반환값은 그 결과로 정해진 .uasset 키 — 이걸로 AssetManager->LoadAsset(key, true)를 부르면 된다.
+	FName Import(const std::filesystem::path& SourceObjPath, FFileManager& InFileManager);
+
 private:
 	URenderer& Renderer;
 	FAssetManager* AssetManager;
-	bool ShouldImport(const FName AssetName, const std::filesystem::path& SourcePath, const std::filesystem::path& BinaryPath);
 };
 
 // mtl 파일 하나에 머티리얼이 여러 개 들어있을 수 있어서(1파일=1에셋인 텍스처와 다름),

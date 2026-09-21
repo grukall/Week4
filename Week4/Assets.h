@@ -83,6 +83,11 @@ public:
 	// 슬롯만 비운다. 머티리얼 자체의 수명은 이 메시를 만든 로더가 책임진다.
 	inline void ClearMaterials() { Materials.Empty(); }
 
+	// .uasset에는 UMaterial* 포인터를 그대로 저장할 수 없어서(FArchive는 raw memcpy라 의미 없는 값이 됨),
+	// 슬롯 순서대로 FAssetManager 조회 키를 대신 저장한다. 로드 후 이 키들로 실제 UMaterial*를 다시 구한다.
+	inline void SetMaterialKeys(const TArray<FName>& InKeys) { MaterialKeys = InKeys; }
+	inline const TArray<FName>& GetMaterialKeys() const { return MaterialKeys; }
+
 	int32 FindMaterialSlot(UMaterial* InMaterial) const;
 
 	void SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial);
@@ -104,6 +109,9 @@ private:
 
 	TArray<FStaticMeshSection> Sections;
 	TArray<UMaterial*> Materials;
+
+	// Materials와 같은 순서. .uasset에 저장/복원되는 건 이 키 배열뿐이다.
+	TArray<FName> MaterialKeys;
 };
 
 class UTexture2D : public UAsset

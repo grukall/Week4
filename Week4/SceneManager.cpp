@@ -714,10 +714,12 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
 			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
 			FAssetManager* AssetManager = guiReference.AssetManager;
-			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
-			FName AssetName = FName(FString(FileManager.MakeRelativeToRoot(Path).string()));
 
-			AssetManager->RegisterAsset<FStaticMeshAssetLoader>(AssetName, FileAssetSource, *Renderer, *AssetManager);
+			// Import()가 obj/mtl을 파싱해서 .uasset으로 굽고 등록까지 한다.
+			// 같은 원본을 다시 고르면 재임포트로 판단해 같은 키에 다시 굽는다.
+			FStaticMeshAssetLoader* Loader = AssetManager->GetOrCreateLoader<FStaticMeshAssetLoader>(*Renderer, *AssetManager);
+			FName AssetName = Loader->Import(Path, FileManager);
+
 			AssetManager->LoadAsset(AssetName, true);
 		}
 	}

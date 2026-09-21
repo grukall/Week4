@@ -8,17 +8,25 @@
 #include <typeinfo>
 #include <type_traits>
 #include <utility>
+#include <filesystem>
+
+class FFileAssetSource;
 
 struct FAssetMetaInfo
 {
-	// FAssetManager 조회 키. 경로처럼 유일성이 필요한 문자열이 들어올 수 있다.
+	// FAssetManager 조회 키. .uasset처럼 프로젝트 내부의 유일한 경로가 들어온다.
 	FName AssetName;
 
 	// 사람이 읽는 표시 이름(파일 stem). UAsset::AssetName으로 그대로 넘어간다.
 	FName Stem;
 
 	FAssetLoader* AssetLoader = nullptr;
+
+	// LoadAsset이 실제로 읽는 소스. 구워지는 에셋이면 .uasset 파일을 가리킨다.
 	FAssetSource* AssetSource = nullptr;
+
+	// 재임포트 판단/실행에만 쓰는 원본 소스(예: obj). 굽기가 필요 없는 에셋이면 nullptr.
+	FFileAssetSource* ImportSource = nullptr;
 
 	// 지금 메모리에 로드돼 있으면 그 인스턴스, 아니면 nullptr.
 	UAsset* LoadedAsset = nullptr;
@@ -61,6 +69,13 @@ public:
 		return newLoader;
 	}
 	void UnregisterAsset(const FName& AssetName);
+
+	// ImportPath(원본 obj 등)를 이미 임포트해서 등록해둔 에셋이 있으면 그 키를 OutAssetName에 담아 true.
+	// 없으면 false — 처음 보는 소스라는 뜻이라 새 이름으로 임포트해야 한다.
+	bool FindAssetByImportPath(const std::filesystem::path& ImportPath, FName& OutAssetName) const;
+
+	// 굽기(Import) 직후, 새로 만든 엔트리에 원본 소스를 한 번 붙여둔다. 재임포트 때는 다시 부를 필요 없다.
+	void SetImportSource(const FName& AssetName, FFileAssetSource* ImportSource);
 
 	UAsset* LoadAsset(const FName& AssetName, bool bImport = false);
 	UAsset* GetAsset(const FName& AssetName, bool loadIfNotLoaded = false);

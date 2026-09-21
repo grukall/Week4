@@ -120,6 +120,7 @@ void UStaticMesh::Serialize(FArchive& Ar)
 	Ar << Vertices;
 	Ar << Indices;
 	Ar << Sections;
+	Ar << MaterialKeys;
 }
 
 void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
