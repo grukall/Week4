@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <string_view>
 #include <filesystem>
@@ -16,7 +16,7 @@ inline constexpr std::string_view kSceneDataSuffix = ".Scene";
 
 class FFileManager;
 class FFrameTimer;
-class FEditorViewportClient;
+struct FEditorViewportClient; // 실제 정의가 struct – class로 선언하면 MSVC 맹글링이 달라져 링크 실패
 class FGraphicsManager;
 class UWorld;
 
@@ -24,7 +24,6 @@ struct FGuiReference
 {
 	const FFrameTimer& FrameTimer;
 	FGraphicsManager* GraphicsManager;
-	const TArray<FEditorViewportClient*>* ViewportClients;
 	FEditorViewportClient*& ActiveViewport;
 	const FFileManager* FileManager;
 	FAssetManager* AssetManager;
@@ -47,7 +46,7 @@ struct FGuiInputField
 class FSceneManager
 {
 public:
-	FSceneManager();
+	explicit FSceneManager(const TArray<FEditorViewportClient*>& clients);
 	~FSceneManager();
 
 	void Tick(float deltaTime);

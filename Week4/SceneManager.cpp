@@ -1,4 +1,4 @@
-﻿#include "SceneManager.h"
+#include "SceneManager.h"
 
 #include <algorithm>
 #include <format>
@@ -42,7 +42,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager()
+FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -54,36 +54,22 @@ FSceneManager::FSceneManager()
 	mPropertyPanel = new FPropertyPanel();
 	mPropertyPanel->Init();
 
-	// 4개의 리프 노드(뷰포트) 생성
-	SWindow* VP_LeftTop = new SWindow();
-	SWindow* VP_LeftBottom = new SWindow();
-	SWindow* VP_RightTop = new SWindow();
-	SWindow* VP_RightBottom = new SWindow();
+	// 4개의 리프 노드(뷰포트) 생성 후 대응 클라이언트를 바로 꽂는다.
+	// 순서: TopLeft=0, TopRight=1, BottomLeft=2, BottomRight=3
+	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->OwningClient     = clients[0];
+	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->OwningClient    = clients[1];
+	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->OwningClient  = clients[2];
+	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->OwningClient = clients[3];
 
 	// 4분할 루트 스플리터 생성 및 조립
 	SSplitterQuad* RootSplitter = new SSplitterQuad();
-	RootSplitter->TopLeft = VP_LeftTop;
-	RootSplitter->BottomLeft = VP_LeftBottom;
-	RootSplitter->TopRight = VP_RightTop;
-	RootSplitter->BottomRight = VP_RightBottom;
+	RootSplitter->TopLeft     = VP_TopLeft;
+	RootSplitter->TopRight    = VP_TopRight;
+	RootSplitter->BottomLeft  = VP_BottomLeft;
+	RootSplitter->BottomRight = VP_BottomRight;
 
 	// SceneManager의 루트 윈도우로 등록
 	mRootWindow = RootSplitter;
-
-	//mCurrentWorld = FObjectFactory::ConstructObject<UWorld>();
-
-	// Todo: Test code, move to other function
-	//{
-	//	UCubeComponent* cubeComponent = FObjectFactory::ConstructObject<UCubeComponent>(FVector(0), FRotator(), FVector(1));
-	//	AActor* cubeActor = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor->AddComponent(cubeComponent);
-	//	mCurrentWorld->AddActor(cubeActor);
-
-	//	UCubeComponent* cubeComponent2 = FObjectFactory::ConstructObject<UCubeComponent>(FVector(1, 1, 1), FRotator(), FVector(0.5));
-	//	AActor* cubeActor2 = FObjectFactory::ConstructObject<AActor>();
-	//	cubeActor2->AddComponent(cubeComponent2);
-	//	mCurrentWorld->AddActor(cubeActor2);
-	//}
 }
 
 FSceneManager::~FSceneManager()
@@ -182,48 +168,40 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 					if (QuadSplitter != nullptr)
 					{
-						SWindow* SplitWindows[4] = {
-							QuadSplitter->TopLeft,
-							QuadSplitter->TopRight,
-							QuadSplitter->BottomLeft,
-							QuadSplitter->BottomRight
-						};
-
-						const TArray<FEditorViewportClient*>& Clients = *guiReference.ViewportClients;
-
 						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
 						const float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - mViewportY;
 
-						for (int i = 0; i < 4; ++i)
+						// 각 리프가 자신의 OwningClient를 직접 들고 있으므로 인덱스 배열 없이 순회
+						auto ProcessLeaf = [&](SWindow* W)
 						{
-							SWindow* SplitArea = SplitWindows[i];
+							if (!W || !W->OwningClient) return;
+							FEditorViewportClient* Client = W->OwningClient;
+							const FRect rect = W->Rect;
 
-							if (SplitArea)
+							// 이번 프레임의 UI 영역 크기를 클라이언트에게 통보
+							Client->SetViewportArea(rect.Left, rect.Top, rect.GetWidth(), rect.GetHeight());
+
+							if (Client->mRenderTarget && Client->mRenderTarget->SRV)
 							{
-								FEditorViewportClient* Client = Clients[i];
-								FRect rect = SplitArea->Rect;
+								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + rect.Top));
 
-								// 이번 프레임의 UI 영역 크기를 클라이언트에게 통보
-								Client->SetViewportArea(rect.Left, rect.Top, rect.GetWidth(), rect.GetHeight());
+								ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
+								ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
 
-								if (Client->mRenderTarget && Client->mRenderTarget->SRV)
+								// ActiveViewport 갱신: 좌클릭 순간에만 변경 (IsMouseClicked = 누른 첫 프레임만 true)
+								if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+									MouseXInViewport >= rect.Left && MouseXInViewport <= (rect.Left + rect.GetWidth()) &&
+									MouseYInViewport >= rect.Top  && MouseYInViewport <= (rect.Top  + rect.GetHeight()))
 								{
-									// 그리기 커서를 해당 분할 구역의 시작점(Left, Top)으로 이동
-									ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + rect.Top));
-
-									// 텍스처 그리기
-									ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
-									ImGui::Image(srv, ImVec2(rect.GetWidth(), rect.GetHeight()));
-
-									// ActiveViewport
-									if (MouseXInViewport >= rect.Left && MouseXInViewport <= (rect.Left + rect.GetWidth()) &&
-										MouseYInViewport >= rect.Top && MouseYInViewport <= (rect.Top + rect.GetHeight()))
-									{
-										guiReference.ActiveViewport = Client;
-									}
+									guiReference.ActiveViewport = Client;
 								}
 							}
-						}
+						};
+
+						ProcessLeaf(QuadSplitter->TopLeft);
+						ProcessLeaf(QuadSplitter->TopRight);
+						ProcessLeaf(QuadSplitter->BottomLeft);
+						ProcessLeaf(QuadSplitter->BottomRight);
 
 						// 마우스 드래그 로직
 						const FPoint LocalMousePos = { MouseXInViewport, MouseYInViewport };

@@ -1,4 +1,4 @@
-﻿#include "LaunchEngineLoop.h"
+#include "LaunchEngineLoop.h"
 
 #include <windows.h>
 #include "Renderer.h"
@@ -95,12 +95,12 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc)
 
 		ViewportClients.Add(NewClient);
 	}
-	
+	ActiveViewportClient = ViewportClients[0];
 
 	const FVector4 NearTint(1.0f, 0.65f, 0.15f, 0.85f); // 주황 = 가까운 쪽
 	const FVector4 FarTint(0.25f, 0.55f, 1.0f, 0.85f); // 파랑 = 먼 쪽
 
-	mSceneManager = new FSceneManager();
+	mSceneManager = new FSceneManager(ViewportClients);
 	mFileManager = new FFileManager();
 	mFontManager = new FFontManager();
 	mComponentVisualizerManager = new FComponentVisualizerManager();
@@ -207,43 +207,14 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	SCOPE_CYCLE_COUNTER("Frame");
 	float deltaTime = FrameTimer->GetDeltaTime();
 
-	// 1. 공통 접근 변수 및 입력 상태 1회 초기화
+	// 공통 접근 변수 및 입력 상태 1회 초기화
 	ConsoleWindow& console = ConsoleWindow::Get();
 	FRenderCollector& RenderCollector = mGraphicsManager->GetRenderCollector();
 	const FInputState& Input = WindowApplication.Input;
 
-	// 2. 뷰포트 및 마우스 상대 위치 계산 (프레임당 1회)
-	const float vpX = mSceneManager->GetViewportX();
-	const float vpY = mSceneManager->GetViewportY();
-	const float MouseXInViewport = static_cast<float>(Input.CursorX) - vpX;
-	const float MouseYInViewport = static_cast<float>(Input.CursorY) - vpY;
-
-	// 3. 활성 뷰포트(Active Viewport) 판별
-	// (참고: 매 프레임 dynamic_cast가 부담스럽다면, 레이아웃 변경 시에만 캐싱하는 구조를 추천합니다)
-	if (SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mSceneManager->GetRootWindow()))
-	{
-		if (ViewportClients.Num() == 4)
-		{
-			SWindow* SplitWindows[4] = {
-				QuadSplitter->TopLeft, QuadSplitter->TopRight,
-				QuadSplitter->BottomLeft, QuadSplitter->BottomRight
-			};
-
-			for (int i = 0; i < 4; ++i)
-			{
-				if (SplitWindows[i] && SplitWindows[i]->Rect.Contains({ MouseXInViewport, MouseYInViewport }))
-				{
-					ActiveViewportClient = ViewportClients[i];
-					break;
-				}
-			}
-
-		}
-	}
-
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
 
-	// 4. Input Threads & Active Viewport Update
+	// Input Threads & Active Viewport Update
 	WindowApplication.ProcessDeferredEvents();
 	mGraphicsManager->UpdateProjectionTransition(deltaTime);
 	ActiveViewportClient->Update(deltaTime, mSceneManager, mGraphicsManager->GetPerspectiveRatio(), RenderCollector);
@@ -252,7 +223,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		console.RequestFocus();
 	}
 
-	// 5. Physics / Game Threads
+	// Game Threads
 	{
 		SCOPE_CYCLE_COUNTER("Game");
 
@@ -266,7 +237,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		ActiveViewportClient->GetCamera().GetProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, 0.1f, 1000.f);
 
 
-	// 6. Mouse Picking & Gizmo
+	// Mouse Picking & Gizmo
 	{
 		// 피킹 로직
 		AActor* HitActor = ActiveViewportClient->PerformMousePicking(mGraphicsManager->GetPerspectiveRatio(), RenderCollector, *mSceneManager);
@@ -311,8 +282,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		}
 
 		// Gizmo Update
-		const float ActiveViewportX = vpX + ActiveViewportClient->mViewportLeft;
-		const float ActiveViewportY = vpY + ActiveViewportClient->mViewportTop;
+		const float ActiveViewportX = mSceneManager->GetViewportX() + ActiveViewportClient->mViewportLeft;
+		const float ActiveViewportY = mSceneManager->GetViewportY() + ActiveViewportClient->mViewportTop;
 
 		ActiveViewportClient->mGizmo.Update(
 			mSceneManager,
@@ -324,7 +295,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		);
 	}
 
-	// 7. Render Threads
+	// Render Threads
 	{
 		SCOPE_CYCLE_COUNTER("Draw");
 		if (WindowApplication.bPendingResize)
@@ -374,9 +345,9 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		}
 
 
-		// 8. ImGui
+		// ImGui
 		SCOPE_CYCLE_COUNTER("ImGui");
-		mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, &ViewportClients, ActiveViewportClient, mFileManager, mAssetManager });
+		mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, ActiveViewportClient, mFileManager, mAssetManager });
 		mGraphicsManager->GetRenderer()->BindFrameBuffer();
 		ImGui::Render();
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
