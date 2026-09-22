@@ -4,6 +4,8 @@
 #include "FName.h"
 #include "Object.h"
 
+class URenderer;
+
 class UAsset : public UObject
 {
 	REFLECT_CLASS(UAsset, UObject)
@@ -29,6 +31,8 @@ public:
 		Ar << AssetName;
 		Ar << AssetPath;
 	}
+
+	virtual void PostLoad(URenderer* Renderer) {}
 
 protected:
 	FName AssetName;

@@ -123,6 +123,16 @@ void UStaticMesh::Serialize(FArchive& Ar)
 	Ar << MaterialKeys;
 }
 
+void UStaticMesh::PostLoad(URenderer* Renderer)
+{
+	Super::PostLoad(Renderer);
+
+	// TODO: Material re-linking logic
+
+	if (Renderer)
+		BuildRenderBuffers(*Renderer);
+}
+
 void UStaticMesh::SetMaterial(uint32 MaterialSlotIndex, UMaterial* InMaterial)
 {
 	if (MaterialSlotIndex >= Materials.Num()) {
