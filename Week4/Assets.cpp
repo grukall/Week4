@@ -8,6 +8,7 @@
 #include "ObjectFactory.h"
 #include "Material.h"
 #include "FAssetManager.h"
+#include "FAssetRegistry.h"
 #include "FName.h"
 
 FString FFileAssetSource::ReadFileToString() const
@@ -128,10 +129,10 @@ void UStaticMesh::Serialize(FArchive& Ar)
 {
 	Super::Serialize(Ar);
 
+	Ar << MaterialGuids;
 	Ar << Vertices;
 	Ar << Indices;
 	Ar << Sections;
-	Ar << MaterialKeys;
 }
 
 void UStaticMesh::PostLoad(URenderer* Renderer)
@@ -237,28 +238,41 @@ void UTexture2D::Serialize(FArchive& Ar)
 	Ar << PixelData;
 }
 
-FName FTexture2DAssetLoader::Import(const std::filesystem::path& SourceTexturePath, FFileManager& InFileManager)
+FGuid FTexture2DAssetLoader::Import(const std::filesystem::path& SourceTexturePath, FFileManager& InFileManager)
 {
 	FAssetManager& AssetManager = FAssetManager::Get();
-	FName ExistingKey;
-	bool bIsReimport = AssetManager.FindAssetByImportPath(SourceTexturePath, ExistingKey);
+	FAssetRegistry& Registry = FAssetRegistry::Get();
 
+	// 원본 png의 GUID. 옆에 .png.meta가 없으면 여기서 만들어진다.
+	// 경로가 아니라 이 GUID가 "같은 원본인가"의 기준이다.
+	FGuid SourceGuid = Registry.GetOrCreateSourceGuid(SourceTexturePath, InFileManager);
+
+	// 이 원본에서 구워진 .uasset이 이미 있으면 그 자리에 다시 굽는다(= 재임포트).
+	TArray<FGuid> ExistingAssets;
 	std::filesystem::path BakedPath;
-	if (bIsReimport)
-	{
-		BakedPath = std::filesystem::path(ExistingKey.ToString().CStr());
-	}
-	else
+	bool bIsReimport = Registry.FindAssetsByImportSource(SourceGuid, ExistingAssets)
+		&& Registry.FindPath(ExistingAssets[0], BakedPath);
+
+	if (!bIsReimport)
 	{
 		FString PreferredStem(SourceTexturePath.stem().string());
 		BakedPath = FAssetManager::MakeUniqueBakedPath("Assets/Baked/Textures", PreferredStem);
 	}
 
-	FName BakedKey(FString(BakedPath.string()));
+	// 조회 키는 구워진 .uasset의 루트 기준 상대경로다. ScanBakedAssets가 재시작 후 등록할 때
+	// 쓰는 키와 정규화 방식이 같아야, GUID로 찾은 경로를 그대로 조회 키로 쓸 수 있다.
+	FName BakedKey(FString(InFileManager.MakeRelativeToRoot(BakedPath).string()));
+
+	// 굽든 안 굽든 GUID는 알아야 한다(머티리얼이 이 값을 참조로 저장한다).
+	FGuid TextureGuid = Registry.AcquireGuidForBake(BakedPath);
+
 	bool bNeedsBake = true;
 	if (std::filesystem::exists(BakedPath) && std::filesystem::exists(SourceTexturePath))
 	{
 		bNeedsBake = std::filesystem::last_write_time(SourceTexturePath) > std::filesystem::last_write_time(BakedPath);
+
+		// 포맷 버전이 바뀌었으면 원본이 그대로여도 다시 구워야 한다(본문 레이아웃이 다르다).
+		bNeedsBake |= !FAssetRegistry::IsBakedFileCurrent(BakedPath);
 	}
 
 	if (bNeedsBake)
@@ -283,15 +297,25 @@ FName FTexture2DAssetLoader::Import(const std::filesystem::path& SourceTexturePa
 
 			TempTexture->SetRawData(Width, Height, DXGI_FORMAT_R8G8B8A8_UNORM, PixelData);
 
+			// 재임포트면 기존 .uasset의 GUID를 그대로 물려받는다. 새로 발급하면 이 텍스처를
+			// 참조하던 머티리얼들의 참조가 끊어진다.
+			TempTexture->SetAssetGuid(TextureGuid);
+			TempTexture->SetImportSourceGuid(SourceGuid);
+
 			std::filesystem::create_directories(BakedPath.parent_path());
-			FArchiveFileWriter Writer(BakedPath);
-			FString ClassName = TempTexture->GetRuntimeClass()->Name;
-			Writer << ClassName;
-			TempTexture->Serialize(Writer);
+			{
+				// ClassName은 UAsset::Serialize가 직접 쓴다. 여기서 또 쓰면 읽는 쪽과 한 칸씩 어긋난다.
+				FArchiveFileWriter Writer(BakedPath);
+				TempTexture->Serialize(Writer);
+			}
+
 			TempTexture->Destroy();
 			stbi_image_free(ImageData);
 
-			UE_LOG("[TextureLoader] baked: key=%s", BakedKey.ToString().CStr());
+			Registry.Register(TextureGuid, BakedPath, FString("UTexture2D"), false, InFileManager);
+			Registry.SetImportSource(TextureGuid, SourceGuid);
+
+			UE_LOG("[TextureLoader] baked: key=%s guid=%s", BakedKey.ToString().CStr(), TextureGuid.ToString().CStr());
 		}
 		else
 		{
@@ -304,12 +328,7 @@ FName FTexture2DAssetLoader::Import(const std::filesystem::path& SourceTexturePa
 		BakedKey, BakedSource, Renderer
 	);
 
-	if (!bIsReimport)
-	{
-		AssetManager.SetImportSource(BakedKey, new FFileAssetSource(InFileManager, SourceTexturePath));
-	}
-
-	return BakedKey;
+	return TextureGuid;
 }
 
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
@@ -319,8 +338,6 @@ UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& A
 	UTexture2D* Texture = FObjectFactory::ConstructObject<UTexture2D>(AssetName);
 
 	FArchiveFileReader Reader(FileSource.GetFilePath());
-	FString ClassName;
-	Reader << ClassName;
 	Texture->Serialize(Reader);
 	Texture->MarkDirty(false);
 

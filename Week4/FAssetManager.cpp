@@ -1,10 +1,13 @@
 #include "FAssetManager.h"
+#include "FAssetRegistry.h"
 #include "LaunchEngineLoop.h"
 #include "Assets.h"
 #include "UStaticMeshComponent.h"
 #include "UObjectIterator.h"
 #include "FLogManager.h"
-#include "Archive.h"
+#include "FileManager.h"
+#include "FMaterialAssetLoader.h"
+
 
 #include <filesystem>
 
@@ -27,30 +30,6 @@ namespace
 
 		std::filesystem::path Path(NameStr.CStr());
 		return FName(Path.stem().string().c_str());
-	}
-
-	// .uasset 맨 앞에 UAsset::Serialize가 적어둔 클래스 이름 + 원본 임포트 경로(AssetPath)만
-	// 읽는다. 나머지 본문(정점/머티리얼 등)은 안 건드린다 — 스캔 단계는 "이게 무슨 클래스고
-	// 원본이 어디였냐"만 알면 되지, 오브젝트 전체를 복원할 필요가 없다.
-	// UAsset::Serialize 순서: ClassName -> AssetName -> AssetPath. 순서가 바뀌면 같이 고쳐야 한다.
-	bool ReadBakedAssetHeader(const std::filesystem::path& Path, FString& OutClassName, FString& OutAssetPath)
-	{
-		FArchiveFileReader Reader(Path);
-		if (!Reader.IsValid())
-		{
-			return false;
-		}
-
-		Reader << OutClassName;
-		if (OutClassName.empty())
-		{
-			return false;
-		}
-
-		FName AssetName;
-		Reader << AssetName;
-		Reader << OutAssetPath;
-		return true;
 	}
 }
 
@@ -92,7 +71,6 @@ FAssetManager::~FAssetManager()
 		}
 
 		delete metaInfo.AssetSource;
-		delete metaInfo.ImportSource;
 	}
 	AssetMetaInfoMap.Empty();
 
@@ -174,55 +152,15 @@ void FAssetManager::UnregisterAsset(const FName& AssetName)
 	UnloadAsset(AssetName);
 
 	delete AssetMetaInfoMap[AssetName].AssetSource;
-	delete AssetMetaInfoMap[AssetName].ImportSource;
 	AssetMetaInfoMap.Remove(AssetName);
-}
-
-bool FAssetManager::FindAssetByImportPath(const std::filesystem::path& ImportPath, FName& OutAssetName) const
-{
-	std::filesystem::path Normalized = std::filesystem::weakly_canonical(ImportPath);
-
-	for (const auto& pair : AssetMetaInfoMap)
-	{
-		const FAssetMetaInfo& metaInfo = pair.second;
-		if (!metaInfo.ImportSource)
-		{
-			continue;
-		}
-
-		if (std::filesystem::weakly_canonical(metaInfo.ImportSource->GetFilePath()) == Normalized)
-		{
-			OutAssetName = metaInfo.AssetName;
-			return true;
-		}
-	}
-
-	return false;
-}
-
-void FAssetManager::SetImportSource(const FName& AssetName, FFileAssetSource* ImportSource)
-{
-	if (!AssetMetaInfoMap.Contains(AssetName))
-	{
-		delete ImportSource;
-		return;
-	}
-
-	FAssetMetaInfo& metaInfo = AssetMetaInfoMap[AssetName];
-	if (metaInfo.ImportSource && metaInfo.ImportSource != ImportSource)
-	{
-		delete metaInfo.ImportSource;
-	}
-
-	metaInfo.ImportSource = ImportSource;
 }
 
 void FAssetManager::ScanBakedAssets(const std::filesystem::path& BakedDir, URenderer& Renderer, FFileManager& FileManager)
 {
-	if (!std::filesystem::exists(BakedDir))
-	{
-		return;
-	}
+	// 디스크를 훑는 것도, 헤더 포맷을 아는 것도 레지스트리 몫이다.
+	// 여기서는 그 결과를 받아 "어떤 로더로 열 것인가"만 정한다.
+	FAssetRegistry& Registry = FAssetRegistry::Get();
+	Registry.ScanDirectory(BakedDir, FileManager);
 
 	// 이미 다른 키(예: 프리미티브는 "CubeMesh" 같은 짧은 이름)로 등록된 .uasset은 다시 등록하지 않는다.
 	TArray<std::filesystem::path> AlreadyKnownPaths;
@@ -234,73 +172,65 @@ void FAssetManager::ScanBakedAssets(const std::filesystem::path& BakedDir, URend
 		}
 	}
 
-	for (const auto& Entry : std::filesystem::recursive_directory_iterator(BakedDir))
+	Registry.ForEachEntry([&](const FAssetRegistryEntry& Entry)
 	{
-		if (!Entry.is_regular_file() || Entry.path().extension() != ".uasset")
+		// 레지스트리는 BakedDir 밖의 원본 파일(.meta로 관리되는 png/obj 등)도 들고 있다.
+		if (Entry.bIsSourceFile || !IsUnder(Entry.Path, BakedDir))
 		{
-			continue;
+			return;
 		}
 
-		std::filesystem::path Normalized = std::filesystem::weakly_canonical(Entry.path());
-
-		bool bAlreadyKnown = false;
+		std::filesystem::path Normalized = std::filesystem::weakly_canonical(Entry.Path);
 		for (const std::filesystem::path& Known : AlreadyKnownPaths)
 		{
 			if (Known == Normalized)
 			{
-				bAlreadyKnown = true;
-				break;
+				return;
 			}
 		}
-		if (bAlreadyKnown)
-		{
-			continue;
-		}
 
-		FString ClassName;
-		FString ImportPath;
-		if (!ReadBakedAssetHeader(Entry.path(), ClassName, ImportPath))
-		{
-			UE_LOG_WARN("[AssetManager] ScanBakedAssets: failed to read header, skip: %s", Entry.path().string().c_str());
-			continue;
-		}
-
-		FName Key(FString(FileManager.MakeRelativeToRoot(Entry.path()).string()));
+		FName Key(FString(FileManager.MakeRelativeToRoot(Entry.Path).string()));
 		if (AssetMetaInfoMap.Contains(Key))
 		{
-			continue;
+			return;
 		}
 
-		// 클래스 이름 -> 로더 매핑. 새 굽는 에셋 타입(Material 등)이 생기면 여기만 늘리면 된다.
+		// 클래스 이름 -> 로더 매핑. 새 굽는 에셋 타입이 생기면 여기만 늘리면 된다.
 		const FClassInfo* AssetClass = nullptr;
 		FAssetLoader* Loader = nullptr;
 
-		if (ClassName.Equals(FString("UStaticMesh")))
+		if (Entry.ClassName.Equals(FString("UStaticMesh")))
 		{
 			AssetClass = UStaticMesh::GetClass();
 			Loader = GetOrCreateLoader<FStaticMeshAssetLoader>(Renderer, *this);
 		}
-		// else if (ClassName.Equals(FString("UMaterial"))) { ... 팀원분 Material .uasset 작업 완료 후 추가 ... }
+		else if (Entry.ClassName.Equals(FString("UMaterial")))
+		{
+			AssetClass = UMaterial::GetClass();
+			Loader = GetOrCreateLoader<FMaterialAssetLoader>(Renderer, *this);
+		}
+		else if (Entry.ClassName.Equals(FString("UTexture2D")))
+		{
+			AssetClass = UTexture2D::GetClass();
+			Loader = GetOrCreateLoader<FTexture2DAssetLoader>(Renderer);
+		}
 
 		if (!Loader)
 		{
-			UE_LOG_WARN("[AssetManager] ScanBakedAssets: unknown class '%s', skip: %s", ClassName.CStr(), Entry.path().string().c_str());
-			continue;
+			UE_LOG_WARN("[AssetManager] ScanBakedAssets: unknown class '%s', skip: %s", Entry.ClassName.CStr(), Entry.Path.string().c_str());
+			return;
 		}
 
-		RegisterAssetInternal(Key, Loader, new FFileAssetSource(FileManager, Entry.path()));
+		RegisterAssetInternal(Key, Loader, new FFileAssetSource(FileManager, Entry.Path));
 		AssetMetaInfoMap[Key].AssetClass = AssetClass;
+		AssetMetaInfoMap[Key].Guid = Entry.Guid;
 
-		// 원본 경로가 저장돼 있으면 ImportSource를 복원한다 — 런타임 전용이라 재시작하면
-		// 날아가는 정보라, 이게 없으면 재시작 후 같은 원본을 다시 임포트할 때마다 재임포트로
-		// 인식되지 못하고 매번 새 .uasset(_1, _2 ...)이 생긴다.
-		if (!ImportPath.empty())
-		{
-			SetImportSource(Key, new FFileAssetSource(FileManager, std::filesystem::path(ImportPath.CStr())));
-		}
+		// (원본과의 연결은 레지스트리가 스캔할 때 이미 역인덱스로 만들어뒀다.
+		//  재임포트 판정은 여기가 아니라 FAssetRegistry::FindAssetsByImportSource가 한다.)
 
-		UE_LOG("[AssetManager] ScanBakedAssets: registered (not loaded) key=%s class=%s", Key.ToString().CStr(), ClassName.CStr());
-	}
+		UE_LOG("[AssetManager] ScanBakedAssets: registered (not loaded) key=%s class=%s guid=%s",
+			Key.ToString().CStr(), Entry.ClassName.CStr(), Entry.Guid.ToString().CStr());
+	});
 }
 
 void FAssetManager::UnloadAsset(const FName& AssetName)

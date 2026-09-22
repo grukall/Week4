@@ -173,6 +173,7 @@ void FEngineLoop::InitAssetManager()
 
 	// 사용자가 obj를 임포트해서 만든 .uasset들(프리미티브는 위에서 이미 등록됐으니 건너뛴다)을
 	// 로드 없이 미리 등록해서, 이번 세션에서 한 번도 안 불러온 것도 에셋 드롭다운에 뜨게 한다.
+	// (ScanBakedAssets가 FAssetRegistry::ScanDirectory를 먼저 돌려 GUID -> 경로 인덱스를 채운다.)
 	mAssetManager->ScanBakedAssets("Assets/Baked", *renderer, *mFileManager);
 
 	FFileAssetSource* FileAssetSource = new FFileAssetSource(*mFileManager, "Textures/Test.jpg");

@@ -52,6 +52,15 @@ private:
 	bool bHasMaterialData;
 };
 
+// Import()가 돌려주는 한 건. 메시는 obj의 usemtl 이름으로 자기 슬롯에 맞는 GUID를 찾아야 하므로
+// 이름과 GUID를 짝지어 돌려준다. AssetKey는 이번 세션의 FAssetManager 조회 키다(디스크에는 안 남는다).
+struct FImportedMaterial
+{
+	FString Name;
+	FGuid Guid;
+	FName AssetKey;
+};
+
 class FMaterialAssetLoader : public FAssetLoader
 {
 public:
@@ -62,7 +71,7 @@ public:
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
-	TArray<FName> Import(const std::filesystem::path& SourceObjPath, FFileManager& InFileManager);
+	TArray<FImportedMaterial> Import(const std::filesystem::path& SourceObjPath, FFileManager& InFileManager);
 
 private:
 	URenderer& Renderer;
