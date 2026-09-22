@@ -107,7 +107,11 @@ TArray<FImportedMaterial> FMaterialAssetLoader::Import(const std::filesystem::pa
 				if (Filename.empty())
 					return FGuid();
 
-				std::filesystem::path AbsoluteTexPath = std::filesystem::weakly_canonical(SourceMtlPath.parent_path() / Filename.CStr());
+				const char* PathPtr = Filename.CStr();
+				while (*PathPtr == '/' || *PathPtr == '\\')
+					PathPtr++;
+
+				std::filesystem::path AbsoluteTexPath = std::filesystem::weakly_canonical(SourceMtlPath.parent_path() / PathPtr);
 				FTexture2DAssetLoader* TextureLoader = AssetManager->GetOrCreateLoader<FTexture2DAssetLoader>(Renderer);
 				return TextureLoader->Import(AbsoluteTexPath, InFileManager);
 			};
