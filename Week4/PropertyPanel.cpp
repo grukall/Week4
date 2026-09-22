@@ -521,6 +521,7 @@ namespace
 			// ============================================================
 			// 현재 Material Thumbnail
 			// ============================================================
+			UMaterial* DroppedMaterial = nullptr;
 
 			if (CurrentMaterial &&
 				CurrentMaterial != UMaterial::DefaultMaterial)
@@ -531,6 +532,86 @@ namespace
 				{
 					ImGui::Image(MaterialThumbnail, ImVec2(64.0f, 64.0f));
 
+					if (ImGui::BeginDragDropTarget())
+					{
+						const ImGuiPayload* Payload =
+							ImGui::AcceptDragDropPayload(
+								"CONTENT_BROWSER_ITEM");
+
+						if (Payload &&
+							Payload->Data &&
+							Payload->DataSize > 0)
+						{
+							const char* DroppedPath =
+								static_cast<const char*>(
+									Payload->Data);
+
+							std::filesystem::path AssetPath(
+								DroppedPath);
+
+							const std::string AssetStem =
+								AssetPath.stem().string();
+
+							FString DroppedStem =
+								FString(AssetStem.c_str());
+
+							FAssetManager::Get().ForEachMetaInfo(
+								[&](FAssetMetaInfo& MetaInfo)
+								{
+									if (DroppedMaterial)
+									{
+										return;
+									}
+
+									if (!MetaInfo.AssetClass)
+									{
+										return;
+									}
+
+									// Material만 허용
+									if (!MetaInfo.AssetClass->IsChildOf(
+										UMaterial::GetClass()))
+									{
+										return;
+									}
+
+									// 파일 이름 비교
+									if (MetaInfo.Stem.ToString() !=
+										DroppedStem)
+									{
+										return;
+									}
+
+									// 실제 Asset 로드
+									UAsset* Asset =
+										FAssetManager::Get().GetAsset(
+											MetaInfo.AssetName,
+											true);
+
+									if (!Asset)
+									{
+										return;
+									}
+
+									DroppedMaterial =
+										Asset->Cast<UMaterial>();
+
+									if (!DroppedMaterial)
+									{
+										return;
+									}
+
+									if (DroppedMaterial ==
+										UMaterial::DefaultMaterial)
+									{
+										DroppedMaterial = nullptr;
+										return;
+									}
+								});
+						}
+
+						ImGui::EndDragDropTarget();
+					}
 					ImGui::SameLine();
 				}
 			}
@@ -652,7 +733,6 @@ namespace
 			// Material Drag & Drop
 			// ============================================================
 
-			UMaterial* DroppedMaterial = nullptr;
 
 			if (ImGui::BeginDragDropTarget())
 			{
