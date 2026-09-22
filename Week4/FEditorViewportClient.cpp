@@ -1037,8 +1037,15 @@ void FEditorViewportClient::Draw(FViewport* Viewport, FGraphicsManager* Graphics
 	const float CurrentRatio = GetPerspectiveRatio(GraphicsMgr->GetPerspectiveRatio());
 
 	GraphicsMgr->Prepare(&mCamera, currentWidth, currentHeight, CurrentRatio, ViewMode);
+
+	if (UFontAtlas* StatFontAtlas = GEngineLoop.GetAssetManager()->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
+	{
+		DrawStatsHUD(StatCommands, StatFontAtlas, GraphicsMgr->GetRenderCollector(), currentWidth, currentHeight);
+	}
+
 	GraphicsMgr->FlushLines();
 	GraphicsMgr->Render();
+	GraphicsMgr->GetRenderCollector().ClearScreenQuads();
 
 	if (SceneMgr && SceneMgr->GetSelectedActor())
 	{
