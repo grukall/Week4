@@ -38,9 +38,20 @@ namespace
 TArray<FImportedMaterial> FMaterialAssetLoader::Import(const std::filesystem::path& SourceMtlPath, FFileManager& InFileManager)
 {
 	TArray<FImportedMaterial> ImportedMaterials;
+	if (!std::filesystem::exists(SourceMtlPath))
+	{
+		UE_LOG_WARN("Source MTL file does not exist: %s", SourceMtlPath.string().c_str());
+		return ImportedMaterials;
+	}
+
 	TArray<FMaterialData> MaterialDatas;
 	FFileAssetSource FileSource(InFileManager, SourceMtlPath);
 	FString FileContent = FileSource.ReadFileToString();
+	if (FileContent.Len() == 0)
+	{
+		UE_LOG_WARN("Source MTL file could not be read or is empty: %s", SourceMtlPath.string().c_str());
+		return ImportedMaterials;
+	}
 
 	if (!ParseMtlFile(FileContent, MaterialDatas))
 	{
@@ -112,6 +123,12 @@ TArray<FImportedMaterial> FMaterialAssetLoader::Import(const std::filesystem::pa
 					PathPtr++;
 
 				std::filesystem::path AbsoluteTexPath = std::filesystem::weakly_canonical(SourceMtlPath.parent_path() / PathPtr);
+				if (!std::filesystem::exists(AbsoluteTexPath))
+				{
+					UE_LOG_WARN("Material texture file does not exist, skipping: %s", AbsoluteTexPath.string().c_str());
+					return FGuid();
+				}
+
 				FTexture2DAssetLoader* TextureLoader = AssetManager->GetOrCreateLoader<FTexture2DAssetLoader>(Renderer);
 				return TextureLoader->Import(AbsoluteTexPath, InFileManager);
 			};

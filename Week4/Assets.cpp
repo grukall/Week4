@@ -248,6 +248,12 @@ FGuid FTexture2DAssetLoader::Import(const std::filesystem::path& InSourceTexture
 	// (파일 다이얼로그에서 온 절대경로는 그대로 통과한다.)
 	const std::filesystem::path SourceTexturePath = std::filesystem::absolute(InSourceTexturePath);
 
+	if (!std::filesystem::exists(SourceTexturePath))
+	{
+		UE_LOG_WARN("Source texture file does not exist: %s", SourceTexturePath.string().c_str());
+		return FGuid();
+	}
+
 	// 원본 png의 GUID. 옆에 .png.meta가 없으면 여기서 만들어진다.
 	// 경로가 아니라 이 GUID가 "같은 원본인가"의 기준이다.
 	FGuid SourceGuid = Registry.GetOrCreateSourceGuid(SourceTexturePath, InFileManager);

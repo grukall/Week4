@@ -42,31 +42,49 @@ FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath,
 		bNeedsBake |= !FAssetRegistry::IsBakedFileCurrent(BakedPath);
 	}
 
-	FFileAssetSource FileSource(InFileManager, SourceObjPath);
-	FString FileContent = FileSource.ReadFileToString();
-	FObjImporter Importer;
-	FStaticMesh StaticMesh;
-	TArray<FString> MaterialFiles;
-	TMap<FString, FGuid> MaterialNameToGuid;
-
-	StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
-	Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
-
-	for (FString filename : MaterialFiles)
-	{
-		std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
-		std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
-
-		FMaterialAssetLoader* MatLoader = AssetManager->GetOrCreateLoader<FMaterialAssetLoader>(Renderer, *AssetManager);
-		// obj의 usemtl 이름으로 찾을 수 있게 이름 -> GUID로 모아둔다.
-		for (const FImportedMaterial& Imported : MatLoader->Import(MtlPath, InFileManager))
-		{
-			MaterialNameToGuid.Add(Imported.Name, Imported.Guid);
-		}
-	}
-
 	if (bNeedsBake)
 	{
+		if (!std::filesystem::exists(SourceObjPath))
+		{
+			UE_LOG_ERROR("Source OBJ file does not exist: %s", SourceObjPath.string().c_str());
+			return FName();
+		}
+
+		FFileAssetSource FileSource(InFileManager, SourceObjPath);
+		FString FileContent = FileSource.ReadFileToString();
+		if (FileContent.Len() == 0)
+		{
+			UE_LOG_ERROR("Source OBJ file could not be read or is empty: %s", SourceObjPath.string().c_str());
+			return FName();
+		}
+
+		FObjImporter Importer;
+		FStaticMesh StaticMesh;
+		TArray<FString> MaterialFiles;
+		TMap<FString, FGuid> MaterialNameToGuid;
+
+		StaticMesh.PathFileName = FString(FileSource.GetFilePath().string());
+		Importer.LoadObjModel(FileContent, StaticMesh, MaterialFiles);
+
+		for (FString filename : MaterialFiles)
+		{
+			std::filesystem::path ObjDirectory = FileSource.GetFilePath().parent_path();
+			std::filesystem::path MtlPath = ObjDirectory / filename.CStr();
+
+			if (!std::filesystem::exists(MtlPath))
+			{
+				UE_LOG_WARN("Material file does not exist, skipping: %s", MtlPath.string().c_str());
+				continue;
+			}
+
+			FMaterialAssetLoader* MatLoader = AssetManager->GetOrCreateLoader<FMaterialAssetLoader>(Renderer, *AssetManager);
+			// obj의 usemtl 이름으로 찾을 수 있게 이름 -> GUID로 모아둔다.
+			for (const FImportedMaterial& Imported : MatLoader->Import(MtlPath, InFileManager))
+			{
+				MaterialNameToGuid.Add(Imported.Name, Imported.Guid);
+			}
+		}
+
 		TArray<FGuid> MaterialGuids;
 
 		for (const FString& MaterialName : StaticMesh.Materials) {
