@@ -110,6 +110,8 @@ public:
 
 	void UnloadAsset(const FName& AssetName);
 
+	static std::filesystem::path MakeUniqueBakedPath(const std::filesystem::path& BakedDir, const FString& PreferredStem);
+
 	template <typename Func>
 	void ForEachMetaInfo(Func&& func)
 	{

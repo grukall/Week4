@@ -9,29 +9,6 @@
 #include "Archive.h"
 #include "FMaterialAssetLoader.h"
 
-namespace
-{
-	// BakedDir/PreferredStem.uasset이 이미 있으면(다른 원본이 쓰고 있는 이름이면) 번호를 붙여
-	// 비어있는 경로를 찾는다. 재임포트 여부는 호출자가 이미 판단했으므로 여기선 신규 임포트만 다룬다.
-	std::filesystem::path MakeUniqueBakedPath(const std::filesystem::path& BakedDir, const FString& PreferredStem)
-	{
-		std::filesystem::path Candidate = BakedDir / (std::string(PreferredStem.CStr()) + ".uasset");
-		if (!std::filesystem::exists(Candidate))
-		{
-			return Candidate;
-		}
-
-		for (int32 Suffix = 1; ; ++Suffix)
-		{
-			std::filesystem::path Numbered = BakedDir / (std::string(PreferredStem.CStr()) + "_" + std::to_string(Suffix) + ".uasset");
-			if (!std::filesystem::exists(Numbered))
-			{
-				return Numbered;
-			}
-		}
-	}
-}
-
 FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath, FFileManager& InFileManager)
 {
 	// 이미 같은 원본을 임포트한 적 있으면 그 .uasset 키를 그대로 재사용한다(=재임포트).
@@ -46,7 +23,7 @@ FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath,
 	else
 	{
 		FString PreferredStem(SourceObjPath.stem().string());
-		BakedPath = MakeUniqueBakedPath("Assets/Baked", PreferredStem);
+		BakedPath = FAssetManager::MakeUniqueBakedPath("Assets/Baked", PreferredStem);
 	}
 
 	FName BakedKey(FString(BakedPath.string()));

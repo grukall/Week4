@@ -54,6 +54,24 @@ namespace
 	}
 }
 
+std::filesystem::path FAssetManager::MakeUniqueBakedPath(const std::filesystem::path& BakedDir, const FString& PreferredStem)
+{
+	std::filesystem::path Candidate = BakedDir / (std::string(PreferredStem.CStr()) + ".uasset");
+	if (!std::filesystem::exists(Candidate))
+	{
+		return Candidate;
+	}
+
+	for (int32 Suffix = 1; ; ++Suffix)
+	{
+		std::filesystem::path Numbered = BakedDir / (std::string(PreferredStem.CStr()) + "_" + std::to_string(Suffix) + ".uasset");
+		if (!std::filesystem::exists(Numbered))
+		{
+			return Numbered;
+		}
+	}
+}
+
 FAssetManager::~FAssetManager()
 {
 	UE_LOG("[AssetManager] Shutdown: registered=%u", AssetMetaInfoMap.Num());
