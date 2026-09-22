@@ -133,6 +133,58 @@ FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath,
 	return BakedKey;
 }
 
+FName FStaticMeshAssetLoader::ImportPrimitive(const FName& Name, const std::filesystem::path& SourceFilePath, FFileManager& InFileManager, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount)
+{
+	{
+		std::filesystem::path BakedPath = std::filesystem::path("Assets/Baked") / (std::string(Name.ToString().CStr()) + ".uasset");
+
+		//.h 파일이 .uasset보다 최신이면(=코드에서 정점 배열을 고친 뒤 아직 안 구웠으면) 다시 굽는다.
+		bool bNeedsBake = true;
+		if (std::filesystem::exists(BakedPath) && std::filesystem::exists(SourceFilePath))
+		{
+			bNeedsBake = std::filesystem::last_write_time(SourceFilePath) > std::filesystem::last_write_time(BakedPath);
+		}
+
+		if (bNeedsBake)
+		{
+			TArray<FVertexSimple> Vertices;
+			Vertices.Reserve(InVertexCount);
+			for (uint32 i = 0; i < InVertexCount; ++i)
+			{
+				Vertices.Add(InVertices[i]);
+			}
+
+			TArray<uint32> Indices;
+			Indices.Reserve(InIndexCount);
+			for (uint32 i = 0; i < InIndexCount; ++i)
+			{
+				Indices.Add(InIndices[i]);
+			}
+
+			TArray<FStaticMeshSection> Sections;
+			Sections.Add({ 0, InIndexCount, 0 });
+
+			UStaticMesh* TempMesh = FObjectFactory::ConstructObject<UStaticMesh>(Name);
+			TempMesh->SetData(Vertices, Indices, Sections);
+
+			std::filesystem::create_directories(BakedPath.parent_path());
+			FArchiveFileWriter Writer(BakedPath);
+			FString ClassName = TempMesh->GetRuntimeClass()->Name;
+			Writer << ClassName;
+			TempMesh->Serialize(Writer);
+			TempMesh->Destroy();
+
+			UE_LOG("[StaticMeshLoader] primitive baked: name=%s path=%s", Name.ToString().CStr(), BakedPath.string().c_str());
+		}
+
+		// 굽기는 건너뛰어도 등록은 매번 해야 한다 — AssetMetaInfoMap은 프로세스마다 비어서 시작한다.
+		FFileAssetSource* BakedSource = new FFileAssetSource(InFileManager, BakedPath);
+		AssetManager->RegisterAsset<FStaticMeshAssetLoader>(Name, BakedSource, Renderer, *AssetManager);
+
+		return Name;
+	}
+}
+
 UAsset* FStaticMeshAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
