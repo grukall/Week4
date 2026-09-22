@@ -8,6 +8,8 @@
 #include "ShowFlags.h"
 #include "MathUtility.h"
 #include "Json/json.hpp"
+#include "JsonAssetReference.h"
+#include "JsonUtil.h"
 #include "Property.h"
 #include "UStaticMeshComponent.h"
 
@@ -29,9 +31,16 @@ public:
 	{
 		Super::SerializeClass(outJson);
 
+		json::JSON& propertiesJson = outJson["Properties"];
+
 		// std::wstring을 UTF-8 문자열로 변환하여 저장
-		outJson["Properties"]["mText"] =
-			Wide2Utf(mText).CStr();
+		propertiesJson["mText"] = Wide2Utf(mText).CStr();
+
+		propertiesJson["mFontAtlasAsset"] = AssetReferenceToJson(mFontAtlasAsset);
+		propertiesJson["mColor"] = FVector4ToJson(mColor);
+		propertiesJson["mbBillboard"] = mbBillboard;
+		propertiesJson["mEnableDepthTest"] = mEnableDepthTest;
+		propertiesJson["mEnableDepthWrite"] = mEnableDepthWrite;
 	}
 
 	void DeserializeClass(const json::JSON& inJson) override
@@ -54,21 +63,40 @@ public:
 		{
 			mText.clear();
 		}
+
+		ReadJsonAssetReference(propertiesJson, "mFontAtlasAsset", mFontAtlasAsset);
+		ReadJsonVector4(propertiesJson, "mColor", mColor);
+		ReadJsonBool(propertiesJson, "mbBillboard", mbBillboard);
+		ReadJsonBool(propertiesJson, "mEnableDepthTest", mEnableDepthTest);
+		ReadJsonBool(propertiesJson, "mEnableDepthWrite", mEnableDepthWrite);
 	}
 
-	void RestoreRuntimeResources(FCamera& camera)
+	void PostSceneLoad(const FSceneLoadContext& context) override
 	{
-		SetBillboardCamera(camera);
-		SetBillboard(true);
+		Super::PostSceneLoad(context);
 
-		SetFontAtlasAsset(
-			FAssetManager::Get().GetAssetAs<UFontAtlas>(
-				FName("TestFontAtlas"),
-				true
-			)
-		);
+		// 카메라는 파일에 담기지 않는다.
+		if (context.Camera)
+		{
+			SetBillboardCamera(*context.Camera);
+		}
 
-		SetDepthState(false, false);
+		// 폰트 아틀라스 참조가 없는 옛 씬 파일은 기본 아틀라스로 되살린다.
+		if (!mFontAtlasAsset)
+		{
+			SetFontAtlasAsset(
+				FAssetManager::Get().GetAssetAs<UFontAtlas>(
+					FName("TestFontAtlas"),
+					true
+				)
+			);
+		}
+
+		// mText를 저장하지 않던 씬 파일이 있다. 빈 텍스트면 UUID 문구를 다시 만든다.
+		if (mText.empty() && mOwner)
+		{
+			SetText(Utf2Wide(FString(std::format("UUID: {}", mOwner->UUID))));
+		}
 	}
 
 	FVector GetWorldPivotLocation() const

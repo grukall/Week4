@@ -15,9 +15,10 @@ public:
 
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
+	virtual void PostSceneLoad(const FSceneLoadContext& context) override;
 
 	void AddActor(AActor* actor);
-	bool RemoveActor(uint32 componentUUID);
+	bool RemoveActor(int32 actorUUID);
 
 
 	TArray<AActor*>& GetActors() { return mActors; }
@@ -28,7 +29,7 @@ public:
 
 
 private:
-	int32 getActorIndex(uint32 actorUUID) const;
+	int32 getActorIndex(int32 actorUUID) const;
 
 private:
 	enum

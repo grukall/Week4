@@ -44,6 +44,32 @@ void UMaterial::DeserializeClass(const json::JSON& inJson)
 
 	FGuid::Parse(FString(propertiesJson.at("DiffuseTexture").ToString()), DiffuseTextureGuid);
 }
+void UMaterial::CopyParametersFrom(const UMaterial& Other)
+{
+	SpecularPower = Other.SpecularPower;
+	OpticalDensity = Other.OpticalDensity;
+	Transparency = Other.Transparency;
+	IlluminationModel = Other.IlluminationModel;
+
+	AmbientColor = Other.AmbientColor;
+	DiffuseColor = Other.DiffuseColor;
+	SpecularColor = Other.SpecularColor;
+	EmissiveColor = Other.EmissiveColor;
+
+	AmbientTextureGuid = Other.AmbientTextureGuid;
+	AmbientTexture = Other.AmbientTexture;
+	DiffuseTextureGuid = Other.DiffuseTextureGuid;
+	DiffuseTexture = Other.DiffuseTexture;
+	SpecularTextureGuid = Other.SpecularTextureGuid;
+	SpecularTexture = Other.SpecularTexture;
+	BumpTextureGuid = Other.BumpTextureGuid;
+	BumpTexture = Other.BumpTexture;
+
+	UVScroll = Other.UVScroll;
+	UVSpeed = Other.UVSpeed;
+	TransmissionFilter = Other.TransmissionFilter;
+}
+
 UMaterial* UMaterial::DefaultMaterial = nullptr;
 void UMaterial::InitDefaultMaterial(URenderer* Renderer)
 {

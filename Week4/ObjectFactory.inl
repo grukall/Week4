@@ -40,9 +40,20 @@ template<typename TObject>
 TObject* FObjectFactory::LoadObject(const json::JSON& inJson)
 {
 	TObject* instance = ConstructUnInitializedObject<TObject>();
-	if (instance)
+	if (!instance)
+	{
+		return nullptr;
+	}
+
+	try
 	{
 		instance->DeserializeClass(inJson);
+	}
+	catch (...)
+	{
+		// 반쯤 만들어진 객체를 전역 목록에 남기지 않는다. (ObjectFactory.cpp의 같은 함수 참고)
+		instance->Destroy();
+		throw;
 	}
 
 	return instance;

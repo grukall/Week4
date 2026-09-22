@@ -21,11 +21,12 @@ public:
 
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
+	virtual void PostSceneLoad(const FSceneLoadContext& context) override;
 
 	void AddComponent(UActorComponent* actorComponent);      
 	void AddRootSceneComponent(USceneComponent* sceneComponent);
 	USceneComponent* GetRootComponent() const;
-	bool RemoveComponent(uint32 componentUUID);
+	bool RemoveComponent(int32 componentUUID);
 	inline const TArray<UActorComponent*>& GetComponents() const { return mComponents; }
 
 	FTransform GetTransform() const;
@@ -41,7 +42,7 @@ public:
 	void SetScale(FVector scale);
 
 private:
-	int32 getComponentIndex(uint32 componentUUID) const;
+	int32 getComponentIndex(int32 componentUUID) const;
 
 private:
 	

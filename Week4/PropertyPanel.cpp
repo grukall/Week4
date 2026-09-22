@@ -838,8 +838,15 @@ namespace
 			{
 				ImGui::Spacing();
 
+				// 표시는 이 컴포넌트가 실제로 그리는 값 기준이다. 전용 사본이 있으면 그쪽 값이
+				// 보여야 한다 — 고른 에셋의 값을 보여주면 방금 바꾼 값이 되돌아간 것처럼 보인다.
+				const UMaterial* DisplayMaterial =
+					Component->GetMaterial(static_cast<uint32>(SlotIndex));
+
 				FVector2 CurrentSpeed =
-					CurrentMaterial->GetUVSpeed();
+					DisplayMaterial
+					? DisplayMaterial->GetUVSpeed()
+					: CurrentMaterial->GetUVSpeed();
 
 				float Speed[2] =
 				{
@@ -852,12 +859,18 @@ namespace
 					Speed,
 					0.00001f))
 				{
-					CurrentMaterial->SetUVSpeed(
-						FVector2(
-							Speed[0],
-							Speed[1]));
+					// 슬롯에 들어 있는 머티리얼은 다른 컴포넌트와 공유하는 에셋이다. 직접 고치면
+					// 그 에셋을 쓰는 씬의 모든 물체가 같이 움직인다. 이 컴포넌트 전용 사본에만 쓴다.
+					if (UMaterial* EditableMaterial =
+						Component->GetMaterialForEdit(static_cast<uint32>(SlotIndex)))
+					{
+						EditableMaterial->SetUVSpeed(
+							FVector2(
+								Speed[0],
+								Speed[1]));
 
-					bChanged = true;
+						bChanged = true;
+					}
 				}
 			}
 

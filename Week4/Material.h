@@ -27,6 +27,14 @@ public:
 	static UMaterial* DefaultMaterial;
 	static void InitDefaultMaterial(URenderer* Renderer);
 
+	// 셰이딩 파라미터만 복사한다. UUID나 에셋 이름/GUID 같은 인스턴스 고유 값은 건드리지 않는다
+	// (복사한 머티리얼이 원본 에셋 행세를 하면 저장할 때 같은 에셋으로 취급된다).
+	void CopyParametersFrom(const UMaterial& Other);
+
+	// 주의: 이 머티리얼은 여러 컴포넌트가 포인터로 공유하는 에셋일 수 있다. 컴포넌트 하나에서만
+	// 값을 바꾸려면 UMeshComponent::GetMaterialForEdit으로 전용 사본을 받아 거기에 쓸 것.
+	// 여기 세터를 바로 부르면 같은 머티리얼을 쓰는 씬의 모든 물체가 같이 바뀐다.
+
 public:
 	float GetSpecularPower() const
 	{

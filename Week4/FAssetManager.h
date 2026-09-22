@@ -94,6 +94,18 @@ public:
 	UAsset* LoadAsset(const FName& AssetName, bool bImport = false);
 	UAsset* GetAsset(const FName& AssetName, bool loadIfNotLoaded = false);
 
+	// 씬 파일에 적힌 에셋 참조를 실제 인스턴스로 되돌린다.
+	// GUID가 정체성이므로 그것부터 보고(파일을 옮기거나 이름을 바꿔도 따라간다),
+	// GUID가 없는 에셋(엔진 내장 프리미티브 등)만 이름으로 찾는다.
+	UAsset* ResolveAssetReference(const FGuid& Guid, const FName& AssetName, bool bLoadIfNotLoaded = true);
+
+	template <typename T>
+	T* ResolveAssetReferenceAs(const FGuid& Guid, const FName& AssetName, bool bLoadIfNotLoaded = true)
+	{
+		UAsset* asset = ResolveAssetReference(Guid, AssetName, bLoadIfNotLoaded);
+		return asset ? asset->Cast<T>() : nullptr;
+	}
+
 	template <typename T>
 	T* GetAssetAs(const FName& AssetName, bool loadIfNotLoaded = false)
 	{

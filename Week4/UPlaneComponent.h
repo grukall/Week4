@@ -7,6 +7,8 @@
 #include "FAssetManager.h"
 #include "ShowFlags.h"
 #include "RenderInfo.h"
+#include "Json/json.hpp"
+#include "JsonUtil.h"
 
 class UPlaneComponent : public UStaticMeshComponent
 {
@@ -16,6 +18,49 @@ public:
 	UPlaneComponent()
 	{
 		SetStaticMesh(FAssetManager::Get().GetAssetAs<UStaticMesh>(FName("PlaneMesh"), true));
+	}
+
+	void SerializeClass(json::JSON& outJson) const override
+	{
+		Super::SerializeClass(outJson);
+
+		json::JSON& propertiesJson = outJson["Properties"];
+		propertiesJson["mSubUV"] = FVector4ToJson(mSubUV);
+		propertiesJson["mBlendMode"] = static_cast<int32>(mBlendMode);
+		propertiesJson["mbBillboard"] = mbBillboard;
+		propertiesJson["mEnableDepthTest"] = mEnableDepthTest;
+		propertiesJson["mEnableDepthWrite"] = mEnableDepthWrite;
+	}
+
+	void DeserializeClass(const json::JSON& inJson) override
+	{
+		Super::DeserializeClass(inJson);
+
+		const json::JSON& propertiesJson = inJson.at("Properties");
+
+		ReadJsonVector4(propertiesJson, "mSubUV", mSubUV);
+		ReadJsonBool(propertiesJson, "mbBillboard", mbBillboard);
+		ReadJsonBool(propertiesJson, "mEnableDepthTest", mEnableDepthTest);
+		ReadJsonBool(propertiesJson, "mEnableDepthWrite", mEnableDepthWrite);
+
+		// 열거형은 파일에 정수로 들어간다. 범위를 벗어난 값이 렌더러의 상태 배열을 넘어가지 않게 막는다.
+		int32 BlendMode = static_cast<int32>(mBlendMode);
+		ReadJsonInt(propertiesJson, "mBlendMode", BlendMode);
+		if (BlendMode >= 0 && BlendMode < static_cast<int32>(ERenderBlendMode::Count))
+		{
+			mBlendMode = static_cast<ERenderBlendMode>(BlendMode);
+		}
+	}
+
+	void PostSceneLoad(const FSceneLoadContext& context) override
+	{
+		Super::PostSceneLoad(context);
+
+		// 카메라는 씬 파일에 담기지 않는다. 빌보드를 쓰는 모든 플레인이 여기서 다시 묶인다.
+		if (context.Camera)
+		{
+			SetBillboardCamera(*context.Camera);
+		}
 	}
 
 	void Tick(float DeltaTime) override

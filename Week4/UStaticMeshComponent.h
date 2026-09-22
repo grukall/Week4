@@ -29,6 +29,11 @@ public:
 
 	void ClearMaterials();
 
+	// 메시와 오버라이드 머티리얼을 한 곳에서 처리한다. SetStaticMesh가 OverrideMaterials를
+	// 메시 기본값으로 덮어쓰므로, 둘의 적용 순서를 쥐고 있어야 오버라이드가 날아가지 않는다.
+	virtual void SerializeClass(json::JSON& outJson) const override;
+	virtual void DeserializeClass(const json::JSON& inJson) override;
+
 
 	// 섹션(머티리얼 구간) 하나당 RenderInfo 하나를 만든다.
 	virtual void GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) const override;

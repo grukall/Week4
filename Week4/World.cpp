@@ -55,7 +55,26 @@ void UWorld::DeserializeClass(const json::JSON& inJson)
 			throw std::runtime_error(std::format("{}: Unknown class name: {}", GetRuntimeClass()->Name, className));
 		}
 		AActor* actor = static_cast<AActor*>(FObjectFactory::LoadObject(classInfo, actorJson));
+
+		// AddActor의 중복 검사는 assert라 Release 빌드에서 사라진다. 씬 파일은 손으로도 고칠 수
+		// 있는 외부 입력이므로, UUID가 겹치면 여기서 확실히 실패한다 — 겹친 채로 들어가면
+		// UUID로 액터를 찾는 코드가 전부 엉뚱한 것을 집는다.
+		if (getActorIndex(actor->UUID) != -1)
+		{
+			const int32 duplicatedUUID = actor->UUID;
+			delete actor;
+			throw std::runtime_error(std::format("{}: duplicated actor UUID: {}", GetRuntimeClass()->Name, duplicatedUUID));
+		}
+
 		AddActor(actor);
+	}
+}
+
+void UWorld::PostSceneLoad(const FSceneLoadContext& context)
+{
+	for (AActor* actor : mActors)
+	{
+		actor->PostSceneLoad(context);
 	}
 }
 
@@ -67,16 +86,15 @@ void UWorld::AddActor(AActor* actor)
 	mActors.Add(actor);
 }
 
-bool UWorld::RemoveActor(uint32 componentUUID)
+bool UWorld::RemoveActor(int32 actorUUID)
 {
-	int32 componentIndex = getActorIndex(componentUUID);
-	if (componentIndex == -1)
+	int32 actorIndex = getActorIndex(actorUUID);
+	if (actorIndex == -1)
 	{
 		return false;
 	}
 
-	//mActors.RemoveAt(componentIndex, 1);
-	mActors.RemoveAtSwap(componentIndex);
+	mActors.RemoveAtSwap(actorIndex);
 
 	return true;
 }
@@ -102,7 +120,7 @@ void UWorld::Update(float deltaTime, FRenderCollector& outCollector)
 	}
 }
 
-int32 UWorld::getActorIndex(uint32 actorUUID) const
+int32 UWorld::getActorIndex(int32 actorUUID) const
 {
 	for (uint32 i = 0; i < mActors.Num(); ++i)
 	{

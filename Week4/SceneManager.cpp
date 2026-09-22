@@ -500,57 +500,15 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			// 취소한 경우에는 현재 씬과 카메라 상태를 건드리지 않는다.
 			if (selectedPath.has_value())
 			{
+				// 런타임 상태 복원(빌보드 카메라, 폰트 아틀라스 등)은 LoadScene 안에서
+				// PostSceneLoad가 처리한다. 여기서는 카메라만 넘긴다.
 				LoadScene(
 					selectedPath.value(),
-					*guiReference.FileManager);
+					*guiReference.FileManager,
+					&guiReference.ActiveViewport->GetCamera());
 
 				// 파일 로드가 실행된 뒤에만 카메라를 초기화한다.
 				guiReference.ActiveViewport->Reset();
-
-				// 여기부터 런타임 카메라 재연결
-				FCamera& Camera =
-					guiReference.ActiveViewport->GetCamera();
-
-				for (AActor* Actor : mCurrentWorld->GetActors())
-				{
-					if (ASpotLight* SpotLight =
-						Actor->Cast<ASpotLight>())
-					{
-						SpotLight->RestoreRuntimeCamera(Camera);
-					}
-
-					for (UActorComponent* Component :
-						Actor->GetComponents())
-					{
-						if (UAtlasAnimationComponent* Atlas = Component->Cast<UAtlasAnimationComponent>())
-						{
-							Atlas->RestoreRuntimeCamera(Camera);
-						}
-
-
-						if (UText3DComponent* Text = Component->Cast<UText3DComponent>())
-						{
-							Text->RestoreRuntimeResources(Camera);
-
-							// 기존 씬 파일에는 mText가 저장되지 않았으므로
-							// 빈 텍스트라면 UUID 문구를 재생성한다.
-							if (Text->GetText().empty())
-							{
-								Text->SetText(
-									Utf2Wide(
-										FString(
-											std::format("UUID: {}", Actor->UUID)
-										)
-									)
-								);
-							}
-						}
-					}
-
-					
-
-
-				}
 
 				UE_LOG(
 					"Scene loaded: %s",
@@ -876,31 +834,6 @@ void FSceneManager::SaveScene(
 			"Cannot save scene because current world is null.");
 	}
 
-	uint32 version = 0;
-
-	// 기존 파일이 있으면 Version을 유지한다.
-	try
-	{
-		const FString previousSceneString =
-			fileManager.ReadFileToString(scenePath);
-
-		const json::JSON previousSceneJson =
-			json::JSON::Load(previousSceneString);
-
-		if (previousSceneJson.hasKey("Version") &&
-			previousSceneJson.at("Version").JSONType() ==
-			json::JSON::Class::Integral)
-		{
-			version =
-				previousSceneJson.at("Version").ToInt();
-		}
-	}
-	catch (const std::exception&)
-	{
-		// 새로 저장하는 파일이면 Version 0부터 시작한다.
-		version = 0;
-	}
-
 	json::JSON sceneJson =
 		json::JSON::Make(json::JSON::Class::Object);
 
@@ -909,7 +842,9 @@ void FSceneManager::SaveScene(
 
 	mCurrentWorld->SerializeClass(worldJson);
 
-	sceneJson["Version"] = version;
+	// 예전에는 기존 파일의 Version을 그대로 복사해서 다시 적었다. 그러면 파일이 어떤 포맷으로
+	// 쓰였는지 알 수 없어 마이그레이션을 못 한다. 지금 코드가 쓴 포맷을 그대로 찍는다.
+	sceneJson["Version"] = kSceneFormatVersion;
 	sceneJson["NextUUID"] = UEngineStatics::GetNextUUID();
 	sceneJson["World"] = worldJson;
 
@@ -923,13 +858,33 @@ void FSceneManager::SaveScene(
 
 void FSceneManager::LoadScene(
 	const std::filesystem::path& scenePath,
-	const FFileManager& fileManager)
+	const FFileManager& fileManager,
+	FCamera* runtimeCamera)
 {
 	const FString jsonString =
 		fileManager.ReadFileToString(scenePath);
 
 	const json::JSON sceneJson =
 		json::JSON::Load(jsonString);
+
+	// 버전이 없는 파일은 버전을 찍기 전(0) 것으로 본다. 앞으로 나온 포맷은 읽을 수 없으므로
+	// 엉뚱하게 해석해서 절반만 살아난 씬을 만드느니 여기서 분명히 실패한다.
+	uint32 sceneVersion = 0;
+	if (sceneJson.hasKey("Version") &&
+		sceneJson.at("Version").JSONType() == json::JSON::Class::Integral)
+	{
+		sceneVersion = static_cast<uint32>(sceneJson.at("Version").ToInt());
+	}
+
+	if (sceneVersion > kSceneFormatVersion)
+	{
+		throw std::runtime_error(
+			std::format(
+				"Scene file '{}' was saved with a newer format (version {}, supported up to {}).",
+				scenePath.string(),
+				sceneVersion,
+				kSceneFormatVersion));
+	}
 
 	if (!sceneJson.hasKey("NextUUID") ||
 		sceneJson.at("NextUUID").JSONType() !=
@@ -967,6 +922,12 @@ void FSceneManager::LoadScene(
 				"Failed to deserialize world from '{}'.",
 				scenePath.string()));
 	}
+
+	// 카메라나 폰트 아틀라스처럼 파일에 담기지 않는 것들을 여기서 다시 묶는다.
+	// 호출자가 아니라 로드 경로 안에서 해야 로드 방법이 늘어도 빠뜨리지 않는다.
+	FSceneLoadContext loadContext;
+	loadContext.Camera = runtimeCamera;
+	newWorld->PostSceneLoad(loadContext);
 
 	// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
 	mPropertyPanel->SetTarget(nullptr);

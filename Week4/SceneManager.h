@@ -3,7 +3,6 @@
 #include <string_view>
 #include <filesystem>
 #include <string>
-#include "SceneData.h"
 #include "TArray.h"
 #include "RenderInfo.h"
 #include "enum.h"
@@ -14,9 +13,15 @@
 inline constexpr std::string_view kSceneDataDir = "SceneData\\";
 inline constexpr std::string_view kSceneDataSuffix = ".Scene";
 
+// 씬 파일 포맷 버전. 저장하는 쪽이 항상 이 값을 찍고, 읽는 쪽은 이보다 높은 파일을 거부한다.
+// 필드를 지우거나 의미를 바꾸는 변경을 하면 올리고, 로더에 그 버전용 처리를 추가한다.
+// (0은 버전을 찍지 않던 시절의 파일이다. 키가 늘기만 했으므로 그대로 읽힌다.)
+inline constexpr uint32 kSceneFormatVersion = 1;
+
 class FFileManager;
 class FFrameTimer;
 class FViewport;
+class FCamera;
 struct FEditorViewportClient; // 실제 정의가 struct – class로 선언하면 MSVC 맹글링이 달라져 링크 실패
 class FGraphicsManager;
 class UWorld;
@@ -64,7 +69,10 @@ public:
 
 	// 파일 탐색기용 오버로드
 	void SaveScene(const std::filesystem::path& scenePath, const FFileManager& fileManager);
-	void LoadScene(const std::filesystem::path& scenePath, const FFileManager& fileManager);
+
+	// runtimeCamera는 씬 파일에 담을 수 없는 것(빌보드 카메라 등)을 다시 묶는 데 쓰인다.
+	// 넘기지 않아도 로드 자체는 되지만, 빌보드는 카메라를 받을 때까지 정지 상태가 된다.
+	void LoadScene(const std::filesystem::path& scenePath, const FFileManager& fileManager, FCamera* runtimeCamera = nullptr);
 
 	void SaveConfig(const char* IniPath = ".\\editor.ini");
 	void LoadConfig(const char* IniPath = ".\\editor.ini");

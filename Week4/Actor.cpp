@@ -64,6 +64,16 @@ void AActor::DeserializeClass(const json::JSON& inJson)
 			throw std::runtime_error(std::format("{}: Unknown class name: {}", GetRuntimeClass()->Name, className));
 		}
 		UActorComponent* component = static_cast<UActorComponent*>(FObjectFactory::LoadObject(classInfo, componentJson));
+
+		// AddComponent의 중복 검사는 assert라 Release에서 사라진다. 씬 파일이 준 UUID는 믿을 수
+		// 없으므로 여기서 막는다 — 겹치면 mRootComponentUUID가 엉뚱한 컴포넌트를 가리키게 된다.
+		if (getComponentIndex(component->UUID) != -1)
+		{
+			const int32 duplicatedUUID = component->UUID;
+			delete component;
+			throw std::runtime_error(std::format("{}: duplicated component UUID: {}", GetRuntimeClass()->Name, duplicatedUUID));
+		}
+
 		AddComponent(component);
 	}
 
@@ -84,6 +94,14 @@ void AActor::DeserializeClass(const json::JSON& inJson)
 			throw std::runtime_error(std::format("{}: Invalid root component UUID: {}", GetRuntimeClass()->Name, rootComponentUUID));
 		}
 		mRootComponent = static_cast<USceneComponent*>(mComponents[rootComponentIndex]);
+	}
+}
+
+void AActor::PostSceneLoad(const FSceneLoadContext& context)
+{
+	for (UActorComponent* component : mComponents)
+	{
+		component->PostSceneLoad(context);
 	}
 }
 
@@ -110,7 +128,7 @@ USceneComponent* AActor::GetRootComponent() const
 	return mRootComponent;
 }
 
-bool AActor::RemoveComponent(uint32 componentUUID)
+bool AActor::RemoveComponent(int32 componentUUID)
 {
 	int32 componentIndex = getComponentIndex(componentUUID);
 	if (componentIndex == -1)
@@ -205,7 +223,7 @@ void AActor::SetScale(FVector scale)
 	}
 }
 
-int32 AActor::getComponentIndex(uint32 componentUUID) const
+int32 AActor::getComponentIndex(int32 componentUUID) const
 {
 	for (uint32 i = 0; i < mComponents.Num(); ++i)
 	{

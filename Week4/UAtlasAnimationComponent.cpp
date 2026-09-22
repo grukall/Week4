@@ -1,6 +1,80 @@
 #include "UAtlasAnimationComponent.h"
 #include <cmath>
 
+#include "Json/json.hpp"
+#include "JsonAssetReference.h"
+#include "JsonUtil.h"
+
+void UAtlasAnimationComponent::SerializeClass(json::JSON& outJson) const
+{
+	Super::SerializeClass(outJson);
+
+	json::JSON& propertiesJson = outJson["Properties"];
+
+	// 아틀라스는 머티리얼 텍스처로도 복원되지만, 그 경로는 머티리얼이 성하다는 전제가 붙는다.
+	// 애니메이션이 쓰는 에셋은 여기에 직접 적어둔다.
+	propertiesJson["Asset"] = AssetReferenceToJson(Asset);
+	propertiesJson["bPlaying"] = bPlaying;
+	propertiesJson["bLooping"] = bLooping;
+	propertiesJson["bBackward"] = bBackward;
+	propertiesJson["Frame"] = Frame;
+	propertiesJson["FrameRate"] = FrameRate;
+}
+
+void UAtlasAnimationComponent::DeserializeClass(const json::JSON& inJson)
+{
+	Super::DeserializeClass(inJson);
+
+	const json::JSON& propertiesJson = inJson.at("Properties");
+
+	USpriteAtlas* LoadedAtlas = nullptr;
+	if (ReadJsonAssetReference(propertiesJson, "Asset", LoadedAtlas) && LoadedAtlas)
+	{
+		SetAtlas(LoadedAtlas);
+	}
+	else
+	{
+		// 아틀라스 참조가 없는 옛 씬 파일은 머티리얼에 물린 텍스처에서 되짚는다.
+		RestoreAtlasState();
+	}
+
+	// 플레인 상태를 저장하지 않던 옛 씬 파일에는 이 값들이 없다. 그때 쓰던 고정값으로 채운다.
+	if (!propertiesJson.hasKey("mbBillboard"))
+	{
+		SetBillboard(true);
+		SetDepthState(true, false);
+	}
+
+	bool bShouldPlay = true;
+	ReadJsonBool(propertiesJson, "bPlaying", bShouldPlay);
+	ReadJsonBool(propertiesJson, "bLooping", bLooping);
+	ReadJsonBool(propertiesJson, "bBackward", bBackward);
+	ReadJsonInt(propertiesJson, "FrameRate", FrameRate);
+	SetFrameRate(FrameRate);
+
+	int32 StartFrame = 0;
+	ReadJsonInt(propertiesJson, "Frame", StartFrame);
+
+	// 프레임 수는 아틀라스가 정한다. 에셋이 바뀌어 프레임이 줄었으면 GetFrameSubUV가 범위를 벗어난다.
+	const int32 FrameCount = Asset ? Asset->GetFrameCount() : 0;
+	if (StartFrame < 0 || StartFrame >= FrameCount)
+	{
+		StartFrame = 0;
+	}
+
+	Play(StartFrame, bLooping, bBackward);
+
+	if (!bShouldPlay)
+	{
+		Pause();
+	}
+
+	if (Asset && FrameCount > 0)
+	{
+		mSubUV = Asset->GetFrameSubUV(Frame);
+	}
+}
+
 UAtlasAnimationComponent::UAtlasAnimationComponent()
 {
 }

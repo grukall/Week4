@@ -14,22 +14,8 @@ public:
 	using UPlaneComponent::Initialize;
 	void Initialize(USpriteAtlas* textureAsset);
 
-	void DeserializeClass(const json::JSON& inJson) override
-	{
-		Super::DeserializeClass(inJson);
-
-		RestoreAtlasState();
-
-
-		SetBillboard(true);
-		SetDepthState(true, false);
-
-		Play();
-	}
-	void RestoreRuntimeCamera(FCamera& Camera)
-	{
-		SetBillboardCamera(Camera);
-	}
+	void SerializeClass(json::JSON& outJson) const override;
+	void DeserializeClass(const json::JSON& inJson) override;
 	void SetAtlas(USpriteAtlas* InAtlas);
 	inline USpriteAtlas* GetAtlas() const { return Asset; }
 

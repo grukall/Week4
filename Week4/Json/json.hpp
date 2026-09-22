@@ -1,9 +1,18 @@
 ﻿
 #pragma once
 
+// [수정 이력] 이 파일은 외부에서 가져온 SimpleJSON이지만, 씬 저장/로드가 왕복(저장 -> 로드 -> 저장)
+// 에서 값을 잃지 않으려면 아래 네 군데가 원본 그대로여선 안 된다. 라이브러리를 교체할 일이 생기면
+// 같은 수정이 필요하다. 각 지점에 [FIX] 주석을 달아두었다.
+//  1. ToString()이 이스케이프를 한 번 더 걸어 백슬래시가 저장할 때마다 늘어나던 문제
+//  2. ToFloat()이 정수로 적힌 값을 0으로 읽던 문제
+//  3. dump()가 부동소수를 소수점 6자리로 잘라 정밀도를 잃고, inf/nan으로 파일을 깨뜨리던 문제
+//  4. parse_number()가 음수 지수의 첫 자리를 건너뛰어 1e-12를 1e-2로 읽던 문제
+
 #include <cstdint>
 #include <cmath>
 #include <cctype>
+#include <format>
 #include <string>
 #include <deque>
 #include <map>
@@ -285,16 +294,22 @@ class JSON
         /// Functions for getting primitives from the JSON object.
         bool IsNull() const { return Type == Class::Null; }
 
+        // [FIX 1] 원본은 여기서 json_escape를 걸어 돌려줬다. 이스케이프는 파일에 쓸 때(dump) 하는
+        // 일이고, 파서는 이미 풀어서 저장해둔다. 읽을 때 또 걸면 저장할 때마다 백슬래시가 배로 늘어난다.
         string ToString() const { bool b; return std::move( ToString( b ) ); }
         string ToString( bool &ok ) const {
             ok = (Type == Class::String);
-            return ok ? std::move( json_escape( *Internal.String ) ): string("");
+            return ok ? *Internal.String : string("");
         }
 
+        // [FIX 2] 원본은 Type이 Floating일 때만 값을 주고 나머지는 말없이 0.0이었다.
+        // JSON은 1.0을 1로 적어도 되는 포맷이라, 손으로 고친 파일의 스케일이 통째로 0이 됐다.
         double ToFloat() const { bool b; return ToFloat( b ); }
         double ToFloat( bool &ok ) const {
-            ok = (Type == Class::Floating);
-            return ok ? Internal.Float : 0.0;
+            ok = (Type == Class::Floating || Type == Class::Integral);
+            if( Type == Class::Integral )
+                return static_cast<double>( Internal.Int );
+            return (Type == Class::Floating) ? Internal.Float : 0.0;
         }
 
         long ToInt() const { bool b; return ToInt( b ); }
@@ -365,8 +380,15 @@ class JSON
                 }
                 case Class::String:
                     return "\"" + json_escape( *Internal.String ) + "\"";
-                case Class::Floating:
-                    return std::to_string( Internal.Float );
+                // [FIX 3] std::to_string은 소수점 6자리에서 자른다. 좌표가 조금씩 어긋나고
+                // 1e-7 같은 값은 0이 됐다. std::format의 기본 표기는 다시 읽으면 같은 값이 나오는
+                // 최단 표기다. JSON에는 inf/nan 표기가 없어서 그대로 쓰면 파일 전체가 파싱에 실패하므로
+                // 유한하지 않은 값은 0으로 떨어뜨린다 — 애초에 정상 경로로는 들어올 수 없는 값이다.
+                case Class::Floating: {
+                    if( !std::isfinite( Internal.Float ) )
+                        return "0.0";
+                    return std::format( "{}", Internal.Float );
+                }
                 case Class::Integral:
                     return std::to_string( Internal.Int );
                 case Class::Boolean:
@@ -567,7 +589,11 @@ namespace {
         }
         if( c == 'E' || c == 'e' ) {
             c = str[ offset++ ];
-            if( c == '-' ){ ++offset; exp_str += '-';}
+            // [FIX 4] 원본에는 여기 ++offset이 하나 더 있어서 지수의 첫 자리를 건너뛰었다.
+            // "1e-12"가 1e-2로 읽혔다("1e-07"처럼 앞자리가 0일 때만 우연히 맞았다).
+            // 부호가 없는 지수("1e20")도 첫 자리를 잃었으므로, 부호가 아니면 읽은 자리를 되돌린다.
+            if( c == '-' ){ exp_str += '-';}
+            else if( c != '+' ){ --offset; }
             while( true ) {
                 c = str[ offset++ ];
                 if( c >= '0' && c <= '9' )

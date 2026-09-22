@@ -35,10 +35,24 @@ UObject* FObjectFactory::LoadObject(const FClassInfo* classInfo, const json::JSO
 {
 	UObject* instance = ConstructUnInitializedObject(classInfo);
 
-	if (instance)
+	if (!instance)
+	{
+		return nullptr;
+	}
+
+	try
 	{
 		instance->DeserializeClass(inJson);
 	}
+	catch (...)
+	{
+		// 역직렬화가 중간에 실패하면 반쯤 만들어진 객체가 GUObjectArray와 UObjectHash에 남는다.
+		// 월드에는 없는데 통계와 GetObjectsOfClass에는 잡히는 유령이 되고, 로드를 다시 시도할 때마다
+		// 쌓인다. 여기서 정리하고 예외는 그대로 올려보낸다 — 실패는 호출자가 알아야 한다.
+		instance->Destroy();
+		throw;
+	}
+
 	return instance;
 }
 
@@ -82,14 +96,18 @@ bool FObjectFactory::RegisterClassInfo(FString className, const FClassInfo* clas
 #include "USpotLightComponent.h"
 #include "ASpotLight.h"
 #include "UText3DComponent.h"
+#include "AStaticMeshTestActor.h"
 #include "World.h"
 
 TMap<FString, std::function<const FClassInfo* ()>> FObjectFactory::mClassInfoMap = {
 	{"UObject", &UObject::GetClass },
 	{"AActor", &AActor::GetClass },
+	{"AStaticMeshTestActor", &AStaticMeshTestActor::GetClass },
 	{"UActorComponent", &UActorComponent::GetClass },
 	{"USceneComponent", &USceneComponent::GetClass },
 	{"UPrimitiveComponent", &UPrimitiveComponent::GetClass },
+	{"UMeshComponent", &UMeshComponent::GetClass },
+	{"UStaticMeshComponent", &UStaticMeshComponent::GetClass },
 	{"UCubeComponent", &UCubeComponent::GetClass },
 	{"USphereComponent", &USphereComponent::GetClass },
 	{"ASpotLight", &ASpotLight::GetClass },

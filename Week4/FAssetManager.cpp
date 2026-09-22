@@ -387,6 +387,63 @@ void FAssetManager::RebindReferences(UAsset* OldAsset, UAsset* NewAsset)
 	}
 }
 
+UAsset* FAssetManager::ResolveAssetReference(const FGuid& Guid, const FName& AssetName, bool bLoadIfNotLoaded)
+{
+	// 1순위: GUID. 경로가 바뀌어도 같은 에셋을 가리킨다.
+	if (Guid.IsValid())
+	{
+		for (auto& pair : AssetMetaInfoMap)
+		{
+			if (pair.second.Guid != Guid)
+			{
+				continue;
+			}
+
+			if (pair.second.LoadedAsset)
+			{
+				return pair.second.LoadedAsset;
+			}
+
+			return bLoadIfNotLoaded ? LoadAsset(pair.first) : nullptr;
+		}
+
+		UE_LOG_WARN("[AssetManager] ResolveAssetReference: guid not found, fallback to name: guid=%s name=%s",
+			Guid.ToString().CStr(), AssetName.ToString().CStr());
+	}
+
+	if (AssetName.ToString().Len() == 0)
+	{
+		return nullptr;
+	}
+
+	// 2순위: 조회 키 또는 별칭. 파일 없이 등록된 런타임 에셋은 이름이 곧 키다.
+	if (UAsset* Asset = GetAsset(AssetName, bLoadIfNotLoaded))
+	{
+		return Asset;
+	}
+
+	// 3순위: 표시 이름(stem). 키가 경로인 구운 에셋을 이름만 적힌 옛 씬 파일에서 찾아낸다.
+	for (auto& pair : AssetMetaInfoMap)
+	{
+		if (!(pair.second.Stem == AssetName))
+		{
+			continue;
+		}
+
+		if (pair.second.LoadedAsset)
+		{
+			return pair.second.LoadedAsset;
+		}
+
+		return bLoadIfNotLoaded ? LoadAsset(pair.first) : nullptr;
+	}
+
+	UE_LOG_WARN("[AssetManager] ResolveAssetReference: not found: guid=%s name=%s",
+		Guid.ToString().CStr(), AssetName.ToString().CStr());
+
+	return nullptr;
+}
+
 UAsset* FAssetManager::GetAsset(const FName& InAssetName, bool loadIfNotLoaded)
 {
 	const FName AssetName = ResolveAlias(InAssetName);
