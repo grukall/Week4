@@ -491,6 +491,9 @@ void URenderer::BindFrameBuffer()
 {
 	DeviceContext->OMSetRenderTargets(1, &FrameBufferRTV, nullptr);
 	DeviceContext->RSSetViewports(1, &ViewportInfo);
+
+	const float ClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
+	DeviceContext->ClearRenderTargetView(FrameBufferRTV, ClearColor);
 }
 
 void URenderer::BindRenderTarget(const TSharedPtr<FRenderTarget2D>& RenderTarget, const TSharedPtr<FDepthStencil>& DepthStencil, bool bClear)

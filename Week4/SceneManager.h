@@ -19,6 +19,7 @@ class FFrameTimer;
 struct FEditorViewportClient; // 실제 정의가 struct – class로 선언하면 MSVC 맹글링이 달라져 링크 실패
 class FGraphicsManager;
 class UWorld;
+class FThumbnailManager;
 
 struct FGuiReference
 {
@@ -46,7 +47,7 @@ struct FGuiInputField
 class FSceneManager
 {
 public:
-	explicit FSceneManager(const TArray<FEditorViewportClient*>& clients);
+	explicit FSceneManager(const TArray<FEditorViewportClient*>& clients, FThumbnailManager* thumbnailManager);
 	~FSceneManager();
 
 	void Tick(float deltaTime);
@@ -79,6 +80,8 @@ public:
 	bool IsViewportHovered() const { return mbViewportHovered; }
 	SWindow* GetRootWindow() const { return mRootWindow; }
 
+	void InitObjViewer(const char* CmdLine);
+	void UpdateObjViewerGUI(const FGuiReference& guiReference);
 private:
 	static constexpr float MIN_WIDTH_RATIO = 0.2f;
 	static constexpr float MAX_WIDTH_RATIO = 0.6f;
@@ -96,7 +99,7 @@ private:
 	UWorld* mCurrentWorld = nullptr;
 	AActor* mSelectedActor = nullptr;
 	FGuiInputField mGuiInputField;
-
+	FThumbnailManager* mThumbnailManager = nullptr;
 	FPropertyPanel* mPropertyPanel = nullptr;
 
 	//Content Browser

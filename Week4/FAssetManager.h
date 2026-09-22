@@ -11,6 +11,8 @@
 #include <filesystem>
 
 class FFileAssetSource;
+class URenderer;
+class FFileManager;
 
 struct FAssetMetaInfo
 {
@@ -30,6 +32,11 @@ struct FAssetMetaInfo
 
 	// 지금 메모리에 로드돼 있으면 그 인스턴스, 아니면 nullptr.
 	UAsset* LoadedAsset = nullptr;
+
+	// 로드하면 어떤 클래스가 나오는지. 로드된 적 있으면 그 인스턴스의 실제 클래스로 자동 채워지고,
+	// 디스크 스캔으로만 알려진(아직 한 번도 로드 안 한) 엔트리는 ScanBakedAssets가 파일 헤더로 채운다.
+	// 드롭다운이 "로드 여부와 무관하게" 클래스로 필터링할 수 있는 건 이 필드 덕분이다.
+	const FClassInfo* AssetClass = nullptr;
 };
 
 class FAssetManager
@@ -77,6 +84,10 @@ public:
 	// 굽기(Import) 직후, 새로 만든 엔트리에 원본 소스를 한 번 붙여둔다. 재임포트 때는 다시 부를 필요 없다.
 	void SetImportSource(const FName& AssetName, FFileAssetSource* ImportSource);
 
+	// BakedDir 밑의 .uasset을 전부 훑어서, 아직 등록 안 된 것만 로드 없이 미리 등록해둔다.
+	// (에셋 드롭다운이 로드 여부와 무관하게 "존재하는 것"을 보여줄 수 있게 하기 위함.)
+	void ScanBakedAssets(const std::filesystem::path& BakedDir, URenderer& Renderer, FFileManager& FileManager);
+
 	UAsset* LoadAsset(const FName& AssetName, bool bImport = false);
 	UAsset* GetAsset(const FName& AssetName, bool loadIfNotLoaded = false);
 
@@ -90,6 +101,11 @@ public:
 		}
 
 		return nullptr;
+	}
+
+	bool HasAsset(const FName& AssetName) const
+	{
+		return AssetMetaInfoMap.Contains(AssetName);
 	}
 
 	void UnloadAsset(const FName& AssetName);

@@ -25,9 +25,21 @@ public:
 	inline void MarkDirty(bool bDirty = true) { bIsDirty = bDirty; }
 	inline const bool IsDirty() const { return bIsDirty; }
 
+	// 이 에셋을 구울 때 쓴 원본 소스 파일의 절대경로(있다면). .uasset 안에 저장해두면,
+	// 앱을 재시작해 AssetManager가 메모리부터 새로 시작해도(ImportSource는 런타임 전용이라
+	// 재시작하면 날아간다) ScanBakedAssets가 이걸 읽어 ImportSource를 복원할 수 있다 —
+	// 그래야 재시작 후에도 같은 원본을 다시 임포트했을 때 새 .uasset(_1, _2 ...)을 안 만들고
+	// 재임포트로 인식한다.
+	inline const FString& GetAssetPath() const { return AssetPath; }
+	inline void SetAssetPath(const FString& InPath) { AssetPath = InPath; }
+
 	virtual void Serialize(FArchive& Ar) override
 	{
 		UObject::Serialize(Ar);
+
+		FString ClassName = Ar.IsSaving() ? FString(GetRuntimeClass()->Name) : FString();
+		Ar << ClassName;
+
 		Ar << AssetName;
 		Ar << AssetPath;
 	}

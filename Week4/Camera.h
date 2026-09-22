@@ -200,5 +200,5 @@ public:
 	float Damping = 6.f;
 
 	const float nearZ = 0.1f;
-	const float farZ = 2000.0f;
+	float farZ = 2000.0f;
 };

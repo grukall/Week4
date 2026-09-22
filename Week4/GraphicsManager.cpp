@@ -95,7 +95,10 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 
 void FGraphicsManager::Render()
 {
+#if IS_OBJ_VIEWER
+#else
 	mRenderer->RenderLines(mRenderCollector.LineInfos);
+#endif
 
 	for (const FRenderInfo& renderInfo : mRenderCollector.RenderInfos)
 	{
@@ -168,16 +171,16 @@ void FGraphicsManager::Render()
 			mMeshPipeline->SetShaderResource(2, nullptr);
 			mMeshPipeline->SetShaderResource(3, nullptr);
 			if (AmbientTexture)
-				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(0, AmbientTexture->GetSRV().Get());
 
 			if (DiffuseTexture)
-				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(1, DiffuseTexture->GetSRV().Get());
 
 			if (SpecularTexture)
-				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(2, SpecularTexture->GetSRV().Get());
 
 			if (BumpTexture)
-				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV());
+				mMeshPipeline->SetShaderResource(3, BumpTexture->GetSRV().Get());
 
 			mMeshPipeline->SetSamplerState(0, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
 			mMeshPipeline->SetSamplerState(1, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_MIRROR, D3D11_TEXTURE_ADDRESS_MIRROR);
@@ -218,14 +221,15 @@ void FGraphicsManager::Render()
 	{
 		RenderQuadWithBillboard(QuadInfo);
 	}
-
+#if IS_OBJ_VIEWER
+#else
 	if (FShowFlags::Get().IsEnabled(EShowFlag::Grid))
 	{
 		// Match the grid's world-space half-width of 0.001.
 		mRenderer->RenderWorldAxis(mViewMatrix, mProjectionMatrix, FVector4(0.f, 0.f, 1.f, 1.f), FVector3(0.f, 0.f, 1.f), 0.002f);
 		mRenderer->RenderWorldGrid(mViewUnifiedProjectionMatrix, mCameraLocation, static_cast<float>(GridGap));
 	}
-
+#endif
 	for (const FRenderQuadInfo& QuadInfo : mRenderCollector.GetTransparentQuadInfos())
 	{
 		RenderQuadWithBillboard(QuadInfo);

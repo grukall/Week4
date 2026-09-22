@@ -11,6 +11,7 @@
 #include "FAssetManager.h"
 #include "FFontManager.h"
 #include "FComponentVisualizer.h"
+#include "FThumbnailManager.h"
 
 #include <d3d11.h>
 
@@ -25,12 +26,14 @@ public:
 	}
 	~FEngineLoop() {};
 
-	void Init(HINSTANCE hInstance, WNDPROC WndProc);
+	void Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine);
 	void Tick(bool bPumpMessages);
 	void End();
 
 	FAssetManager* GetAssetManager() { return mAssetManager; }
 	FStatManager* GetStatManager() { return mStatManager; }
+	TArray<FEditorViewportClient*>& GetViewportClients() { return ViewportClients; }
+	FEditorViewportClient* GetActiveViewportClient() { return ActiveViewportClient; }
 
 private:
 	void InitAssetManager();
@@ -52,6 +55,8 @@ private:
 
 	FComponentVisualizerManager* mComponentVisualizerManager;
 	FStatManager* mStatManager;
+
+	FThumbnailManager* mThumbnailManager = nullptr;
 };
 
 inline FEngineLoop GEngineLoop;
