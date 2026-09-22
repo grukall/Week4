@@ -76,15 +76,13 @@ FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath,
 		FMaterialAssetLoader* MatLoader = AssetManager->GetOrCreateLoader<FMaterialAssetLoader>(Renderer, *AssetManager);
 		TArray<FName> ImportedKeys = MatLoader->Import(MtlPath, InFileManager);
 
+		// 머티리얼 키는 구워진 .uasset 경로이고, 파일 이름이 곧 mtl의 머티리얼 이름이다.
+		// obj가 참조하는 이름(usemtl)으로 키를 찾을 수 있게 stem으로 매핑해둔다.
 		for (const FName& Key : ImportedKeys)
 		{
 			FString KeyStr = Key.ToString();
-			int32 Sep = KeyStr.Find(FString("::"));
-			if (Sep != -1)
-			{
-				FString MatName = KeyStr.RightChop(Sep + 2);
-				MaterialNameToAssetKey.Add(MatName, Key);
-			}
+			FString MatName(std::filesystem::path(KeyStr.CStr()).stem().string());
+			MaterialNameToAssetKey.Add(MatName, Key);
 		}
 	}
 

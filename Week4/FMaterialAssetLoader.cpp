@@ -48,14 +48,13 @@ TArray<FName> FMaterialAssetLoader::Import(const std::filesystem::path& SourceMt
 
 	for (FMaterialData& Data : MaterialDatas)
 	{
-		FString MaterialKey = FileSource.GetFileManager().MakeRelativeToRoot(SourceMtlPath).string();
-		MaterialKey.Append("::");
-		MaterialKey.Append(Data.Name);
-		FName MaterialAssetName(MaterialKey);
-
 		std::filesystem::path BakedDir = "Assets/Baked/Materials";
 		std::filesystem::path CandidatePath = BakedDir / (std::string(Data.Name.CStr()) + ".uasset");
-		bool bIsReimport = (AssetManager->GetAsset(MaterialAssetName) != nullptr);
+
+		// 이미 같은 이름으로 구워둔 게 있으면 그 자리에 다시 굽는다(= 재임포트).
+		// 등록 여부가 아니라 파일 존재로 판단해야 한다 — 재시작 직후처럼 아직 아무것도
+		// 로드/등록되지 않은 상태에서도 같은 판단이 나와야 _1, _2가 안 생긴다.
+		bool bIsReimport = std::filesystem::exists(CandidatePath);
 
 		std::filesystem::path BakedPath;
 		if (bIsReimport)
@@ -66,6 +65,10 @@ TArray<FName> FMaterialAssetLoader::Import(const std::filesystem::path& SourceMt
 		{
 			BakedPath = MakeUniqueBakedPath(BakedDir, Data.Name);
 		}
+
+		// 조회 키는 구워진 .uasset의 루트 기준 상대경로다. ScanBakedAssets가 재시작 후
+		// 등록할 때 쓰는 키와 정규화 방식이 같아야, 메시가 저장해둔 키로 머티리얼을 찾을 수 있다.
+		FName MaterialAssetName(FString(InFileManager.MakeRelativeToRoot(BakedPath).string()));
 
 		bool bNeedsBake = true;
 		if (std::filesystem::exists(BakedPath) && std::filesystem::exists(SourceMtlPath))
@@ -119,8 +122,8 @@ TArray<FName> FMaterialAssetLoader::Import(const std::filesystem::path& SourceMt
 			AssetManager->SetImportSource(MaterialAssetName, new FFileAssetSource(InFileManager, SourceMtlPath));
 		}
 
-		UE_LOG("[MaterialLoader] registered: logical_key=%s baked=%s",
-			MaterialAssetName.ToString().CStr(), BakedPath.string().c_str());
+		UE_LOG("[MaterialLoader] registered: key=%s name=%s",
+			MaterialAssetName.ToString().CStr(), Data.Name.CStr());
 		MaterialAssetNames.Add(MaterialAssetName);
 	}
 	

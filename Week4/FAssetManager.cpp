@@ -5,6 +5,7 @@
 #include "UObjectIterator.h"
 #include "FLogManager.h"
 #include "Archive.h"
+#include "FMaterialAssetLoader.h"
 
 #include <filesystem>
 
@@ -32,7 +33,10 @@ namespace
 	// .uasset 맨 앞에 UAsset::Serialize가 적어둔 클래스 이름 + 원본 임포트 경로(AssetPath)만
 	// 읽는다. 나머지 본문(정점/머티리얼 등)은 안 건드린다 — 스캔 단계는 "이게 무슨 클래스고
 	// 원본이 어디였냐"만 알면 되지, 오브젝트 전체를 복원할 필요가 없다.
-	// UAsset::Serialize 순서: ClassName -> AssetName -> AssetPath. 순서가 바뀌면 같이 고쳐야 한다.
+	// 파일에는 ClassName이 두 번 들어있다 — 로더가 굽기 직전에 수동으로 한 번 쓰고
+	// (StaticMesh.cpp / FMaterialAssetLoader.cpp의 Writer << ClassName),
+	// UAsset::Serialize가 또 한 번 쓴다. 둘 다 읽어 넘겨야 뒤 필드가 밀리지 않는다.
+	// 파일 순서: ClassName(수동) -> ClassName(UAsset) -> AssetName -> AssetPath.
 	bool ReadBakedAssetHeader(const std::filesystem::path& Path, FString& OutClassName, FString& OutAssetPath)
 	{
 		FArchiveFileReader Reader(Path);
@@ -46,6 +50,9 @@ namespace
 		{
 			return false;
 		}
+
+		FString ClassNameFromAsset;
+		Reader << ClassNameFromAsset;
 
 		FName AssetName;
 		Reader << AssetName;
@@ -262,7 +269,11 @@ void FAssetManager::ScanBakedAssets(const std::filesystem::path& BakedDir, URend
 			AssetClass = UStaticMesh::GetClass();
 			Loader = GetOrCreateLoader<FStaticMeshAssetLoader>(Renderer, *this);
 		}
-		// else if (ClassName.Equals(FString("UMaterial"))) { ... 팀원분 Material .uasset 작업 완료 후 추가 ... }
+		else if (ClassName.Equals(FString("UMaterial")))
+		{
+			AssetClass = UMaterial::GetClass();
+			Loader = GetOrCreateLoader<FMaterialAssetLoader>(Renderer, *this);
+		}
 
 		if (!Loader)
 		{
