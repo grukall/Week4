@@ -1,5 +1,6 @@
 #include "Material.h"
 #include "Json/json.hpp"
+#include "Archive.h"
 
 void UMaterial::Initialize(const FName& InAssetName, URenderer& InRenderer)
 {
@@ -58,4 +59,32 @@ void UMaterial::InitDefaultMaterial(URenderer* Renderer)
 	DefaultMaterial->SetAmbientColor({ 0.2f, 0.2f, 0.2f });
 	DefaultMaterial->SetDiffuseColor({ 0.6f, 0.6f, 0.6f, 1.0f });
 	DefaultMaterial->SetSpecularPower(32.0f);
+}
+
+void UMaterial::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	Ar << SpecularPower;
+	Ar << OpticalDensity;
+	Ar << Transparency;
+	Ar << IlluminationModel;
+	Ar << AmbientColor;
+	Ar << DiffuseColor;
+	Ar << SpecularColor;
+	Ar << EmissiveColor;
+	Ar << AmbientTexturePath;
+	Ar << DiffuseTexturePath;
+	Ar << SpecularTexturePath;
+	Ar << BumpTexturePath;
+	Ar << UVScroll;
+	Ar << UVSpeed;
+	Ar << TransmissionFilter;
+}
+
+void UMaterial::PostLoad(URenderer* Renderer)
+{
+	Super::PostLoad(Renderer);
+
+	// TODO: Texture re-linking logic
 }

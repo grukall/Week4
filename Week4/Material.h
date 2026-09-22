@@ -4,6 +4,7 @@
 #include "Renderer.h"
 
 class UTexture2D;
+class FArchive;
 
 class UMaterial : public UAsset
 {
@@ -19,6 +20,9 @@ public:
 
 	virtual void SerializeClass(json::JSON& outJson) const override;
 	virtual void DeserializeClass(const json::JSON& inJson) override;
+
+	void Serialize(FArchive& Ar) override;
+	void PostLoad(URenderer* Renderer) override;
 
 	static UMaterial* DefaultMaterial;
 	static void InitDefaultMaterial(URenderer* Renderer);
