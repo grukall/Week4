@@ -11,6 +11,7 @@
 #include "PrimitiveComponent.h"
 #include "TArray.h"
 #include "World.h"
+#include "FViewport.h"
 #include "FEditorViewportClient.h"
 #include "Camera.h"
 #include "Console.h"
@@ -42,7 +43,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
+FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -54,12 +55,12 @@ FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
 	mPropertyPanel = new FPropertyPanel();
 	mPropertyPanel->Init();
 
-	// 4개의 리프 노드(뷰포트) 생성 후 대응 클라이언트를 바로 꽂는다.
+	// 4개의 리프 노드(뷰포트) 생성 후 대응 뷰포트를 바로 꽂는다.
 	// 순서: TopLeft=0, TopRight=1, BottomLeft=2, BottomRight=3
-	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->OwningClient     = clients[0];
-	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->OwningClient    = clients[1];
-	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->OwningClient  = clients[2];
-	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->OwningClient = clients[3];
+	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->Viewport     = inViewports[0];
+	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->Viewport    = inViewports[1];
+	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->Viewport  = inViewports[2];
+	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->Viewport = inViewports[3];
 
 	// 4분할 루트 스플리터 생성 및 조립
 	SSplitterQuad* RootSplitter = new SSplitterQuad();
@@ -74,6 +75,11 @@ FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
 
 FSceneManager::~FSceneManager()
 {
+	if (mRootWindow)
+	{
+		delete mRootWindow;
+		mRootWindow = nullptr;
+	}
 	delete mCurrentWorld;
 }
 
@@ -172,188 +178,19 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 						const float MouseXInViewport = static_cast<float>(WindowApplication.Input.CursorX) - mViewportX;
 						const float MouseYInViewport = static_cast<float>(WindowApplication.Input.CursorY) - mViewportY;
 
-						const float ToolbarHeight = 26.0f;
-
 						// 각 리프 뷰포트 및 상단 툴바 렌더링
 						auto ProcessLeaf = [&](SWindow* W, int32 ViewportIndex)
 						{
-							if (!W || !W->OwningClient) return;
-							FEditorViewportClient* Client = W->OwningClient;
-							const FRect rect = W->Rect;
-
-							if (rect.GetWidth() <= 0.0f || rect.GetHeight() <= ToolbarHeight) return;
-
-							const float RenderTop = rect.Top + ToolbarHeight;
-							const float RenderHeight = rect.GetHeight() - ToolbarHeight;
-							const float RenderWidth = rect.GetWidth();
-
-							// 이번 프레임의 3D 렌더 영역 크기를 클라이언트에게 통보 (마우스 피킹과 종횡비 보정)
-							Client->SetViewportArea(rect.Left, RenderTop, RenderWidth, RenderHeight);
-
-							ImGui::PushID(Client);
-
-							// 1. 3D 뷰포트 이미지 렌더링
-							if (Client->mRenderTarget && Client->mRenderTarget->SRV)
-							{
-								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left, startCursorPos.y + RenderTop));
-
-								ImTextureID srv = (ImTextureID)(intptr_t)Client->mRenderTarget->SRV.Get();
-								ImGui::Image(srv, ImVec2(RenderWidth, RenderHeight));
-
-								// 뷰포트 이미지 영역 클릭 시 ActiveViewport 갱신
-								if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right))
-								{
-									guiReference.ActiveViewport = Client;
-								}
-							}
-
-							// 2. 상단 툴바 (Toolbar Bar) 렌더링
-							{
-								ImDrawList* drawList = ImGui::GetWindowDrawList();
-								const ImVec2 barMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
-								const ImVec2 barMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Top + ToolbarHeight);
-
-								// 툴바 배경색 및 하단 구분선
-								drawList->AddRectFilled(barMin, barMax, IM_COL32(28, 28, 32, 240));
-								drawList->AddLine(ImVec2(barMin.x, barMax.y), ImVec2(barMax.x, barMax.y), IM_COL32(45, 45, 50, 255));
-
-								ImGui::SetCursorPos(ImVec2(startCursorPos.x + rect.Left + 4.0f, startCursorPos.y + rect.Top + 2.0f));
-
-								// 뷰포트 인덱스 배지
-								bool bIsActive = (Client == guiReference.ActiveViewport);
-								if (bIsActive)
-								{
-									ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.1f, 1.0f), "[#%d]", ViewportIndex + 1);
-								}
-								else
-								{
-									ImGui::TextDisabled("[#%d]", ViewportIndex + 1);
-								}
-								if (ImGui::IsItemClicked())
-								{
-									guiReference.ActiveViewport = Client;
-								}
-
-								ImGui::SameLine();
-
-								// 시점 드롭다운 (View Type)
-								const char* ViewTypeNames[] = { "Perspective", "Top", "Bottom", "Left", "Right", "Front", "Back" };
-								int CurrentViewType = static_cast<int>(Client->ViewportType);
-								ImGui::SetNextItemWidth(110.0f);
-								if (ImGui::Combo("##ViewType", &CurrentViewType, ViewTypeNames, IM_ARRAYSIZE(ViewTypeNames)))
-								{
-									Client->SetViewportType(static_cast<EViewportType>(CurrentViewType));
-									guiReference.ActiveViewport = Client;
-								}
-
-								ImGui::SameLine();
-
-								// 뷰 모드 드롭다운 (View Mode)
-								const char* ViewModes[] = { "Lit", "Unlit", "Wireframe" };
-								int CurrentViewMode = static_cast<int>(Client->ViewMode);
-								ImGui::SetNextItemWidth(100.0f);
-								if (ImGui::Combo("##ViewMode", &CurrentViewMode, ViewModes, IM_ARRAYSIZE(ViewModes)))
-								{
-									Client->ViewMode = static_cast<EViewModeIndex>(CurrentViewMode);
-									guiReference.ActiveViewport = Client;
-								}
-
-								ImGui::SameLine();
-
-								// 카메라 속도 조절
-								ImGui::SetNextItemWidth(48.0f);
-								if (ImGui::DragFloat("##Speed", &Client->GetCamera().Speed, 0.2f, 0.1f, 50.0f, "S:%.1f"))
-								{
-									guiReference.ActiveViewport = Client;
-								}
-								if (ImGui::IsItemHovered())
-								{
-									ImGui::SetTooltip("Camera Speed: %.1f", Client->GetCamera().Speed);
-								}
-
-								// 너비 여유에 따라 FOV, Sens를 인라인 또는 팝업으로 제공
-								const float maxBtnWidth = 22.0f;
-								const float rightButtonX = startCursorPos.x + rect.Right - maxBtnWidth - 4.0f;
-								const float spaceRemaining = rightButtonX - ImGui::GetCursorPosX();
-
-								if (spaceRemaining >= 150.0f)
-								{
-									ImGui::SameLine();
-									ImGui::SetNextItemWidth(50.0f);
-									if (ImGui::DragFloat("##FOV", &Client->GetCamera().mFovDegree, 0.5f, 5.0f, 170.0f, "FOV:%.0f"))
-									{
-										guiReference.ActiveViewport = Client;
-									}
-									if (ImGui::IsItemHovered())
-									{
-										ImGui::SetTooltip("Field of View (FOV: %.1f deg)", Client->GetCamera().mFovDegree);
-									}
-
-									ImGui::SameLine();
-									ImGui::SetNextItemWidth(60.0f);
-									if (ImGui::DragFloat("##Sens", &Client->GetCamera().Sensitivity, 0.005f, 0.01f, 1.0f, "Sens:%.2f", ImGuiSliderFlags_AlwaysClamp))
-									{
-										guiReference.ActiveViewport = Client;
-									}
-									if (ImGui::IsItemHovered())
-									{
-										ImGui::SetTooltip("Camera Sensitivity: %.3f", Client->GetCamera().Sensitivity);
-									}
-								}
-								else
-								{
-									ImGui::SameLine();
-									if (ImGui::Button("..."))
-									{
-										ImGui::OpenPopup("CamOptPopup");
-									}
-									if (ImGui::IsItemHovered())
-									{
-										ImGui::SetTooltip("Camera Settings (FOV, Sensitivity)");
-									}
-
-									if (ImGui::BeginPopup("CamOptPopup"))
-									{
-										ImGui::Text("Camera Settings [#%d]", ViewportIndex + 1);
-										ImGui::Separator();
-										ImGui::SliderFloat("FOV", &Client->GetCamera().mFovDegree, 5.0f, 170.0f, "%.1f deg");
-										ImGui::SliderFloat("Sensitivity", &Client->GetCamera().Sensitivity, 0.01f, 1.0f, "%.3f");
-										ImGui::DragFloat("Speed", &Client->GetCamera().Speed, 0.2f, 0.1f, 50.0f, "%.1f");
-										ImGui::EndPopup();
-									}
-								}
-
-								ImGui::SameLine();
-
-								// 포커스 버튼
-								if (ImGui::Button("F"))
-								{
-									Client->FocusOnActor(mSelectedActor);
-									guiReference.ActiveViewport = Client;
-								}
-								if (ImGui::IsItemHovered())
-								{
-									ImGui::SetTooltip("Focus on selected actor (F)");
-								}
-
-								// 최대화 토글 버튼
-								if (rightButtonX > ImGui::GetCursorPosX() + 4.0f)
-								{
-									ImGui::SetCursorPos(ImVec2(rightButtonX, startCursorPos.y + rect.Top + 2.0f));
-									const char* maxIcon = (mMaximizedViewportIndex == ViewportIndex) ? "■" : "□";
-									if (ImGui::Button(maxIcon, ImVec2(maxBtnWidth, 0.0f)))
-									{
-										mMaximizedViewportIndex = (mMaximizedViewportIndex == ViewportIndex) ? -1 : ViewportIndex;
-										guiReference.ActiveViewport = Client;
-									}
-									if (ImGui::IsItemHovered())
-									{
-										ImGui::SetTooltip(mMaximizedViewportIndex == ViewportIndex ? "Restore Viewport" : "Maximize Viewport");
-									}
-								}
-							}
-
-							ImGui::PopID();
+							if (!W || !W->Viewport) return;
+							W->Viewport->DrawViewportUI(
+								W->Rect,
+								ViewportIndex,
+								guiReference.ActiveViewport,
+								mMaximizedViewportIndex,
+								mSelectedActor,
+								startCursorPos,
+								screenCursorPos
+							);
 						};
 
 						SWindow* Leaves[4] = {
@@ -425,7 +262,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								{
 									for (int i = 0; i < 4; ++i)
 									{
-										if (Leaves[i] && Leaves[i]->OwningClient == guiReference.ActiveViewport)
+										if (Leaves[i] && Leaves[i]->Viewport && Leaves[i]->Viewport->GetClient() == guiReference.ActiveViewport)
 										{
 											ActiveWindow = Leaves[i];
 											break;
@@ -1240,13 +1077,17 @@ void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 			mViewportY = ScreenPos.y;
 			mViewportWidth = Size.x;
 			mViewportHeight = Size.y;
-
-			ViewportClient->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+			FViewport* Viewport = ViewportClient ? ViewportClient->GetViewport() : nullptr;
+			if (Viewport) {
+				Viewport->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+			} else if (ViewportClient) {
+				ViewportClient->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+			}
 
 			guiReference.ActiveViewport = ViewportClient;
 
-			if (ViewportClient->mRenderTarget && ViewportClient->mRenderTarget->SRV) {
-				ImTextureID SRV = (ImTextureID)(intptr_t)ViewportClient->mRenderTarget->SRV.Get();
+			if (Viewport && Viewport->GetRenderTarget() && Viewport->GetRenderTarget()->SRV) {
+				ImTextureID SRV = (ImTextureID)(intptr_t)Viewport->GetRenderTarget()->SRV.Get();
 
 				ImGui::Image(SRV, Size);
 

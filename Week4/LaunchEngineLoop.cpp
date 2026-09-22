@@ -86,15 +86,16 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 	//ViewportClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer()); // Todo: cChange to class
 
 	ViewportClients.Empty();
+	Viewports.Empty();
 	for (int i = 0; i < 4; ++i)
 	{
 		FEditorViewportClient* NewClient = new FEditorViewportClient(*mGraphicsManager->GetRenderer());
-
-		// @TODO : 해상도 관련 문제
-		NewClient->mRenderTarget = mGraphicsManager->GetRenderer()->CreateRenderTarget2D(800, 600, DXGI_FORMAT_R8G8B8A8_UNORM);
-		NewClient->mDepthStencil = mGraphicsManager->GetRenderer()->CreateDepthStencil(800, 600);
-
 		ViewportClients.Add(NewClient);
+
+		FViewport* NewViewport = new FViewport(NewClient);
+		NewViewport->mRenderTarget = mGraphicsManager->GetRenderer()->CreateRenderTarget2D(800, 600, DXGI_FORMAT_R8G8B8A8_UNORM);
+		NewViewport->mDepthStencil = mGraphicsManager->GetRenderer()->CreateDepthStencil(800, 600);
+		Viewports.Add(NewViewport);
 	}
 	ViewportClients[0]->SetViewportType(EViewportType::Top);
 	ViewportClients[0]->ViewMode = EViewModeIndex::VMI_Wireframe;
@@ -113,15 +114,14 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 	const FVector4 NearTint(1.0f, 0.65f, 0.15f, 0.85f); // 주황 = 가까운 쪽
 	const FVector4 FarTint(0.25f, 0.55f, 1.0f, 0.85f); // 파랑 = 먼 쪽
 
-	
 	mFileManager = new FFileManager();
 	mFontManager = new FFontManager();
 	mComponentVisualizerManager = new FComponentVisualizerManager();
 	InitAssetManager();
 
 	URenderer* renderer = mGraphicsManager->GetRenderer();
-	FThumbnailManager::Get().Initialize(renderer->GetDevice(),renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
-	mSceneManager = new FSceneManager(ViewportClients);
+	FThumbnailManager::Get().Initialize(renderer->GetDevice(), renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
+	mSceneManager = new FSceneManager(Viewports);
 
 	char Value[64] = {};
 	GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), ".\\editor.ini");
@@ -280,7 +280,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		mSceneManager->Update(deltaTime, RenderCollector);
 	}
 
-	const float ActiveAspect = static_cast<float>(ActiveViewportClient->mWidth) / static_cast<float>(ActiveViewportClient->mHeight);
+	const float ActiveAspect = ActiveViewportClient->GetViewport() ? ActiveViewportClient->GetViewport()->GetAspectRatio() : (static_cast<float>(ActiveViewportClient->GetWidth()) / static_cast<float>(ActiveViewportClient->GetHeight()));
 	const FMatrix ActiveViewProjMatrix =
 		ActiveViewportClient->GetCamera().GetViewMatrix() *
 		ActiveViewportClient->GetCamera().GetUnifiedProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, ActiveViewportClient->GetCamera().mOrthoDistance, 0.1f, 1000.f, ActivePerspectiveRatio);
@@ -331,16 +331,16 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		}
 
 		// Gizmo Update
-		const float ActiveViewportX = mSceneManager->GetViewportX() + ActiveViewportClient->mViewportLeft;
-		const float ActiveViewportY = mSceneManager->GetViewportY() + ActiveViewportClient->mViewportTop;
+		const float ActiveViewportX = mSceneManager->GetViewportX() + ActiveViewportClient->GetViewportLeft();
+		const float ActiveViewportY = mSceneManager->GetViewportY() + ActiveViewportClient->GetViewportTop();
 
 		ActiveViewportClient->mGizmo.Update(
 			mSceneManager,
 			ActiveViewProjMatrix,
 			ActiveViewportX,
 			ActiveViewportY,
-			static_cast<float>(ActiveViewportClient->mWidth),
-			static_cast<float>(ActiveViewportClient->mHeight)
+			static_cast<float>(ActiveViewportClient->GetWidth()),
+			static_cast<float>(ActiveViewportClient->GetHeight())
 		);
 	}
 
@@ -356,75 +356,14 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		mGraphicsManager->Update(deltaTime);
 
 #if IS_OBJ_VIEWER
-		if (!ViewportClients.IsEmpty()) {
-			FEditorViewportClient* CurrentClient = ViewportClients[0];
-
-			CurrentClient->ResizeRenderTarget(mGraphicsManager);
-
-			mGraphicsManager->GetRenderer()->BindRenderTarget(CurrentClient->mRenderTarget, CurrentClient->mDepthStencil, true);
-
-			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
-			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
-
-			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight);
-
-			if (UFontAtlas* StatFontAtlas = mAssetManager->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
-			{
-				CurrentClient->DrawStatsHUD(CurrentClient->StatCommands, StatFontAtlas,
-					mGraphicsManager->GetRenderCollector(), currentWidth, currentHeight);
-			}
-
-			mGraphicsManager->FlushLines();
-			mGraphicsManager->Render();
-			mGraphicsManager->GetRenderCollector().ClearScreenQuads();
+		if (!Viewports.IsEmpty()) {
+			Viewports[0]->Draw(mGraphicsManager, mSceneManager);
 		}
 #else
-
 		// 4개의 뷰포트 드로우콜
 		for (int i = 0; i < 4; ++i)
 		{
-			FEditorViewportClient* CurrentClient = ViewportClients[i];
-
-			CurrentClient->ResizeRenderTarget(mGraphicsManager);
-
-			// 렌더 타겟 바인딩 및 Clear
-			mGraphicsManager->GetRenderer()->BindRenderTarget(CurrentClient->mRenderTarget, CurrentClient->mDepthStencil, true);
-
-			const float currentWidth = static_cast<float>(CurrentClient->mWidth);
-			const float currentHeight = static_cast<float>(CurrentClient->mHeight);
-			const float CurrentRatio = CurrentClient->GetPerspectiveRatio(mGraphicsManager->GetPerspectiveRatio());
-
-			mGraphicsManager->Prepare(&CurrentClient->mCamera, currentWidth, currentHeight, CurrentRatio, CurrentClient->ViewMode);
-
-			if (UFontAtlas* StatFontAtlas = mAssetManager->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
-			{
-				CurrentClient->DrawStatsHUD(CurrentClient->StatCommands, StatFontAtlas,
-					mGraphicsManager->GetRenderCollector(), currentWidth, currentHeight);
-			}
-
-			mGraphicsManager->FlushLines();
-			mGraphicsManager->Render();
-			mGraphicsManager->GetRenderCollector().ClearScreenQuads();
-
-			if (mSceneManager->GetSelectedActor())
-			{
-				FRenderInfo clickedRenderInfo;
-				mSceneManager->GetSelectedActor()->GetFirstRenderInfo(clickedRenderInfo);
-				mGraphicsManager->RenderHighLight(clickedRenderInfo);
-			}
-
-			// 각 뷰포트별 렌더링용 ViewProj 계산 및 기즈모 렌더링
-			const float Aspect = currentWidth / currentHeight;
-			const FMatrix CurrentViewProj = CurrentClient->mCamera.GetViewMatrix() *
-				CurrentClient->mCamera.GetUnifiedProjectionMatrix(Aspect, CurrentClient->mCamera.mFovDegree, CurrentClient->mCamera.mOrthoDistance, 0.1f, 1000.f, CurrentRatio);
-
-			CurrentClient->mGizmo.Render(
-				mSceneManager,
-				CurrentClient->mCamera.Transform.Location,
-				CurrentViewProj,
-				currentWidth,
-				currentHeight
-			);
+			Viewports[i]->Draw(mGraphicsManager, mSceneManager);
 		}
 #endif
 
@@ -476,6 +415,12 @@ void FEngineLoop::End()
 	ImGui::DestroyContext();
 
 	delete mComponentVisualizerManager;
+	for (FViewport* Viewport : Viewports)
+	{
+		delete Viewport;
+	}
+	Viewports.Empty();
+
 	for (FEditorViewportClient* Client : ViewportClients)
 	{
 		delete Client;

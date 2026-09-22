@@ -16,6 +16,7 @@ inline constexpr std::string_view kSceneDataSuffix = ".Scene";
 
 class FFileManager;
 class FFrameTimer;
+class FViewport;
 struct FEditorViewportClient; // 실제 정의가 struct – class로 선언하면 MSVC 맹글링이 달라져 링크 실패
 class FGraphicsManager;
 class UWorld;
@@ -47,7 +48,7 @@ struct FGuiInputField
 class FSceneManager
 {
 public:
-	explicit FSceneManager(const TArray<FEditorViewportClient*>& clients);
+	explicit FSceneManager(const TArray<FViewport*>& inViewports);
 	~FSceneManager();
 
 	void Tick(float deltaTime);
