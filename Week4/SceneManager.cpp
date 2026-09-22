@@ -106,6 +106,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 	ImGui::NewFrame();
 #if IS_OBJ_VIEWER
 	UpdateObjViewerGUI(guiReference);
+	updateContentBrowserGUI(guiReference); 
 #else
 	{
 		// Docking

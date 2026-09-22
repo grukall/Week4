@@ -252,13 +252,15 @@ public:
 	}
 
 private:
-	float SpecularPower{ 0.0f };
+	float SpecularPower{ 32.0f };
+
 	float OpticalDensity{ 1.0f };
 	float Transparency{ 1.0f };
 
-	int IlluminationModel{ 0 };
+	int IlluminationModel{ 2 };
 
-	FVector3 AmbientColor{ 0.0f, 0.0f, 0.0f };
+	FVector3 AmbientColor{ 0.2f, 0.2f, 0.2f };
+
 	FVector4 DiffuseColor{ 1.0f, 1.0f, 1.0f, 1.0f };
 	FVector3 SpecularColor{ 0.0f, 0.0f, 0.0f };
 	FVector3 EmissiveColor{ 0.0f, 0.0f, 0.0f };
@@ -278,5 +280,5 @@ private:
 	FVector2 UVScroll{ 0.0f, 0.0f };
 	FVector2 UVSpeed{ 0.0f, 0.0f };
 
-	FVector TransmissionFilter{ 1.0f,1.0f,1.0f };
+	FVector TransmissionFilter{ 1.0f, 1.0f, 1.0f };
 };

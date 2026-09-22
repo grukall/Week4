@@ -205,30 +205,26 @@ float3 GetBumpNormal(PS_INPUT input, float3 baseNormal, float2 uv)
 float4 mainPS(PS_INPUT input) : SV_TARGET
 {
     // --------------------------------------------------------
-    // UV
+    // 1. UV Calculation
     // --------------------------------------------------------
-
     float2 uv = input.uv + UVScroll;
 
 
     // --------------------------------------------------------
-    // Diffuse Color
+    // 2. Diffuse Color & Texture
     // --------------------------------------------------------
-
     float4 diffuseColor = input.color;
 
-    // Diffuse Texture
     if (HasTexture != 0)
     {
         float4 textureColor = diffuse_texture.Sample(diffuse_sampler, uv);
         diffuseColor *= textureColor;
     }
 
-    /*
-    // --------------------------------------------------------
-    // Ambient Color
-    // --------------------------------------------------------
 
+    // --------------------------------------------------------
+    // 3. Ambient Color & Texture
+    // --------------------------------------------------------
     float3 ambientColor = AmbientColor.rgb;
 
     if (HasAmbientTexture != 0)
@@ -239,9 +235,8 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
 
 
     // --------------------------------------------------------
-    // Specular Color
+    // 4. Specular Color & Texture
     // --------------------------------------------------------
-
     float3 specularColor = SpecularColor.rgb;
 
     if (HasSpecularTexture != 0)
@@ -252,95 +247,75 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
 
 
     // --------------------------------------------------------
-    // Normal
+    // 5. Normal & View Vector
     // --------------------------------------------------------
-
     float3 normal = normalize(input.normal);
     normal = GetBumpNormal(input, normal, uv);
-
-
-    // --------------------------------------------------------
-    // Light Direction
-    // --------------------------------------------------------
-
-    float3 lightDirection = normalize(float3(-0.5f, -1.0f, -0.5f));
-    float3 lightColor = float3(1.0f, 1.0f, 1.0f);
-
-
-    // --------------------------------------------------------
-    // View Direction
-    // --------------------------------------------------------
 
     float3 viewDirection = normalize(CameraPosition - input.worldPosition);
 
 
     // --------------------------------------------------------
-    // Diffuse Lighting
+    // 6. Multi-Directional Lighting (어두운 음영 제거)
     // --------------------------------------------------------
+    // 주 광원 (Key Light : 정면/위)
+    float3 keyLightDir = normalize(float3(-0.5f, -1.0f, -0.5f));
+    float keyDiffuse = saturate(dot(normal, -keyLightDir));
 
-    float diffuseFactor = saturate(dot(normal, -lightDirection));
-    float3 diffuseLighting = diffuseColor.rgb * diffuseFactor * lightColor;
+    // 보조 광원 (Fill Light : 주 광원의 완전 반대편 후면)
+    float3 fillLightDir = normalize(float3(0.5f, 1.0f, 0.5f));
+    float fillDiffuse = saturate(dot(normal, -fillLightDir)) * 0.4f;
 
+    // 최소 밝기 바닥값 (0.35) 부여 -> 완전 검은색 음영 제거
+    float totalDiffuseFactor = max(keyDiffuse + fillDiffuse, 0.35f);
 
-    // --------------------------------------------------------
-    // Specular Lighting
-    // --------------------------------------------------------
-
-    float3 halfVector = normalize(-lightDirection + viewDirection);
-    float specularFactor = pow(saturate(dot(normal, halfVector)), max(SpecularPower, 1.0f));
-    float3 specularLighting = specularColor * specularFactor * lightColor;
-
-
-    // --------------------------------------------------------
-    // Ambient Lighting
-    // --------------------------------------------------------
-
-    float3 ambientLighting = ambientColor * diffuseColor.rgb;
+    float3 lightColor = float3(1.0f, 1.0f, 1.0f);
+    float3 diffuseLighting = diffuseColor.rgb * totalDiffuseFactor * lightColor;
 
 
     // --------------------------------------------------------
-    // Fresnel
-    // OpticalDensity = IOR
+    // 7. Fresnel & Specular Lighting
     // --------------------------------------------------------
-
     float ior = max(OpticalDensity, 1.0f);
     float f0 = pow((1.0f - ior) / (1.0f + ior), 2.0f);
     float viewDotNormal = saturate(dot(normal, viewDirection));
     float fresnel = f0 + (1.0f - f0) * pow(1.0f - viewDotNormal, 5.0f);
 
+    float3 halfVector = normalize(-keyLightDir + viewDirection);
+    float specularFactor = pow(saturate(dot(normal, halfVector)), max(SpecularPower, 1.0f));
+    
+    // 프레넬 스펙큘러를 여기에 미리 적용
+    float3 specularLighting = specularColor * specularFactor * fresnel * lightColor;
+
 
     // --------------------------------------------------------
-    // Illumination Model
+    // 8. Ambient Lighting
     // --------------------------------------------------------
+    float3 ambientLighting = ambientColor * diffuseColor.rgb;
 
+
+    // --------------------------------------------------------
+    // 9. Illumination Model Switch
+    // --------------------------------------------------------
     float3 result = float3(0.0f, 0.0f, 0.0f);
 
     switch (IlluminationModel)
     {
-        // ----------------------------------------------------
-        // illum 0
-        // Diffuse color only
-        // ----------------------------------------------------
+        // illum 0: Diffuse color only (Unlit / 단색 모드)
         case 0:
         {
                 result = diffuseColor.rgb;
                 break;
             }
 
-        // ----------------------------------------------------
-        // illum 1
-        // Ambient + Diffuse
-        // ----------------------------------------------------
+        // illum 1: Ambient + Diffuse
         case 1:
         {
                 result = ambientLighting + diffuseLighting;
                 break;
             }
 
-        // ----------------------------------------------------
-        // illum 2+
-        // Ambient + Diffuse + Specular
-        // ----------------------------------------------------
+        // illum 2+: Ambient + Diffuse + Specular
         default:
         {
                 result = ambientLighting + diffuseLighting + specularLighting;
@@ -350,25 +325,11 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
 
 
     // --------------------------------------------------------
-    // Fresnel Specular
+    // 10. Emissive & Transmission
     // --------------------------------------------------------
-
-    result += specularLighting * fresnel;
-
-
-    // --------------------------------------------------------
-    // Emissive
-    // --------------------------------------------------------
-
     result += EmissiveColor.rgb;
 
-
-    // --------------------------------------------------------
-    // Transmission
-    // --------------------------------------------------------
-
     float transmissionAmount = 1.0f - saturate(Transparency);
-
     if (transmissionAmount > 0.0f)
     {
         result = lerp(result, result * TransmissionFilter.rgb, transmissionAmount * (1.0f - fresnel));
@@ -376,14 +337,9 @@ float4 mainPS(PS_INPUT input) : SV_TARGET
 
 
     // --------------------------------------------------------
-    // Alpha
-    //
-    // MTL:
-    // d  = opacity
-    // Tr = 1 - opacity
+    // 11. Alpha & Final Output
     // --------------------------------------------------------
-
     float alpha = diffuseColor.a * saturate(Transparency);
-*/
-    return diffuseColor;
+
+    return float4(result, alpha);
 }

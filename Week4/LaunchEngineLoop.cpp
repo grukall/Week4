@@ -260,7 +260,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	const FInputState& Input = WindowApplication.Input;
 #if IS_OBJ_VIEWER
 	if (!ViewportClients.IsEmpty()) {
-		ActiveViewportClient = ViewportClients[0];
+		ActiveViewportClient = ViewportClients[1];
 	}
 #endif
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
@@ -365,7 +365,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 #if IS_OBJ_VIEWER
 		if (!Viewports.IsEmpty()) {
-			Viewports[0]->Draw(mGraphicsManager, mSceneManager);
+			Viewports[1]->Draw(mGraphicsManager, mSceneManager);
 		}
 #else
 		// 4개의 뷰포트 드로우콜
