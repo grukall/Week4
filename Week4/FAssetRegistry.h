@@ -80,6 +80,10 @@ public:
 	bool FindPath(const FGuid& Guid, std::filesystem::path& OutPath) const;
 	bool FindGuidByPath(const std::filesystem::path& Path, FGuid& OutGuid, FFileManager& FileManager) const;
 
+	// FFileManager가 없는 쪽(썸네일 매니저 등)에서 쓰는 버전. 정규화 키 대신 경로를 직접 비교하므로
+	// 선형 탐색이지만, 한 번 찾으면 캐시되는 용도에만 쓴다.
+	bool FindGuidByPath(const std::filesystem::path& Path, FGuid& OutGuid) const;
+
 	// 매직을 검사하고 헤더만 읽는다. 우리 포맷이 아니거나 더 나중 버전이면 false.
 	// 옛 버전도 읽어준다 — 헤더 부분은 그대로라서, 다시 굽더라도 GUID는 물려받을 수 있어야 한다.
 	static bool ReadAssetHeader(const std::filesystem::path& Path, FAssetFileHeader& OutHeader);

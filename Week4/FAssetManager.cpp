@@ -137,6 +137,13 @@ void FAssetManager::RegisterAssetInternal(const FName& AssetName, FAssetLoader* 
 	metaInfo.AssetLoader = AssetLoader;
 	metaInfo.AssetSource = AssetSource;
 
+	// 파일에서 오는 에셋이면 GUID도 여기서 채운다. 스캔으로 알게 된 것만 채우면,
+	// 이번 세션에 임포트해서 등록된 에셋만 GUID가 비는 반쪽짜리 상태가 된다.
+	if (FFileAssetSource* FileSource = dynamic_cast<FFileAssetSource*>(AssetSource))
+	{
+		FAssetRegistry::Get().FindGuidByPath(FileSource->GetFilePath(), metaInfo.Guid);
+	}
+
 	AssetMetaInfoMap.Add(AssetName, metaInfo);
 
 	UE_LOG("[AssetManager] Register(new): key=%s stem=%s", AssetName.ToString().CStr(), Stem.ToString().CStr());
@@ -340,6 +347,10 @@ UAsset* FAssetManager::LoadAsset(const FName& InAssetName, bool bImport)
 	if (asset)
 	{
 		metaInfo.AssetClass = asset->GetRuntimeClass();
+
+		// 로더가 뭘 하든(Serialize가 파일에 적힌 값으로 덮든, 로드 끝에 Initialize를 다시 부르든)
+		// 인스턴스의 이름은 여기서 확정한다. 안 그러면 타입마다 경로였다가 stem이었다가 한다.
+		asset->SetAssetName(metaInfo.Stem);
 	}
 
 	UE_LOG("[AssetManager] Load(fresh): key=%s stem=%s new_asset=%p", AssetName.ToString().CStr(), metaInfo.Stem.ToString().CStr(), (void*)asset);

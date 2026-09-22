@@ -23,6 +23,11 @@ public:
 	}
 
 	inline const FName& GetAssetName() const { return AssetName; }
+
+	// 인스턴스의 표시 이름. 로드가 끝난 뒤 FAssetManager가 확정한다 —
+	// Serialize는 파일에 적힌 값으로, 일부 로더는 Initialize로 이 값을 덮어쓰기 때문에
+	// 로더에 맡겨두면 타입마다 다른 값이 남는다(경로였다가 stem이었다가).
+	inline void SetAssetName(const FName& InAssetName) { AssetName = InAssetName; }
 	inline void MarkDirty(bool bDirty = true) { bIsDirty = bDirty; }
 	inline const bool IsDirty() const { return bIsDirty; }
 

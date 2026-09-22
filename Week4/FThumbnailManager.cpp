@@ -1,5 +1,6 @@
 #include "FThumbnailManager.h"
 #include "FAssetManager.h"
+#include "FAssetRegistry.h"
 #include "stb_image.h"
 #include "FAABB.h"
 #include "StaticMesh.h"
@@ -211,7 +212,7 @@ ImTextureID FThumbnailManager::GetUAssetThumbnail(const std::filesystem::path& P
 		return GetFileThumbnail();
 	}
 
-	const std::string Key = Path.lexically_normal().string();
+	const std::string Key = MakeThumbnailKey(Path);
 
 	auto It = mThumbnailCache.find(Key);
 
@@ -320,6 +321,23 @@ ImTextureID FThumbnailManager::GetUAssetThumbnail(const std::filesystem::path& P
 	return GetFileThumbnail();
 }
 
+ImTextureID FThumbnailManager::GetAssetThumbnail(UAsset* Asset)
+{
+	if (!Asset)
+	{
+		return GetFileThumbnail();
+	}
+
+	std::filesystem::path AssetPath;
+	if (!FAssetRegistry::Get().FindPath(Asset->GetAssetGuid(), AssetPath))
+	{
+		// 디스크에 없는 런타임 전용 에셋(DefaultMaterial 등)은 굽힌 파일이 없다.
+		return GetFileThumbnail();
+	}
+
+	return GetUAssetThumbnail(AssetPath);
+}
+
 ImTextureID FThumbnailManager::GetStaticMeshThumbnail(const std::filesystem::path& Path, UStaticMesh* Mesh)
 {
 	if (!Mesh)
@@ -328,7 +346,7 @@ ImTextureID FThumbnailManager::GetStaticMeshThumbnail(const std::filesystem::pat
 	}
 
 	const std::string Key = !Path.empty()
-		? Path.lexically_normal().string()
+		? MakeThumbnailKey(Path)
 		: "StaticMeshPtr_" + std::to_string(reinterpret_cast<uintptr_t>(Mesh));
 
 	auto It = mThumbnailCache.find(Key);
@@ -2069,23 +2087,36 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadThumbnailDDS(const std::filesys
 	return SRV.Detach();
 }
 
+std::string FThumbnailManager::MakeThumbnailKey(const std::filesystem::path& AssetPath) const
+{
+	// 에셋으로 등록된 파일이면 GUID를 키로 쓴다 — 파일을 옮기거나 이름을 바꿔도
+	// 캐시와 .dds가 그대로 따라온다. 레지스트리가 모르는 파일(원본 png 등)은 경로로 떨어진다.
+	FGuid Guid;
+	if (FAssetRegistry::Get().FindGuidByPath(AssetPath, Guid) && Guid.IsValid())
+	{
+		return std::string(Guid.ToString().CStr());
+	}
+
+	return AssetPath.lexically_normal().string();
+}
+
 std::filesystem::path FThumbnailManager::GetThumbnailCachePath(const std::filesystem::path& AssetPath) const
 {
 	const std::filesystem::path CacheDirectory =
 		"Saved/Thumbnails";
 
-	const std::string NormalizedPath =
-		AssetPath.lexically_normal().generic_string();
-
-	const size_t HashValue =
-		std::hash<std::string>{}(
-			NormalizedPath);
+	// GUID를 아는 에셋이면 그걸 파일명에 쓰고, 모르면 예전처럼 경로 해시로 떨어진다.
+	// (키 문자열을 그대로 파일명에 넣으면 경로의 \ 와 : 때문에 못 쓰는 이름이 된다.)
+	FGuid Guid;
+	const std::string Suffix =
+		(FAssetRegistry::Get().FindGuidByPath(AssetPath, Guid) && Guid.IsValid())
+		? std::string(Guid.ToString().CStr())
+		: std::to_string(std::hash<std::string>{}(AssetPath.lexically_normal().generic_string()));
 
 	const std::string FileName =
 		AssetPath.stem().string() +
 		"_" +
-		std::to_string(
-			HashValue) +
+		Suffix +
 		".dds";
 
 	return CacheDirectory /

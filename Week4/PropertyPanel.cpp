@@ -186,14 +186,12 @@ namespace
 			UAsset* DroppedAsset = nullptr;
 
 			ImTextureID CurrentThumbnail = NULL;
-			if (CurrentAsset) {
-				FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo) {
-					if (CurrentThumbnail) return;
-					if (MetaInfo.LoadedAsset != CurrentAsset) return;
-					CurrentThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(std::filesystem::path(MetaInfo.AssetName.ToString().c_str()));
-					});
+			if (CurrentAsset)
+			{
+				CurrentThumbnail = FThumbnailManager::Get().GetAssetThumbnail(CurrentAsset);
 			}
-			if (!CurrentThumbnail) {
+			if (!CurrentThumbnail)
+			{
 				CurrentThumbnail = FThumbnailManager::Get().GetFileThumbnail();
 			}
 			ImGui::Image(CurrentThumbnail, ImVec2(64.0f, 64.0f));
@@ -526,7 +524,7 @@ namespace
 			if (CurrentMaterial &&
 				CurrentMaterial != UMaterial::DefaultMaterial)
 			{
-				ImTextureID MaterialThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(CurrentMaterial->GetAssetName().ToString().c_str());
+				ImTextureID MaterialThumbnail = FThumbnailManager::Get().GetAssetThumbnail(CurrentMaterial);
 
 				if (MaterialThumbnail)
 				{
