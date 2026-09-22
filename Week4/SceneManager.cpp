@@ -1007,11 +1007,18 @@ void FSceneManager::InitObjViewer(const char* CmdLine)
 void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 {
 	if (guiReference.ActiveViewport == nullptr)	return;
-	//if (guiReference.ActiveViewport->IsEmpty())	return;
 
 	FEditorViewportClient* ViewportClient = (guiReference.ActiveViewport);
 	if (ViewportClient == nullptr) return;
 	
+	if (!ViewportClient->mViewerActor) {
+		AActor* NewActor = FObjectFactory::SpawnPrimitiveActor("StaticMeshActor", FVector(0.0f, 0.0f, 0.0f), FRotator(0.0f, 0.0f, 0.0f), FVector(1.0f, 1.0f, 1.0f));
+		mCurrentWorld->AddActor(NewActor);
+		ViewportClient->SetViewerActor(NewActor);
+		ViewportClient->FocusOnViewerActor();
+		ViewportClient->Reset();
+	}
+
 	const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
 
 	ImGui::SetNextWindowPos(MainViewport->Pos, ImGuiCond_Always);

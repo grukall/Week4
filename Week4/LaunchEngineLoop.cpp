@@ -292,8 +292,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	const FMatrix ActiveViewProjMatrix =
 		ActiveViewportClient->GetCamera().GetViewMatrix() *
 		ActiveViewportClient->GetCamera().GetUnifiedProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, ActiveViewportClient->GetCamera().mOrthoDistance, 0.1f, 1000.f, ActivePerspectiveRatio);
-
-
+#if IS_OBJ_VIEWER
+#else
 	// Mouse Picking & Gizmo
 	{
 		// 피킹 로직
@@ -351,7 +351,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			static_cast<float>(ActiveViewportClient->GetHeight())
 		);
 	}
-
+#endif
 	// Render Threads
 	{
 		SCOPE_CYCLE_COUNTER("Draw");
