@@ -8,7 +8,7 @@
 #include "Material.h"
 #include "UStaticMeshComponent.h"
 #include "FAssetManager.h"
-
+#include "FThumbnailManager.h"
 namespace
 {
 	// _dragId는 "##X"처럼 호출부에서 상수로 넘긴다. 매 프레임 문자열을 조립하지 않기 위함이다.
@@ -183,6 +183,34 @@ namespace
 			// 단일 상속이라 UAsset* 과 표현이 같아 이렇게 읽고 쓴다.
 			UAsset** AssetSlot = static_cast<UAsset**>(ValuePtr);
 			UAsset* CurrentAsset = *AssetSlot;
+			UAsset* DroppedAsset = nullptr;
+
+			ImTextureID CurrentThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(CurrentAsset);
+			ImGui::Image(CurrentThumbnail, ImVec2(64.0f, 64.0f));
+			if (ImGui::BeginDragDropTarget())
+			{
+				const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM");
+
+				if (Payload && Payload->Data && Payload->DataSize > 0)
+				{
+					const char* DroppedPath = static_cast<const char*>(Payload->Data);
+					std::filesystem::path AssetPath(DroppedPath);
+					const std::string AssetStem = AssetPath.stem().string();
+
+					FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
+						{
+							if (!MetaInfo.AssetClass) return;
+							if (!MetaInfo.AssetClass->IsChildOf(Property.ClassInfo)) return;
+							if (MetaInfo.Stem.ToString() != FString(AssetStem.c_str())) return;
+
+							DroppedAsset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
+						});
+				}
+
+				// 먼저 DragDropTarget를 닫는다.
+				ImGui::EndDragDropTarget();
+			}
+			ImGui::SameLine();
 
 			// FName::ToString()이 임시 객체를 돌려주므로 반드시 붙잡아 둔다.
 			FString CurrentName = CurrentAsset ? CurrentAsset->GetAssetName().ToString() : FString("None");
@@ -209,6 +237,29 @@ namespace
 
 						const bool bSelected = (MetaInfo.LoadedAsset == CurrentAsset);
 
+						ImGui::PushID(MetaInfo.AssetName.ToString().c_str());
+
+						ImTextureID ItemThumbnail = NULL;
+						std::string AssetNameStr = MetaInfo.AssetName.ToString().c_str();
+
+						// 1. 이미 메모리에 로드되어 있는 경우 (Cube, Sphere 등 런타임 내장 에셋 포함)
+						if (MetaInfo.LoadedAsset)
+						{
+							ItemThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(MetaInfo.LoadedAsset);
+						}
+						// 2. .uasset 확장자/경로가 포함된 디스크 파일 에셋인 경우 (DDS 캐시 조회)
+						else if (AssetNameStr.find('.') != std::string::npos)
+						{
+							ItemThumbnail = FThumbnailManager::Get().GetThumbnail(AssetNameStr, false);
+						}
+						// 3. 확장자가 없는 런타임 에셋인데 아직 미로드 상태인 경우 (불러와서 썸네일 생성)
+						else
+						{
+							UAsset* Asset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
+							ItemThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(Asset);
+						}
+						ImGui::Image(ItemThumbnail, ImVec2(20.0f, 20.0f));
+						ImGui::SameLine();
 						FString AssetLabel = MetaInfo.Stem.ToString();
 						if (ImGui::Selectable(AssetLabel.c_str(), bSelected))
 						{
@@ -239,12 +290,13 @@ namespace
 						{
 							ImGui::SetItemDefaultFocus();
 						}
+						ImGui::PopID();
+
 					});
 
 				ImGui::EndCombo();
 			}
 
-			UAsset* DroppedAsset = nullptr;
 
 			if (ImGui::BeginDragDropTarget())
 			{
@@ -423,107 +475,353 @@ namespace
 		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont, OnPropertyChanged);
 	}
 
-	bool DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
-		if (!Component) {
+	bool DrawStaticMeshMaterials(UStaticMeshComponent* Component)
+	{
+		if (!Component)
+		{
 			return false;
 		}
 
 		bool bChanged = false;
 
-		TArray<UMaterial*> ComponentMaterials = Component->GetMaterials();
-
 		ImGui::Separator();
 
-		if (!ImGui::CollapsingHeader("Static Mesh Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (!ImGui::CollapsingHeader(
+			"Static Mesh Materials",
+			ImGuiTreeNodeFlags_DefaultOpen))
+		{
 			return false;
 		}
 
-		for (int32 SlotIndex = 0; SlotIndex < ComponentMaterials.Num(); ++SlotIndex) {
-			UMaterial* CurrentMaterial = ComponentMaterials[SlotIndex];
+		TArray<UMaterial*> ComponentMaterials =
+			Component->GetMaterials();
+
+		for (int32 SlotIndex = 0;
+			SlotIndex < ComponentMaterials.Num();
+			++SlotIndex)
+		{
+			UMaterial* CurrentMaterial =
+				ComponentMaterials[SlotIndex];
 
 			const bool bNoneSelected =
-				(CurrentMaterial == nullptr || CurrentMaterial == UMaterial::DefaultMaterial);
+				(CurrentMaterial == nullptr ||
+					CurrentMaterial == UMaterial::DefaultMaterial);
 
-			FString CurrentMaterialName = bNoneSelected
+			FString CurrentMaterialName =
+				bNoneSelected
 				? FString("None")
 				: CurrentMaterial->GetAssetName().ToString();
 
 			ImGui::PushID(SlotIndex);
 
-			ImGui::Text("Slot %d", SlotIndex);
+			ImGui::BeginGroup();
+
+			ImGui::Text(
+				"Slot %d",
+				SlotIndex);
 
 			ImGui::Text("Material");
-			ImGui::SameLine(120.0f);
+
+			ImGui::EndGroup();
+
+			ImGui::SameLine(100.0f);
+
+			// ============================================================
+			// 현재 Material Thumbnail
+			// ============================================================
+
+			if (CurrentMaterial &&
+				CurrentMaterial != UMaterial::DefaultMaterial)
+			{
+				ImTextureID MaterialThumbnail =
+					FThumbnailManager::Get().GetMaterialThumbnail(
+						CurrentMaterial);
+
+				if (MaterialThumbnail)
+				{
+					ImGui::Image(
+						MaterialThumbnail,
+						ImVec2(64.0f, 64.0f));
+
+					ImGui::SameLine();
+				}
+			}
+
+			// ============================================================
+			// Material Combo
+			// ============================================================
+
 			ImGui::SetNextItemWidth(-1.0f);
 
-			if (ImGui::BeginCombo("##Material", CurrentMaterialName.c_str())) {
-
+			if (ImGui::BeginCombo(
+				"##Material",
+				CurrentMaterialName.c_str()))
+			{
+				// --------------------------------------------------------
 				// None
-				if (ImGui::Selectable("None", bNoneSelected)) {
+				// --------------------------------------------------------
+
+				if (ImGui::Selectable(
+					"None",
+					bNoneSelected))
+				{
 					Component->SetMaterial(
 						SlotIndex,
-						UMaterial::DefaultMaterial
-					);
+						UMaterial::DefaultMaterial);
+
 					bChanged = true;
 				}
 
-				if (bNoneSelected) {
+				if (bNoneSelected)
+				{
 					ImGui::SetItemDefaultFocus();
 				}
 
-				// 모든 Material 표시
-				for (TObjectIterator<UAsset> It(UMaterial::GetClass()); It; ++It) {
-					UAsset* Asset = *It;
+				// --------------------------------------------------------
+				// MetaInfo 기반 Material 목록
+				// --------------------------------------------------------
 
-					if (!Asset) {
-						continue;
-					}
+				FAssetManager::Get().ForEachMetaInfo(
+					[&](FAssetMetaInfo& MetaInfo)
+					{
+						if (!MetaInfo.AssetClass)
+						{
+							return;
+						}
 
-					UMaterial* Material = Asset->Cast<UMaterial>();
+						if (!MetaInfo.AssetClass->IsChildOf(
+							UMaterial::GetClass()))
+						{
+							return;
+						}
 
-					if (!Material) {
-						continue;
-					}
+						// ------------------------------------------------
+						// Material 가져오기
+						//
+						// 이미 로드되어 있으면 그대로 사용.
+						// 안 되어 있으면 여기서 로드.
+						// ------------------------------------------------
 
-					// DefaultMaterial은 None으로 표시하므로 제외
-					if (Material == UMaterial::DefaultMaterial) {
-						continue;
-					}
+						UMaterial* Material = nullptr;
 
-					const bool bSelected = (Material == CurrentMaterial);
+						if (MetaInfo.LoadedAsset)
+						{
+							Material =
+								MetaInfo.LoadedAsset->Cast<UMaterial>();
+						}
+						else
+						{
+							UAsset* Asset =
+								FAssetManager::Get().GetAsset(
+									MetaInfo.AssetName,
+									true);
 
-					FString MaterialName = Material->GetAssetName().ToString();
+							if (Asset)
+							{
+								Material =
+									Asset->Cast<UMaterial>();
+							}
+						}
 
-					if (ImGui::Selectable(MaterialName.c_str(), bSelected)) {
-						Component->SetMaterial(
-							SlotIndex,
-							Material
-						);
-						bChanged = true;
-					}
+						if (!Material)
+						{
+							return;
+						}
 
-					if (bSelected) {
-						ImGui::SetItemDefaultFocus();
-					}
-				}
+						// DefaultMaterial은 None으로 표시
+						if (Material ==
+							UMaterial::DefaultMaterial)
+						{
+							return;
+						}
+
+						const bool bSelected =
+							(Material == CurrentMaterial);
+
+						FString AssetName =
+							MetaInfo.AssetName.ToString();
+
+						FString AssetLabel =
+							MetaInfo.Stem.ToString();
+
+						ImGui::PushID(
+							AssetName.c_str());
+
+						// ------------------------------------------------
+						// Material Thumbnail
+						// ------------------------------------------------
+
+						ImTextureID ItemThumbnail =
+							FThumbnailManager::Get()
+							.GetMaterialThumbnail(
+								Material);
+
+						if (ItemThumbnail)
+						{
+							ImGui::Image(
+								ItemThumbnail,
+								ImVec2(20.0f, 20.0f));
+
+							ImGui::SameLine();
+						}
+
+						// ------------------------------------------------
+						// Material 선택
+						// ------------------------------------------------
+
+						if (ImGui::Selectable(
+							AssetLabel.c_str(),
+							bSelected))
+						{
+							Component->SetMaterial(
+								SlotIndex,
+								Material);
+
+							bChanged = true;
+						}
+
+						if (bSelected)
+						{
+							ImGui::SetItemDefaultFocus();
+						}
+
+						ImGui::PopID();
+					});
 
 				ImGui::EndCombo();
 			}
 
-			if (CurrentMaterial && CurrentMaterial != UMaterial::DefaultMaterial) {
+			// ============================================================
+			// Material Drag & Drop
+			// ============================================================
+
+			UMaterial* DroppedMaterial = nullptr;
+
+			if (ImGui::BeginDragDropTarget())
+			{
+				const ImGuiPayload* Payload =
+					ImGui::AcceptDragDropPayload(
+						"CONTENT_BROWSER_ITEM");
+
+				if (Payload &&
+					Payload->Data &&
+					Payload->DataSize > 0)
+				{
+					const char* DroppedPath =
+						static_cast<const char*>(
+							Payload->Data);
+
+					std::filesystem::path AssetPath(
+						DroppedPath);
+
+					const std::string AssetStem =
+						AssetPath.stem().string();
+
+					FString DroppedStem =
+						FString(AssetStem.c_str());
+
+					FAssetManager::Get().ForEachMetaInfo(
+						[&](FAssetMetaInfo& MetaInfo)
+						{
+							if (DroppedMaterial)
+							{
+								return;
+							}
+
+							if (!MetaInfo.AssetClass)
+							{
+								return;
+							}
+
+							// Material만 허용
+							if (!MetaInfo.AssetClass->IsChildOf(
+								UMaterial::GetClass()))
+							{
+								return;
+							}
+
+							// 파일 이름 비교
+							if (MetaInfo.Stem.ToString() !=
+								DroppedStem)
+							{
+								return;
+							}
+
+							// 실제 Asset 로드
+							UAsset* Asset =
+								FAssetManager::Get().GetAsset(
+									MetaInfo.AssetName,
+									true);
+
+							if (!Asset)
+							{
+								return;
+							}
+
+							DroppedMaterial =
+								Asset->Cast<UMaterial>();
+
+							if (!DroppedMaterial)
+							{
+								return;
+							}
+
+							if (DroppedMaterial ==
+								UMaterial::DefaultMaterial)
+							{
+								DroppedMaterial = nullptr;
+								return;
+							}
+						});
+				}
+
+				ImGui::EndDragDropTarget();
+			}
+
+			// ============================================================
+			// Drag & Drop 결과 적용
+			// ============================================================
+
+			if (DroppedMaterial)
+			{
+				Component->SetMaterial(
+					SlotIndex,
+					DroppedMaterial);
+
+				CurrentMaterial =
+					DroppedMaterial;
+
+				bChanged = true;
+			}
+
+			// ============================================================
+			// UV Speed
+			// ============================================================
+
+			if (CurrentMaterial &&
+				CurrentMaterial != UMaterial::DefaultMaterial)
+			{
 				ImGui::Spacing();
 
-				FVector2 CurrentSpeed = CurrentMaterial->GetUVSpeed();
+				FVector2 CurrentSpeed =
+					CurrentMaterial->GetUVSpeed();
 
-				float Speed[2] = {
+				float Speed[2] =
+				{
 					static_cast<float>(CurrentSpeed.X),
 					static_cast<float>(CurrentSpeed.Y)
 				};
 
-				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f)) {
+				if (ImGui::DragFloat2(
+					"UV Speed",
+					Speed,
+					0.00001f))
+				{
 					CurrentMaterial->SetUVSpeed(
-						FVector2(Speed[0], Speed[1])
-					);
+						FVector2(
+							Speed[0],
+							Speed[1]));
+
 					bChanged = true;
 				}
 			}
@@ -532,6 +830,7 @@ namespace
 
 			ImGui::PopID();
 		}
+
 		return bChanged;
 	}
 }

@@ -120,9 +120,8 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 	InitAssetManager();
 
 	URenderer* renderer = mGraphicsManager->GetRenderer();
-	mThumbnailManager = new FThumbnailManager();
-	mThumbnailManager->Initialize(renderer->GetDevice(),renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
-	mSceneManager = new FSceneManager(ViewportClients, mThumbnailManager);
+	FThumbnailManager::Get().Initialize(renderer->GetDevice(),renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
+	mSceneManager = new FSceneManager(ViewportClients);
 
 	char Value[64] = {};
 	GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), ".\\editor.ini");
@@ -475,12 +474,6 @@ void FEngineLoop::End()
 	ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
-
-	if (mThumbnailManager) {
-		mThumbnailManager->Shutdown();
-		delete mThumbnailManager;
-		mThumbnailManager = nullptr;
-	}
 
 	delete mComponentVisualizerManager;
 	for (FEditorViewportClient* Client : ViewportClients)

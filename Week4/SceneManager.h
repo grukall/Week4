@@ -47,7 +47,7 @@ struct FGuiInputField
 class FSceneManager
 {
 public:
-	explicit FSceneManager(const TArray<FEditorViewportClient*>& clients, FThumbnailManager* thumbnailManager);
+	explicit FSceneManager(const TArray<FEditorViewportClient*>& clients);
 	~FSceneManager();
 
 	void Tick(float deltaTime);
@@ -99,7 +99,6 @@ private:
 	UWorld* mCurrentWorld = nullptr;
 	AActor* mSelectedActor = nullptr;
 	FGuiInputField mGuiInputField;
-	FThumbnailManager* mThumbnailManager = nullptr;
 	FPropertyPanel* mPropertyPanel = nullptr;
 
 	//Content Browser

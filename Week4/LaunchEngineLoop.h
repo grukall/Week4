@@ -55,8 +55,6 @@ private:
 
 	FComponentVisualizerManager* mComponentVisualizerManager;
 	FStatManager* mStatManager;
-
-	FThumbnailManager* mThumbnailManager = nullptr;
 };
 
 inline FEngineLoop GEngineLoop;

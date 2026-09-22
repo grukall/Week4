@@ -113,7 +113,6 @@ FName FStaticMeshAssetLoader::Import(const std::filesystem::path& SourceObjPath,
 
 	return BakedKey;
 }
-
 FName FStaticMeshAssetLoader::ImportPrimitive(const FName& Name, const std::filesystem::path& SourceFilePath, FFileManager& InFileManager, const FVertexSimple* InVertices, uint32 InVertexCount, const uint32* InIndices, uint32 InIndexCount)
 {
 	std::filesystem::path BakedPath = std::filesystem::path("Assets/Baked") / (std::string(Name.ToString().CStr()) + ".uasset");
