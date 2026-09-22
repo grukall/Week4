@@ -66,9 +66,13 @@ TArray<FName> FMaterialAssetLoader::Import(const std::filesystem::path& SourceMt
 			TempMaterial->SetTransmissionFilter(Data.TransmissionFilter);
 
 			auto ProcessTexturePath = [&](const FString& Filename) -> FString {
-				if (Filename.empty()) return Filename;
+				if (Filename.empty()) 
+					return Filename;
+
 				std::filesystem::path AbsoluteTexPath = std::filesystem::weakly_canonical(SourceMtlPath.parent_path() / Filename.CStr());
-				return FString(InFileManager.MakeRelativeToRoot(AbsoluteTexPath).string());
+				FTexture2DAssetLoader* TextureLoader = AssetManager->GetOrCreateLoader<FTexture2DAssetLoader>(Renderer);
+				FName TextureAssetKey = TextureLoader->Import(AbsoluteTexPath, InFileManager);
+				return FString(TextureAssetKey.ToString());
 			};
 			TempMaterial->SetAmbientTexturePath(ProcessTexturePath(Data.AmbientColorMapFilename));
 			TempMaterial->SetDiffuseTexturePath(ProcessTexturePath(Data.DiffuseColorMapFilename));
@@ -254,20 +258,13 @@ UAsset* FMaterialAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& As
 
 		auto RebindTexture = [&](const FString& TexturePathString) -> UTexture2D*
 		{
-			if (TexturePathString.empty()) return nullptr;
-			FName TextureAssetName(TexturePathString);
+			if (TexturePathString.empty()) 
+				return nullptr;
 
-			if (!AssetManager->GetAsset(TextureAssetName, false))
-			{
-				std::filesystem::path AbsoluteTexPath = std::filesystem::absolute(TexturePathString.CStr());
-				if (std::filesystem::exists(AbsoluteTexPath))
-				{
-					FFileAssetSource* TextureSource = new FFileAssetSource(FileSource->GetFileManager(), AbsoluteTexPath);
-					AssetManager->RegisterAsset<FTexture2DAssetLoader>(TextureAssetName, TextureSource, Renderer);
-				}
-			}
+			FName TextureAssetName(TexturePathString);
 			UAsset* TextureAsset = AssetManager->GetAsset(TextureAssetName, true);
 			UTexture2D* Texture = TextureAsset ? TextureAsset->Cast<UTexture2D>() : nullptr;
+
 			UE_LOG("[MaterialLoader] rebind texture: key=%s texture=%p", TexturePathString.CStr(), (void*)Texture);
 			return Texture;
 		};

@@ -147,6 +147,20 @@ public:
 	inline uint32 GetHeight() const { return Height; }
 
 	inline DXGI_FORMAT GetFormat() const { return Format; }
+
+	const TArray<uint8>& GetRawData() const { return PixelData; }
+
+	void SetRawData(uint32 InWidth, uint32 InHeight, DXGI_FORMAT InFormat, const TArray<uint8>& InPixelData)
+	{
+		Width = InWidth;
+		Height = InHeight;
+		Format = InFormat;
+		PixelData = InPixelData;
+	}
+
+	void ClearRawData() { PixelData.Empty(); }
+
+	virtual void Serialize(FArchive& Ar) override;
 	
 protected:
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
@@ -155,6 +169,7 @@ protected:
 	uint32 Width = 0;
 	uint32 Height = 0;
 	DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+	TArray<uint8> PixelData;
 };
 
 class FTexture2DAssetLoader : public FAssetLoader
@@ -165,6 +180,8 @@ public:
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
+
+	FName Import(const std::filesystem::path& SourceTexturePath, FFileManager& InFileManager);
 
 private:
 	URenderer& Renderer;

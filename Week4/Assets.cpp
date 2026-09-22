@@ -7,6 +7,9 @@
 #include "MathUtility.h"
 #include "ObjectFactory.h"
 #include "Material.h"
+#include "FAssetManager.h"
+#include "FName.h"
+
 FString FFileAssetSource::ReadFileToString() const
 {
 	return FileManager.ReadFileToString(FilePath);
@@ -224,26 +227,116 @@ void UStaticMesh::SetSectionMaterial(uint32 SectionIndex, UMaterial* InMaterial)
 	Sections[SectionIndex].MaterialSlotIndex = MaterialSlotIndex;
 }
 
+void UTexture2D::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	Ar << Width;
+	Ar << Height;
+	Ar << Format;
+	Ar << PixelData;
+}
+
+FName FTexture2DAssetLoader::Import(const std::filesystem::path& SourceTexturePath, FFileManager& InFileManager)
+{
+	FAssetManager& AssetManager = FAssetManager::Get();
+	FName ExistingKey;
+	bool bIsReimport = AssetManager.FindAssetByImportPath(SourceTexturePath, ExistingKey);
+
+	std::filesystem::path BakedPath;
+	if (bIsReimport)
+	{
+		BakedPath = std::filesystem::path(ExistingKey.ToString().CStr());
+	}
+	else
+	{
+		FString PreferredStem(SourceTexturePath.stem().string());
+		BakedPath = FAssetManager::MakeUniqueBakedPath("Assets/Baked/Textures", PreferredStem);
+	}
+
+	FName BakedKey(FString(BakedPath.string()));
+	bool bNeedsBake = true;
+	if (std::filesystem::exists(BakedPath) && std::filesystem::exists(SourceTexturePath))
+	{
+		bNeedsBake = std::filesystem::last_write_time(SourceTexturePath) > std::filesystem::last_write_time(BakedPath);
+	}
+
+	if (bNeedsBake)
+	{
+		FFileAssetSource FileSource(InFileManager, SourceTexturePath);
+		FString FileContent = FileSource.ReadFileToString();
+
+		int32 Width, Height, Channels;
+		stbi_uc* ImageData = stbi_load_from_memory(
+			reinterpret_cast<const stbi_uc*>(FileContent.CStr()),
+			FileContent.Len(),
+			&Width, &Height, &Channels, 4
+		);
+
+		if (ImageData)
+		{
+			UTexture2D* TempTexture = FObjectFactory::ConstructObject<UTexture2D>(BakedKey);
+			uint32 DataSize = Width * Height * 4;
+			TArray<uint8> PixelData;
+			PixelData.SetNum(DataSize);
+			std::memcpy(PixelData.Data(), ImageData, DataSize);
+
+			TempTexture->SetRawData(Width, Height, DXGI_FORMAT_R8G8B8A8_UNORM, PixelData);
+
+			std::filesystem::create_directories(BakedPath.parent_path());
+			FArchiveFileWriter Writer(BakedPath);
+			FString ClassName = TempTexture->GetRuntimeClass()->Name;
+			Writer << ClassName;
+			TempTexture->Serialize(Writer);
+			TempTexture->Destroy();
+			stbi_image_free(ImageData);
+
+			UE_LOG("[TextureLoader] baked: key=%s", BakedKey.ToString().CStr());
+		}
+		else
+		{
+			UE_LOG_ERROR("Failed to load texture for import: %s", SourceTexturePath.string().c_str());
+		}
+	}
+
+	FFileAssetSource* BakedSource = new FFileAssetSource(InFileManager, BakedPath);
+	AssetManager.RegisterAsset<FTexture2DAssetLoader>(
+		BakedKey, BakedSource, Renderer
+	);
+
+	if (!bIsReimport)
+	{
+		AssetManager.SetImportSource(BakedKey, new FFileAssetSource(InFileManager, SourceTexturePath));
+	}
+
+	return BakedKey;
+}
+
 UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& AssetSource)
 {
 	FFileAssetSource& FileSource = static_cast<FFileAssetSource&>(AssetSource);
-	FString FileContent = FileSource.ReadFileToString();
 
-	int32 Width, Height, Channels;
-	stbi_uc* ImageData = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(FileContent.CStr()), FileContent.Len(), &Width, &Height, &Channels, 4);
+	UTexture2D* Texture = FObjectFactory::ConstructObject<UTexture2D>(AssetName);
 
-	if (!ImageData)
+	FArchiveFileReader Reader(FileSource.GetFilePath());
+	FString ClassName;
+	Reader << ClassName;
+	Texture->Serialize(Reader);
+	Texture->MarkDirty(false);
+
+	const TArray<uint8>& PixelData = Texture->GetRawData();
+	if (PixelData.IsEmpty())
 	{
-		UE_LOG_ERROR("Failed to load texture asset: %s", AssetName.ToString().CStr());
+		UE_LOG_ERROR("Failed to load texture asset (empty pixel data): %s", AssetName.ToString().CStr());
 		return nullptr;
 	}
 
 	D3D11_TEXTURE2D_DESC TextureDesc = {};
-	TextureDesc.Width = Width;
-	TextureDesc.Height = Height;
+	TextureDesc.Width = Texture->GetWidth();
+	TextureDesc.Height = Texture->GetHeight();
 	TextureDesc.MipLevels = 1;
 	TextureDesc.ArraySize = 1;
-	TextureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	TextureDesc.Format = Texture->GetFormat();
 	TextureDesc.SampleDesc.Count = 1;
 	TextureDesc.Usage = D3D11_USAGE_IMMUTABLE;
 	TextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
@@ -251,7 +344,7 @@ UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& A
 	TextureDesc.MiscFlags = 0;
 	TextureDesc.MipLevels = 1;
 
-	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture = Renderer.CreateTexture2D(TextureDesc, ImageData);
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> D3DTexture = Renderer.CreateTexture2D(TextureDesc, PixelData.Data());
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 	SRVDesc.Format = TextureDesc.Format;
@@ -259,11 +352,12 @@ UAsset* FTexture2DAssetLoader::LoadAsset(const FName& AssetName, FAssetSource& A
 	SRVDesc.Texture2D.MostDetailedMip = 0;
 	SRVDesc.Texture2D.MipLevels = 1;
 
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV = Renderer.CreateShaderResourceView(Texture, &SRVDesc);
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV = Renderer.CreateShaderResourceView(D3DTexture, &SRVDesc);
 
-	stbi_image_free(ImageData);
+	Texture->Initialize(AssetName, D3DTexture, SRV);
+	Texture->ClearRawData();
 
-	return FObjectFactory::ConstructObject<UTexture2D>(AssetName, Texture, SRV);
+	return Texture;
 }
 
 void FTexture2DAssetLoader::UnloadAsset(UAsset* Asset)
