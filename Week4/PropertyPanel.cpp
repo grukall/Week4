@@ -185,7 +185,17 @@ namespace
 			UAsset* CurrentAsset = *AssetSlot;
 			UAsset* DroppedAsset = nullptr;
 
-			ImTextureID CurrentThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(CurrentAsset);
+			ImTextureID CurrentThumbnail = NULL;
+			if (CurrentAsset) {
+				FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo) {
+					if (CurrentThumbnail) return;
+					if (MetaInfo.LoadedAsset != CurrentAsset) return;
+					CurrentThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(std::filesystem::path(MetaInfo.AssetName.ToString().c_str()));
+					});
+			}
+			if (!CurrentThumbnail) {
+				CurrentThumbnail = FThumbnailManager::Get().GetFileThumbnail();
+			}
 			ImGui::Image(CurrentThumbnail, ImVec2(64.0f, 64.0f));
 			if (ImGui::BeginDragDropTarget())
 			{
@@ -239,25 +249,7 @@ namespace
 
 						ImGui::PushID(MetaInfo.AssetName.ToString().c_str());
 
-						ImTextureID ItemThumbnail = NULL;
-						std::string AssetNameStr = MetaInfo.AssetName.ToString().c_str();
-
-						// 1. 이미 메모리에 로드되어 있는 경우 (Cube, Sphere 등 런타임 내장 에셋 포함)
-						if (MetaInfo.LoadedAsset)
-						{
-							ItemThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(MetaInfo.LoadedAsset);
-						}
-						// 2. .uasset 확장자/경로가 포함된 디스크 파일 에셋인 경우 (DDS 캐시 조회)
-						else if (AssetNameStr.find('.') != std::string::npos)
-						{
-							ItemThumbnail = FThumbnailManager::Get().GetThumbnail(AssetNameStr, false);
-						}
-						// 3. 확장자가 없는 런타임 에셋인데 아직 미로드 상태인 경우 (불러와서 썸네일 생성)
-						else
-						{
-							UAsset* Asset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
-							ItemThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(Asset);
-						}
+						ImTextureID ItemThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(std::filesystem::path(MetaInfo.AssetName.ToString().c_str()));
 						ImGui::Image(ItemThumbnail, ImVec2(20.0f, 20.0f));
 						ImGui::SameLine();
 						FString AssetLabel = MetaInfo.Stem.ToString();
@@ -533,9 +525,8 @@ namespace
 			if (CurrentMaterial &&
 				CurrentMaterial != UMaterial::DefaultMaterial)
 			{
-				ImTextureID MaterialThumbnail =
-					FThumbnailManager::Get().GetMaterialThumbnail(
-						CurrentMaterial);
+				std::filesystem::path MaterialPath = std::filesystem::path("Assets/Baked/Materials") / std::filesystem::path(CurrentMaterial->GetAssetName().ToString().Append(".uasset").c_str());
+				ImTextureID MaterialThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(MaterialPath);
 
 				if (MaterialThumbnail)
 				{
@@ -602,44 +593,7 @@ namespace
 						// 안 되어 있으면 여기서 로드.
 						// ------------------------------------------------
 
-						UMaterial* Material = nullptr;
-
-						if (MetaInfo.LoadedAsset)
-						{
-							Material =
-								MetaInfo.LoadedAsset->Cast<UMaterial>();
-						}
-						else
-						{
-							UAsset* Asset =
-								FAssetManager::Get().GetAsset(
-									MetaInfo.AssetName,
-									true);
-
-							if (Asset)
-							{
-								Material =
-									Asset->Cast<UMaterial>();
-							}
-						}
-
-						if (!Material)
-						{
-							return;
-						}
-
-						// DefaultMaterial은 None으로 표시
-						if (Material ==
-							UMaterial::DefaultMaterial)
-						{
-							return;
-						}
-
-						const bool bSelected =
-							(Material == CurrentMaterial);
-
-						FString AssetName =
-							MetaInfo.AssetName.ToString();
+						FString AssetName = MetaInfo.AssetName.ToString();
 
 						FString AssetLabel =
 							MetaInfo.Stem.ToString();
@@ -647,14 +601,7 @@ namespace
 						ImGui::PushID(
 							AssetName.c_str());
 
-						// ------------------------------------------------
-						// Material Thumbnail
-						// ------------------------------------------------
-
-						ImTextureID ItemThumbnail =
-							FThumbnailManager::Get()
-							.GetMaterialThumbnail(
-								Material);
+						ImTextureID ItemThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(std::filesystem::path(AssetName.c_str()));
 
 						if (ItemThumbnail)
 						{
@@ -665,24 +612,37 @@ namespace
 							ImGui::SameLine();
 						}
 
-						// ------------------------------------------------
-						// Material 선택
-						// ------------------------------------------------
+						const bool bSelected =
+							(CurrentMaterial &&
+								MetaInfo.Stem.ToString() ==
+								CurrentMaterial->GetAssetName().ToString());
 
 						if (ImGui::Selectable(
 							AssetLabel.c_str(),
 							bSelected))
 						{
-							Component->SetMaterial(
-								SlotIndex,
-								Material);
+							UAsset* Asset =
+								FAssetManager::Get().GetAsset(
+									MetaInfo.AssetName,
+									true);
 
-							bChanged = true;
+							UMaterial* Material =
+								Asset ? Asset->Cast<UMaterial>() : nullptr;
+
+							if (Material &&
+								Material != UMaterial::DefaultMaterial)
+							{
+								Component->SetMaterial(
+									SlotIndex,
+									Material);
+
+								bChanged = true;
+							}
 						}
 
 						if (bSelected)
 						{
-							ImGui::SetItemDefaultFocus();
+							ImGui::SetItemDefaultFocus;
 						}
 
 						ImGui::PopID();
