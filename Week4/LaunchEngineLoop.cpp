@@ -22,6 +22,7 @@
 #include "World.h"
 #include <FLogManager.h>
 #include "Assets.h"
+#include "FAssetRegistry.h"
 #include "FStatManager.h"
 
 #include "Material.h"
@@ -119,9 +120,8 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 	InitAssetManager();
 
 	URenderer* renderer = mGraphicsManager->GetRenderer();
-	mThumbnailManager = new FThumbnailManager();
-	mThumbnailManager->Initialize(renderer->GetDevice(),renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
-	mSceneManager = new FSceneManager(Viewports, mThumbnailManager);
+	FThumbnailManager::Get().Initialize(renderer->GetDevice(), renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
+	mSceneManager = new FSceneManager(Viewports);
 
 	char Value[64] = {};
 	GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), ".\\editor.ini");
@@ -173,16 +173,28 @@ void FEngineLoop::InitAssetManager()
 
 	// 사용자가 obj를 임포트해서 만든 .uasset들(프리미티브는 위에서 이미 등록됐으니 건너뛴다)을
 	// 로드 없이 미리 등록해서, 이번 세션에서 한 번도 안 불러온 것도 에셋 드롭다운에 뜨게 한다.
+	// (ScanBakedAssets가 FAssetRegistry::ScanDirectory를 먼저 돌려 GUID -> 경로 인덱스를 채운다.)
 	mAssetManager->ScanBakedAssets("Assets/Baked", *renderer, *mFileManager);
 
-	FFileAssetSource* FileAssetSource = new FFileAssetSource(*mFileManager, "Textures/Test.jpg");
-	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("TestTexture"), FileAssetSource, *renderer);
+	// 엔진이 이름으로 집어가는 텍스처들도 임포트 파이프라인을 태운다 — 원본 png를 바로 읽는 대신
+	// .uasset으로 굽고, 원본 옆에는 .meta(GUID)가 생긴다. 다른 에셋과 같은 규칙으로 관리된다.
+	// 조회 키는 구워진 경로가 되므로, 기존 이름 조회는 별칭으로 살려둔다.
+	FTexture2DAssetLoader* TextureLoader = mAssetManager->GetOrCreateLoader<FTexture2DAssetLoader>(*renderer);
 
-	FFileAssetSource* SpotLightIconAssetSource = new FFileAssetSource(*mFileManager, "Textures/Icon_SpotLight.png");
-	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("SpotLightIcon"), SpotLightIconAssetSource, *renderer);
+	auto ImportTexture = [&](const FName& Alias, const std::filesystem::path& SourcePath)
+	{
+		FGuid TextureGuid = TextureLoader->Import(SourcePath, *mFileManager);
 
-	FFileAssetSource* ExplosionTextureSource = new FFileAssetSource(*mFileManager, "Textures/ExplosionAtlas.png");
-	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("ExplosionTexture"), ExplosionTextureSource, *renderer);
+		std::filesystem::path BakedPath;
+		if (FAssetRegistry::Get().FindPath(TextureGuid, BakedPath))
+		{
+			mAssetManager->RegisterAssetAlias(Alias, FName(FString(mFileManager->MakeRelativeToRoot(BakedPath).string())));
+		}
+	};
+
+	ImportTexture(FName("TestTexture"), "Assets/Textures/Test.jpg");
+	ImportTexture(FName("SpotLightIcon"), "Assets/Textures/Icon_SpotLight.png");
+	ImportTexture(FName("ExplosionTexture"), "Assets/Textures/ExplosionAtlas.png");
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
 	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);
@@ -401,12 +413,6 @@ void FEngineLoop::End()
 	ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
-
-	if (mThumbnailManager) {
-		mThumbnailManager->Shutdown();
-		delete mThumbnailManager;
-		mThumbnailManager = nullptr;
-	}
 
 	delete mComponentVisualizerManager;
 	for (FViewport* Viewport : Viewports)

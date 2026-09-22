@@ -43,7 +43,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports, FThumbnailManager* thumbnailManager)
+FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -71,8 +71,6 @@ FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports, FThumbnailMa
 
 	// SceneManager의 루트 윈도우로 등록
 	mRootWindow = RootSplitter;
-
-	mThumbnailManager = thumbnailManager;
 }
 
 FSceneManager::~FSceneManager()
@@ -1263,7 +1261,7 @@ void FSceneManager::drawAssetGrid() {
 		ImGui::PushID(filename.c_str());
 
 		// [핵심 연결] ThumbnailManager로부터 ImTextureID(ID3D11ShaderResourceView*) 획득
-		ImTextureID thumbID = mThumbnailManager->GetThumbnail(path, isDirectory);
+		ImTextureID thumbID = FThumbnailManager::Get().GetThumbnail(path, isDirectory);
 
 		ImVec4 bgColor = (mSelectedAssetPath == path) ? ImVec4(0.2f, 0.6f, 1.0f, 0.6f) : ImVec4(0, 0, 0, 0);
 

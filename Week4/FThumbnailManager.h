@@ -1,49 +1,83 @@
 #pragma once
 
 #include <d3d11.h>
+#include <wrl/client.h>
 #include <filesystem>
-#include <unordered_map>
 #include <string>
-#include "ImGui/imgui.h"
+#include <unordered_map>
+#include <vector>
+#include "imgui.h"
 
-class UStaticMesh;
 class FAssetManager;
 class FGraphicsManager;
+class UStaticMesh;
+class UMaterial;
+class UAsset;
+class UTexture2D;
+struct FThumbnailRenderTarget
+{
+	ID3D11Texture2D* Texture = nullptr;
+	ID3D11RenderTargetView* RTV = nullptr;
+	ID3D11ShaderResourceView* SRV = nullptr;
+	ID3D11Texture2D* DepthStencil = nullptr;
+	ID3D11DepthStencilView* DSV = nullptr;
+};
 
-class FThumbnailManager {
+class FThumbnailManager
+{
 public:
-    void Initialize(ID3D11Device* device, ID3D11DeviceContext* context, FAssetManager* assetManager, FGraphicsManager* graphicsManager);
-    void Shutdown();
+	static FThumbnailManager& Get()
+	{
+		static FThumbnailManager Instance;
+		return Instance;
+	}
 
-    // 외부에서 에셋 매니저 등을 넘겨받아 썸네일을 갱신할 수 있게 준비
-    ImTextureID GetThumbnail(const std::filesystem::path& path, bool isDirectory);
+	void Initialize(ID3D11Device* device, ID3D11DeviceContext* context, FAssetManager* assetManager, FGraphicsManager* graphicsManager);
+	void Shutdown();
+
+	ImTextureID GetThumbnail(const std::filesystem::path& Path, bool IsDirectory);
+	ImTextureID GetUAssetThumbnail(const std::filesystem::path& Path);
+	ImTextureID GetStaticMeshThumbnail(const std::filesystem::path& Path, UStaticMesh* Mesh);
+	ImTextureID GetMaterialThumbnail(const std::filesystem::path& Path, UMaterial* Material);
+
+	ImTextureID GetDirectoryThumbnail();
+	ImTextureID GetFontThumbnail();
+	ImTextureID GetShaderThumbnail();
+	ImTextureID GetFileThumbnail();
 
 private:
-    FAssetManager* mAssetManager = nullptr;
-    FGraphicsManager* mGraphicsManager = nullptr;
+	FThumbnailManager() = default;
+	~FThumbnailManager() = default;
 
-    ID3D11Device* mDevice = nullptr;
-    ID3D11DeviceContext* mContext = nullptr;
+	FThumbnailManager(const FThumbnailManager&) = delete;
+	FThumbnailManager& operator=(const FThumbnailManager&) = delete;
 
-    std::unordered_map<std::string, ID3D11ShaderResourceView*> mThumbnailCache;
+	ID3D11ShaderResourceView* LoadStaticMeshThumbnail(const std::filesystem::path& Path, UStaticMesh* Mesh, UMaterial* OverrideMaterial = nullptr);
+	ID3D11ShaderResourceView* LoadMaterialThumbnail(const std::filesystem::path& Path, UMaterial* Material);
+	ID3D11ShaderResourceView* LoadTextureThumbnail(const std::filesystem::path& Path);
+	ID3D11ShaderResourceView* CreateIconTexture(const std::vector<uint32_t>& Pixels, UINT Width, UINT Height);
 
-    ID3D11ShaderResourceView* mFolderIconSRV = nullptr;
-    ID3D11ShaderResourceView* mFileIconSRV = nullptr;
+	void CreateThumbnailRenderTarget(int width, int height);
+	void ReleaseThumbnailRenderTarget();
 
-    // 3D 에셋 썸네일 생성 함수
-    ID3D11ShaderResourceView* LoadStaticMeshThumbnail(const std::filesystem::path& path);
-    ID3D11ShaderResourceView* LoadTextureThumbnail(const std::filesystem::path& path);
+	bool SaveThumbnailDDS(const std::filesystem::path& Path, ID3D11Texture2D* SourceTexture);
+	ID3D11ShaderResourceView* LoadThumbnailDDS(const std::filesystem::path& Path);
+	std::filesystem::path GetThumbnailCachePath(const std::filesystem::path& AssetPath) const;
 
-    // 썸네일 전용 오프스크린 렌더 타겟 구조체
-    struct FThumbnailRenderTarget {
-        ID3D11Texture2D* Texture = nullptr;
-        ID3D11RenderTargetView* RTV = nullptr;
-        ID3D11ShaderResourceView* SRV = nullptr;
-        ID3D11Texture2D* DepthStencil = nullptr;
-        ID3D11DepthStencilView* DSV = nullptr;
-    };
-    FThumbnailRenderTarget mThumbRT;
+private:
+	ID3D11Device* mDevice = nullptr;
+	ID3D11DeviceContext* mContext = nullptr;
+	FAssetManager* mAssetManager = nullptr;
+	FGraphicsManager* mGraphicsManager = nullptr;
 
-    void CreateThumbnailRenderTarget(int width, int height);
-    void ReleaseThumbnailRenderTarget();
+	FThumbnailRenderTarget mThumbRT;
+
+	UStaticMesh* mMaterialPreviewSphere = nullptr;
+
+	std::unordered_map<std::string, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>> mThumbnailCache;
+
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mFileIconSRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mDirectoryThumbnail;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mFontIconSRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mShaderIconSRV;
 };

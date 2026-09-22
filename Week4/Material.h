@@ -118,14 +118,14 @@ public:
 		EmissiveColor = InColor;
 	}
 
-	const FString& GetAmbientTexturePath() const
+	const FGuid& GetAmbientTextureGuid() const
 	{
-		return AmbientTexturePath;
+		return AmbientTextureGuid;
 	}
 
-	void SetAmbientTexturePath(const FString& InPath)
+	void SetAmbientTextureGuid(const FGuid& InGuid)
 	{
-		AmbientTexturePath = InPath;
+		AmbientTextureGuid = InGuid;
 	}
 
 	UTexture2D* GetAmbientTexture() const
@@ -143,14 +143,14 @@ public:
 		return AmbientTexture != nullptr;
 	}
 
-	const FString& GetDiffuseTexturePath() const
+	const FGuid& GetDiffuseTextureGuid() const
 	{
-		return DiffuseTexturePath;
+		return DiffuseTextureGuid;
 	}
 
-	void SetDiffuseTexturePath(const FString& InPath)
+	void SetDiffuseTextureGuid(const FGuid& InGuid)
 	{
-		DiffuseTexturePath = InPath;
+		DiffuseTextureGuid = InGuid;
 	}
 
 	UTexture2D* GetDiffuseTexture() const
@@ -168,14 +168,14 @@ public:
 		return DiffuseTexture != nullptr;
 	}
 
-	const FString& GetSpecularTexturePath() const
+	const FGuid& GetSpecularTextureGuid() const
 	{
-		return SpecularTexturePath;
+		return SpecularTextureGuid;
 	}
 
-	void SetSpecularTexturePath(const FString& InPath)
+	void SetSpecularTextureGuid(const FGuid& InGuid)
 	{
-		SpecularTexturePath = InPath;
+		SpecularTextureGuid = InGuid;
 	}
 
 	UTexture2D* GetSpecularTexture() const
@@ -193,14 +193,14 @@ public:
 		return SpecularTexture != nullptr;
 	}
 
-	const FString& GetBumpTexturePath() const
+	const FGuid& GetBumpTextureGuid() const
 	{
-		return BumpTexturePath;
+		return BumpTextureGuid;
 	}
 
-	void SetBumpTexturePath(const FString& InPath)
+	void SetBumpTextureGuid(const FGuid& InGuid)
 	{
-		BumpTexturePath = InPath;
+		BumpTextureGuid = InGuid;
 	}
 
 	UTexture2D* GetBumpTexture() const
@@ -263,16 +263,16 @@ private:
 	FVector3 SpecularColor{ 0.0f, 0.0f, 0.0f };
 	FVector3 EmissiveColor{ 0.0f, 0.0f, 0.0f };
 
-	FString AmbientTexturePath{ "" };
+	FGuid AmbientTextureGuid;
 	UTexture2D* AmbientTexture{ nullptr };
 
-	FString DiffuseTexturePath{ "" };
+	FGuid DiffuseTextureGuid;
 	UTexture2D* DiffuseTexture{ nullptr };
 
-	FString SpecularTexturePath{ "" };
+	FGuid SpecularTextureGuid;
 	UTexture2D* SpecularTexture{ nullptr };
 
-	FString BumpTexturePath{ "" };
+	FGuid BumpTextureGuid;
 	UTexture2D* BumpTexture{ nullptr };
 
 	FVector2 UVScroll{ 0.0f, 0.0f };
