@@ -238,10 +238,15 @@ void UTexture2D::Serialize(FArchive& Ar)
 	Ar << PixelData;
 }
 
-FGuid FTexture2DAssetLoader::Import(const std::filesystem::path& SourceTexturePath, FFileManager& InFileManager)
+FGuid FTexture2DAssetLoader::Import(const std::filesystem::path& InSourceTexturePath, FFileManager& InFileManager)
 {
 	FAssetManager& AssetManager = FAssetManager::Get();
 	FAssetRegistry& Registry = FAssetRegistry::Get();
+
+	// 들어온 경로의 해석 기준을 하나로 못박는다. FFileManager는 상대경로를 Assets/ 기준으로
+	// 풀지만, 여기서 쓰는 exists()나 MakeRelativeToRoot()는 작업 디렉터리 기준이라 서로 엇갈린다.
+	// (파일 다이얼로그에서 온 절대경로는 그대로 통과한다.)
+	const std::filesystem::path SourceTexturePath = std::filesystem::absolute(InSourceTexturePath);
 
 	// 원본 png의 GUID. 옆에 .png.meta가 없으면 여기서 만들어진다.
 	// 경로가 아니라 이 GUID가 "같은 원본인가"의 기준이다.

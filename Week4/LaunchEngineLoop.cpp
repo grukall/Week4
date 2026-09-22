@@ -22,6 +22,7 @@
 #include "World.h"
 #include <FLogManager.h>
 #include "Assets.h"
+#include "FAssetRegistry.h"
 #include "FStatManager.h"
 
 #include "Material.h"
@@ -176,14 +177,25 @@ void FEngineLoop::InitAssetManager()
 	// (ScanBakedAssets가 FAssetRegistry::ScanDirectory를 먼저 돌려 GUID -> 경로 인덱스를 채운다.)
 	mAssetManager->ScanBakedAssets("Assets/Baked", *renderer, *mFileManager);
 
-	FFileAssetSource* FileAssetSource = new FFileAssetSource(*mFileManager, "Textures/Test.jpg");
-	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("TestTexture"), FileAssetSource, *renderer);
+	// 엔진이 이름으로 집어가는 텍스처들도 임포트 파이프라인을 태운다 — 원본 png를 바로 읽는 대신
+	// .uasset으로 굽고, 원본 옆에는 .meta(GUID)가 생긴다. 다른 에셋과 같은 규칙으로 관리된다.
+	// 조회 키는 구워진 경로가 되므로, 기존 이름 조회는 별칭으로 살려둔다.
+	FTexture2DAssetLoader* TextureLoader = mAssetManager->GetOrCreateLoader<FTexture2DAssetLoader>(*renderer);
 
-	FFileAssetSource* SpotLightIconAssetSource = new FFileAssetSource(*mFileManager, "Textures/Icon_SpotLight.png");
-	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("SpotLightIcon"), SpotLightIconAssetSource, *renderer);
+	auto ImportTexture = [&](const FName& Alias, const std::filesystem::path& SourcePath)
+	{
+		FGuid TextureGuid = TextureLoader->Import(SourcePath, *mFileManager);
 
-	FFileAssetSource* ExplosionTextureSource = new FFileAssetSource(*mFileManager, "Textures/ExplosionAtlas.png");
-	mAssetManager->RegisterAsset<FTexture2DAssetLoader>(FName("ExplosionTexture"), ExplosionTextureSource, *renderer);
+		std::filesystem::path BakedPath;
+		if (FAssetRegistry::Get().FindPath(TextureGuid, BakedPath))
+		{
+			mAssetManager->RegisterAssetAlias(Alias, FName(FString(mFileManager->MakeRelativeToRoot(BakedPath).string())));
+		}
+	};
+
+	ImportTexture(FName("TestTexture"), "Assets/Textures/Test.jpg");
+	ImportTexture(FName("SpotLightIcon"), "Assets/Textures/Icon_SpotLight.png");
+	ImportTexture(FName("ExplosionTexture"), "Assets/Textures/ExplosionAtlas.png");
 
 	UTexture2D* ExplosionTexture2DAsset = mAssetManager->GetAssetAs<UTexture2D>("ExplosionTexture", true);
 	USpriteAtlas* ExplosionSpriteAtlasAsset = FObjectFactory::ConstructObject<USpriteAtlas> (FName("ExplosionSpriteAtlas"), *renderer, ExplosionTexture2DAsset, 6, 6);

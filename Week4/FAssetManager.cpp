@@ -51,29 +51,28 @@ std::filesystem::path FAssetManager::MakeUniqueBakedPath(const std::filesystem::
 	}
 }
 
-	// .uasset 맨 앞에 UAsset::Serialize가 적어둔 클래스 이름 + 원본 임포트 경로(AssetPath)만
-	// 읽는다. 나머지 본문(정점/머티리얼 등)은 안 건드린다 — 스캔 단계는 "이게 무슨 클래스고
-	// 원본이 어디였냐"만 알면 되지, 오브젝트 전체를 복원할 필요가 없다.
-	// 파일에는 ClassName이 두 번 들어있다 — 로더가 굽기 직전에 수동으로 한 번 쓰고
-	// (StaticMesh.cpp / FMaterialAssetLoader.cpp의 Writer << ClassName),
-	// UAsset::Serialize가 또 한 번 쓴다. 둘 다 읽어 넘겨야 뒤 필드가 밀리지 않는다.
-	// 파일 순서: ClassName(수동) -> ClassName(UAsset) -> AssetName -> AssetPath.
-	bool ReadBakedAssetHeader(const std::filesystem::path& Path, FString& OutClassName, FString& OutAssetPath)
+// .uasset 맨 앞에 UAsset::Serialize가 적어둔 클래스 이름 + 원본 임포트 경로(AssetPath)만
+// 읽는다. 나머지 본문(정점/머티리얼 등)은 안 건드린다 — 스캔 단계는 "이게 무슨 클래스고
+// 원본이 어디였냐"만 알면 되지, 오브젝트 전체를 복원할 필요가 없다.
+// 파일에는 ClassName이 두 번 들어있다 — 로더가 굽기 직전에 수동으로 한 번 쓰고
+// (StaticMesh.cpp / FMaterialAssetLoader.cpp의 Writer << ClassName),
+// UAsset::Serialize가 또 한 번 쓴다. 둘 다 읽어 넘겨야 뒤 필드가 밀리지 않는다.
+// 파일 순서: ClassName(수동) -> ClassName(UAsset) -> AssetName -> AssetPath.
+bool ReadBakedAssetHeader(const std::filesystem::path& Path, FString& OutClassName, FString& OutAssetPath)
+{
+	FArchiveFileReader Reader(Path);
+	if (!Reader.IsValid())
 	{
-		FArchiveFileReader Reader(Path);
-		if (!Reader.IsValid())
-		{
-			return false;
-		}
-
-		FString ClassNameFromAsset;
-		Reader << ClassNameFromAsset;
-
-		FName AssetName;
-		Reader << AssetName;
-		Reader << OutAssetPath;
-		return true;
+		return false;
 	}
+
+	FString ClassNameFromAsset;
+	Reader << ClassNameFromAsset;
+
+	FName AssetName;
+	Reader << AssetName;
+	Reader << OutAssetPath;
+	return true;
 }
 
 FAssetManager::~FAssetManager()
@@ -165,6 +164,25 @@ void FAssetManager::RegisterAsset(UAsset* Asset)
 	metaInfo.AssetClass = Asset->GetRuntimeClass();
 
 	AssetMetaInfoMap.Add(AssetName, metaInfo);
+}
+
+void FAssetManager::RegisterAssetAlias(const FName& Alias, const FName& AssetName)
+{
+	if (Alias == AssetName)
+	{
+		return;
+	}
+
+	if (!AssetMetaInfoMap.Contains(AssetName))
+	{
+		UE_LOG_WARN("[AssetManager] Alias: target not registered, skip: %s -> %s",
+			Alias.ToString().CStr(), AssetName.ToString().CStr());
+		return;
+	}
+
+	AssetNameAliases.Add(Alias, AssetName);
+
+	UE_LOG("[AssetManager] Alias: %s -> %s", Alias.ToString().CStr(), AssetName.ToString().CStr());
 }
 
 void FAssetManager::UnregisterAsset(const FName& AssetName)
@@ -282,8 +300,10 @@ void FAssetManager::UnloadAsset(const FName& AssetName)
 	metaInfo.LoadedAsset = nullptr;
 }
 
-UAsset* FAssetManager::LoadAsset(const FName& AssetName, bool bImport)
+UAsset* FAssetManager::LoadAsset(const FName& InAssetName, bool bImport)
 {
+	const FName AssetName = ResolveAlias(InAssetName);
+
 	if (!AssetMetaInfoMap.Contains(AssetName))
 	{
 		return nullptr;
@@ -356,8 +376,10 @@ void FAssetManager::RebindReferences(UAsset* OldAsset, UAsset* NewAsset)
 	}
 }
 
-UAsset* FAssetManager::GetAsset(const FName& AssetName, bool loadIfNotLoaded)
+UAsset* FAssetManager::GetAsset(const FName& InAssetName, bool loadIfNotLoaded)
 {
+	const FName AssetName = ResolveAlias(InAssetName);
+
 	if (AssetMetaInfoMap.Contains(AssetName) && AssetMetaInfoMap[AssetName].LoadedAsset)
 	{
 		return AssetMetaInfoMap[AssetName].LoadedAsset;
