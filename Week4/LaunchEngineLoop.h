@@ -1,8 +1,9 @@
-﻿#pragma once
+#pragma once
 
 #include <Windows.h>
 #include "FrameTimer.h"
 #include "FEditorViewportClient.h"
+#include "FViewport.h"
 #include "Camera.h"
 #include "SceneManager.h"
 #include "FileManager.h"
@@ -44,6 +45,7 @@ private:
 	FFrameTimer* FrameTimer;
 	bool GInTick = false;
 
+	TArray<FViewport*> Viewports;
 	TArray<FEditorViewportClient*> ViewportClients;
 	FEditorViewportClient* ActiveViewportClient = nullptr;
 
