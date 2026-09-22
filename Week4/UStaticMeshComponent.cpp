@@ -108,7 +108,9 @@ void UStaticMeshComponent::GetRenderInfos(TArray<FRenderInfo>* outRenderInfos) c
 			RenderInfo.SectionIndex = SectionIndex;
 
 			RenderInfo.Material = Material;
-
+			if (!RenderInfo.Material) {
+				RenderInfo.Material = UMaterial::DefaultMaterial;
+			}
 			outRenderInfos->Add(RenderInfo);
 	}
 }

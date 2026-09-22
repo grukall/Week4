@@ -8,28 +8,6 @@
 struct FStaticMesh;
 struct FMaterialData;
 
-struct FNormalVertex
-{
-	FVector Pos;
-	FVector2 UV;
-	FVector Normal;
-
-	const FString GetKey() const
-	{
-		char Buffer[128];
-		std::snprintf
-		(
-			Buffer,
-			sizeof(Buffer),
-			"%.4f,%.4f,%.4f|%.4f,%.4f|%.4f,%.4f,%.4f",
-			Pos.x, Pos.y, Pos.z,
-			UV.X, UV.Y,
-			Normal.x, Normal.y, Normal.z
-		);
-		return FString(Buffer);
-	}
-};
-
 struct FObjImporter
 {
 	struct FVertexData
@@ -60,7 +38,6 @@ struct FObjImporter
 	};
 
 	bool LoadObjModel(FString& FileContent, FStaticMesh& Mesh, TArray<FString>& MaterialFiles);
-	bool ParseMtlFile(FString& FileContent, TArray<FMaterialData>& Materials);
 private:
 	void BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh);
 	bool ParseObjFile(FString& FileContent, FObjData& Data);
@@ -69,7 +46,7 @@ private:
 
 static FVector PositionToUEBasis(const FVector& InVector)
 {
-	return { InVector.x, -InVector.y, InVector.z };
+	return FVector(InVector.x, -InVector.y, InVector.z);
 }
 
 static FVector2 UVToUEBasis(const FVector2& InVector)

@@ -23,16 +23,11 @@ struct FRenderInfo
 {
 	UStaticMesh* StaticMesh = nullptr;
 
-	// UMaterial이 들어오면 이 두 개가 머티리얼 포인터로 합쳐진다.
-	/*UTexture2D* Texture = nullptr;
-	FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);*/
-
 	UMaterial* Material = nullptr;
 
 	FMatrix WorldTransformMatrix;
 	FObjectID ObejctID;
 
-	// StaticMesh->GetSections()의 인덱스. 이 구간만 그린다.
 	uint32 SectionIndex = 0;
 };
 
@@ -108,6 +103,14 @@ public:
 		OpaqueQuadInfos.Empty();
 		TransparentQuadInfos.Empty();
 		OverlayQuadInfos.Empty();
+		Quad2DInfos.Empty();
+	}
+
+	// 2D 화면 오버레이(스탯 HUD 등)만 비운다. 뷰포트마다 렌더타겟이 따로라
+	// 한 뷰포트를 그린 직후 여기서 비우지 않으면, 다음 뷰포트를 그릴 때
+	// 이전 뷰포트용으로 쌓인 쿼드까지 같이 그려진다.
+	inline void ClearScreenQuads()
+	{
 		Quad2DInfos.Empty();
 	}
 

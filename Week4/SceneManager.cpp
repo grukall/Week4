@@ -43,7 +43,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports)
+FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports, FThumbnailManager* thumbnailManager)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -71,6 +71,8 @@ FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports)
 
 	// SceneManager의 루트 윈도우로 등록
 	mRootWindow = RootSplitter;
+
+	mThumbnailManager = thumbnailManager;
 }
 
 FSceneManager::~FSceneManager()
@@ -99,7 +101,9 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
-
+#if IS_OBJ_VIEWER
+	UpdateObjViewerGUI(guiReference);
+#else
 	{
 		// Docking
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -241,6 +245,40 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 							{
 								QuadSplitter->OnMouseUp();
 							}
+
+							// 활성화 뷰포트 테두리 렌더링
+							if (guiReference.ActiveViewport != nullptr)
+							{
+								// 활성화된 클라이언트를 소유한 SWindow 찾기
+								SWindow* ActiveWindow = nullptr;
+								if (mMaximizedViewportIndex >= 0 && mMaximizedViewportIndex < 4)
+								{
+									ActiveWindow = Leaves[mMaximizedViewportIndex];
+								}
+								else
+								{
+									for (int i = 0; i < 4; ++i)
+									{
+										if (Leaves[i] && Leaves[i]->OwningClient == guiReference.ActiveViewport)
+										{
+											ActiveWindow = Leaves[i];
+											break;
+										}
+									}
+								}
+								if (ActiveWindow != nullptr)
+								{
+									ImDrawList* drawList = ImGui::GetWindowDrawList();
+									const FRect& r = ActiveWindow->Rect;
+									// 선 두께(2px)의 절반(1px)만큼 안쪽으로 인셋하여 경계선 침범/클리핑 방지
+									const float BorderThickness = 2.0f;
+									const float Half = BorderThickness * 0.5f;
+									const ImVec2 pMin(screenCursorPos.x + r.Left + Half, screenCursorPos.y + r.Top + Half);
+									const ImVec2 pMax(screenCursorPos.x + r.Right - Half, screenCursorPos.y + r.Bottom - Half);
+									// 툴바와 다른 뷰포트 이미지보다 항상 위에 주황색 테두리가 선명하게 그려짐
+									drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, BorderThickness);
+								}
+							}
 						}
 					}
 				}
@@ -250,12 +288,12 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 
 		ImGui::PopStyleVar();
 	}
-
 	updateControlPanelGUI(guiReference);
 	updatePropertyWindowGUI(guiReference);
 	updateOutlinerGUI(guiReference);
 	updateContentBrowserGUI(guiReference);
 	ConsoleWindow::Get().Process(mPanelWidth);
+#endif
 }
 
 void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
@@ -535,12 +573,14 @@ void FSceneManager::updateControlPanelGUI(const FGuiReference& guiReference)
 			const std::filesystem::path& Path = selectedPath.value();
 			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
 			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
-			FTexture2DAssetLoader* Texture2DLoader = new FTexture2DAssetLoader(*Renderer);
-			FStaticMeshAssetLoader* StaticMeshLoader = new FStaticMeshAssetLoader(*Renderer, *guiReference.AssetManager, *Texture2DLoader);
-			FFileAssetSource* FileAssetSource = new FFileAssetSource(FileManager, Path);
-			FName AssetName = FName(selectedPath.value().stem().string().c_str());
-			GEngineLoop.GetAssetManager()->RegisterAsset(AssetName, StaticMeshLoader, FileAssetSource);
-			GEngineLoop.GetAssetManager()->LoadAsset(AssetName);
+			FAssetManager* AssetManager = guiReference.AssetManager;
+
+			// Import()가 obj/mtl을 파싱해서 .uasset으로 굽고 등록까지 한다.
+			// 같은 원본을 다시 고르면 재임포트로 판단해 같은 키에 다시 굽는다.
+			FStaticMeshAssetLoader* Loader = AssetManager->GetOrCreateLoader<FStaticMeshAssetLoader>(*Renderer, *AssetManager);
+			FName AssetName = Loader->Import(Path, FileManager);
+
+			AssetManager->LoadAsset(AssetName, true);
 		}
 	}
 
@@ -683,109 +723,7 @@ void FSceneManager::updatePropertyWindowGUI(const FGuiReference& guiReference)
 	ImGui::Begin("Jungle Property Window", nullptr, flags);
 
 	mPanelWidth = ImGui::GetWindowWidth();
-
 	mPropertyPanel->OnRender();
-
-	//if (mSelectedActor)
-	//{
-	//	UAtlasAnimationComponent* atlasAnimationComponent = nullptr;
-	//	for (UActorComponent* component : mSelectedActor->GetComponents())
-	//	{
-	//		if (component->IsA<UAtlasAnimationComponent>())
-	//		{
-	//			atlasAnimationComponent = component->Cast<UAtlasAnimationComponent>();
-	//		}
-	//	}
-
-	//	if (atlasAnimationComponent)
-	//	{
-	//		// EAssetType이 없어져서 실제 에셋을 올려 보고 타입으로 거른다.
-	//		TArray<FString> spriteAtlasAssetNames;
-	//		FAssetManager* assetManager = guiReference.AssetManager;
-	//		assetManager->ForEachMetaInfo([&spriteAtlasAssetNames, assetManager](const FAssetMetaInfo& metaInfo) {
-	//			UAsset* asset = assetManager->GetAsset(metaInfo.AssetName, true);
-	//			if (!asset || !asset->IsA<USpriteAtlas>())
-	//			{
-	//				return;
-	//			}
-	//			spriteAtlasAssetNames.Add(metaInfo.AssetName.ToString());
-	//			});
-
-	//		USpriteAtlas* currentAtlas = atlasAnimationComponent->GetAtlas();
-	//		FString currentAtlasName = currentAtlas ? currentAtlas->GetAssetName().ToString() : "None";
-
-	//		if (ImGui::BeginCombo("Sprite Atlas", currentAtlasName.CStr()))
-	//		{
-	//			for (const FString& assetName : spriteAtlasAssetNames)
-	//			{
-	//				bool isSelected = (currentAtlasName == assetName);
-	//				if (ImGui::Selectable(assetName.CStr(), isSelected))
-	//				{
-	//					atlasAnimationComponent->SetAtlas(guiReference.AssetManager->GetAssetAs<USpriteAtlas>(FName(assetName), true));
-	//				}
-	//				if (isSelected)
-	//				{
-	//					ImGui::SetItemDefaultFocus();
-	//				}
-	//			}
-	//			ImGui::EndCombo();
-	//		}
-	//	}
-
-	//	// 메쉬 컴포넌트 처리
-	//	USceneComponent* rootComponent = mSelectedActor->GetRootComponent();
-	//	if (rootComponent && rootComponent->GetRuntimeClass()->IsChildOf(UMeshComponent::GetClass()) && !rootComponent->IsA<UAtlasAnimationComponent>())
-	//	{
-	//		UMeshComponent* MeshComponent = rootComponent->Cast<UMeshComponent>();
-
-	//		UTexture2D* currentTexture = MeshComponent->GetTexture();
-	//		FString currentTextureName = currentTexture ? currentTexture->GetAssetName().ToString() : "None";
-	//		if (ImGui::BeginCombo("Texture", currentTextureName.CStr()))
-	//		{
-	//			for (TObjectIterator<UTexture2D> It; It; ++It)
-	//			{
-	//				FName AssetName = It->GetAssetName();
-	//				bool isSelected = (currentTextureName == AssetName);
-	//				if (ImGui::Selectable(AssetName.ToString().CStr(), isSelected))
-	//				{
-	//					UTexture2D* textureAsset = guiReference.AssetManager->GetAssetAs<UTexture2D>(AssetName, true);
-	//					MeshComponent->SetTexture(textureAsset);
-	//				}
-	//				if (isSelected)
-	//				{
-	//					ImGui::SetItemDefaultFocus();
-	//				}
-	//			}
-	//			ImGui::EndCombo();
-	//		}
-
-	//		if (MeshComponent->IsA<UStaticMeshComponent>())
-	//		{
-	//			UStaticMeshComponent* StaticMeshComponent = static_cast<UStaticMeshComponent*>(MeshComponent);
-
-	//			UStaticMesh* currentMesh = StaticMeshComponent->GetStaticMesh();
-	//			FString currentMeshName = currentMesh ? currentMesh->GetAssetName().ToString() : "None";
-	//			if (ImGui::BeginCombo("Static Mesh", currentMeshName.CStr()))
-	//			{
-	//				for (TObjectIterator<UStaticMesh> It; It; ++It)
-	//				{
-	//					FName AssetName = It->GetAssetName();
-	//					bool isSelected = (currentMeshName == AssetName);
-	//					if (ImGui::Selectable(AssetName.ToString().CStr(), isSelected))
-	//					{
-	//						UStaticMesh* MeshAsset = guiReference.AssetManager->GetAssetAs<UStaticMesh>(AssetName, true);
-	//						StaticMeshComponent->SetStaticMesh(MeshAsset);
-	//					}
-	//					if (isSelected)
-	//					{
-	//						ImGui::SetItemDefaultFocus();
-	//					}
-	//				}
-	//				ImGui::EndCombo();
-	//			}
-	//		}
-	//	}
-	//}
 	ImGui::End();
 }
 
@@ -899,6 +837,8 @@ void FSceneManager::updateOutlinerGUI(const FGuiReference& guiReference)
 
 void FSceneManager::NewScene()
 {
+	mPropertyPanel->SetTarget(nullptr);
+
 	if (mCurrentWorld != nullptr)
 	{
 		delete mCurrentWorld;
@@ -1023,6 +963,7 @@ void FSceneManager::LoadScene(
 	}
 
 	// 새 월드 생성이 성공한 경우에만 기존 월드를 교체한다.
+	mPropertyPanel->SetTarget(nullptr);
 	delete mCurrentWorld;
 	mCurrentWorld = newWorld;
 	mPropertyPanel->SetWorld(mCurrentWorld);
@@ -1051,6 +992,127 @@ void  FSceneManager::SetSelectedActor(AActor* actor)
 float FSceneManager::GetPanelWidth() const
 {
 	return mPanelWidth;
+}
+
+void FSceneManager::InitObjViewer(const char* CmdLine)
+{
+	NewScene();
+	UE_LOG("OBJ Viewer Path: %s", CmdLine);
+}
+
+void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
+{
+	if (guiReference.ActiveViewport == nullptr)	return;
+	//if (guiReference.ActiveViewport->IsEmpty())	return;
+
+	FEditorViewportClient* ViewportClient = (guiReference.ActiveViewport);
+	if (ViewportClient == nullptr) return;
+	
+	const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+
+	ImGui::SetNextWindowPos(MainViewport->Pos, ImGuiCond_Always);
+
+	ImGui::SetNextWindowSize(MainViewport->Size, ImGuiCond_Always);
+
+	const ImGuiWindowFlags WindowFlags =ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+											ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+
+	ImGui::Begin("OBJ Viewer", nullptr, WindowFlags);
+
+	if (ImGui::Button("Open OBJ")) {
+		const std::filesystem::path sceneDirectory = std::filesystem::absolute(std::filesystem::path(kDefaultAssetsPath) / std::filesystem::path(kSceneDataDir));
+		void* ownerWindow = ImGui::GetMainViewport()->PlatformHandleRaw;
+
+		const std::optional<std::filesystem::path> selectedPath = FNativeFileDialog::OpenObjFile(ownerWindow, sceneDirectory);
+
+		if (selectedPath.has_value()) {
+			const std::filesystem::path& Path = selectedPath.value();
+			FFileManager& FileManager = const_cast<FFileManager&>(*guiReference.FileManager);
+			URenderer* Renderer = guiReference.GraphicsManager->GetRenderer();
+			FAssetManager* AssetManager = guiReference.AssetManager;
+
+			// Import()가 obj/mtl을 파싱해서 .uasset으로 굽고 등록까지 한다.
+			// 같은 원본을 다시 고르면 재임포트로 판단해 같은 키에 다시 굽는다.
+			FStaticMeshAssetLoader* Loader = AssetManager->GetOrCreateLoader<FStaticMeshAssetLoader>(*Renderer, *AssetManager);
+			FName AssetName = Loader->Import(Path, FileManager);
+
+			AssetManager->LoadAsset(AssetName, true);
+
+			NewScene();
+
+			UStaticMesh* MeshAsset = guiReference.AssetManager->GetAssetAs<UStaticMesh>(AssetName, true);
+
+			if (MeshAsset != nullptr) {
+				const FAABB& Bounds = MeshAsset->GetLocalBoundingBox();
+				const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+				AActor* NewActor = FObjectFactory::SpawnPrimitiveActor(AssetName, -Center, FRotator(0.0f, 0.0f, 0.0f), FVector(1.0f, 1.0f, 1.0f));
+				if (NewActor != nullptr) {
+					mCurrentWorld->AddActor(NewActor);
+					ViewportClient->SetViewerActor(NewActor);
+					ViewportClient->FocusOnViewerActor();
+					ViewportClient->Reset();
+				}
+			}
+
+		}
+	}
+
+	ImGui::Separator();
+	ImVec2 ContentSize = ImGui::GetContentRegionAvail();
+	float PropertyPanelWidth = 350.0f;
+	float ViewportWidth = ContentSize.x - PropertyPanelWidth - 8.0f;
+
+	if (ImGui::BeginChild("ViewportRegion", ImVec2(ViewportWidth, ContentSize.y), false)) {
+		const ImVec2 Size = ImGui::GetContentRegionAvail();
+
+		if (Size.x > 0.0f && Size.y > 0.0f) {
+			ImVec2 ScreenPos = ImGui::GetCursorScreenPos();
+
+			mViewportX = ScreenPos.x;
+			mViewportY = ScreenPos.y;
+			mViewportWidth = Size.x;
+			mViewportHeight = Size.y;
+
+			ViewportClient->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+
+			guiReference.ActiveViewport = ViewportClient;
+
+			if (ViewportClient->mRenderTarget && ViewportClient->mRenderTarget->SRV) {
+				ImTextureID SRV = (ImTextureID)(intptr_t)ViewportClient->mRenderTarget->SRV.Get();
+
+				ImGui::Image(SRV, Size);
+
+				mbViewportHovered = ImGui::IsWindowHovered();
+			}
+			else {
+				mbViewportHovered = false;
+			}
+		}
+	}
+	ImGui::EndChild();
+	ImGui::SameLine();
+
+	if (ImGui::BeginChild("PropertiesRegion", ImVec2(PropertyPanelWidth, ContentSize.y), true)) {
+		ImGui::Text("Details");
+		ImGui::Separator();
+
+		if (mPropertyPanel != nullptr) {
+			mPropertyPanel->OnPropertyChanged = [ViewportClient]() {
+				ViewportClient->FocusOnViewerActor();
+			};
+			mPropertyPanel->SetTarget(ViewportClient->mViewerActor);
+			mPropertyPanel->OnRender();
+		}
+		else {
+			ImGui::TextDisabled("PropertyPanel is uninitialized.");
+		}
+	}
+	ImGui::EndChild();
+	
+	ImGui::End();
+	ImGui::PopStyleVar();
 }
 
 const TArray<FRenderInfo> FSceneManager::GetAxisRenderInfos()
@@ -1169,13 +1231,11 @@ void FSceneManager::drawFolderTree(const std::filesystem::path& currentPath)
 // ----------------------------------------------------
 // 우측: 반응형 에셋 타일 그리드 & Drag & Drop
 // ----------------------------------------------------
-void FSceneManager::drawAssetGrid()
-{
+void FSceneManager::drawAssetGrid() {
 	if (!std::filesystem::exists(mCurrentDirectory)) return;
 
 	float padding = 16.0f;
 	float cellSize = mThumbnailSize + padding;
-
 	float panelWidth = ImGui::GetContentRegionAvail().x;
 	int columnCount = static_cast<int>(panelWidth / cellSize);
 	if (columnCount < 1) columnCount = 1;
@@ -1186,67 +1246,52 @@ void FSceneManager::drawAssetGrid()
 	{
 		const auto& path = entry.path();
 		std::string filename = path.filename().string();
+		bool isDirectory = entry.is_directory();
 
-		// 검색 필터 적용
 		if (strlen(mSearchBuffer) > 0 && filename.find(mSearchBuffer) == std::string::npos)
-		{
 			continue;
-		}
 
 		ImGui::PushID(filename.c_str());
 
-		bool isDirectory = entry.is_directory();
+		// [핵심 연결] ThumbnailManager로부터 ImTextureID(ID3D11ShaderResourceView*) 획득
+		ImTextureID thumbID = mThumbnailManager->GetThumbnail(path, isDirectory);
 
-		// 아이콘 레이블 (실제 엔진에서는 ImTextureID를 받아 ImGui::ImageButton을 사용)
-		const char* iconText = isDirectory ? "[FOLDER]" : "[FILE]";
+		ImVec4 bgColor = (mSelectedAssetPath == path) ? ImVec4(0.2f, 0.6f, 1.0f, 0.6f) : ImVec4(0, 0, 0, 0);
 
-		// 선택 여부 하이라이트 표시
 		if (mSelectedAssetPath == path)
-		{
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 0.6f));
-		}
 
-		ImGui::Button(iconText, ImVec2(mThumbnailSize, mThumbnailSize));
+		// 글자 버튼 대신 이미지 버튼으로 렌더링
+		bool clicked = ImGui::ImageButton(
+			filename.c_str(),
+			thumbID,
+			ImVec2(mThumbnailSize, mThumbnailSize),
+			ImVec2(0, 0), ImVec2(1, 1),
+			bgColor,
+			ImVec4(1, 1, 1, 1)
+		);
 
 		if (mSelectedAssetPath == path)
-		{
 			ImGui::PopStyleColor();
-		}
 
-		// 클릭 선택
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-		{
+		if (clicked || ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			mSelectedAssetPath = path;
-		}
 
-		// 폴더 더블 클릭 시 이동
 		if (isDirectory && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-		{
 			mCurrentDirectory /= path.filename();
-		}
 
-		// ==========================================
-		// 에셋 드래그 앤 드롭 (Drag Source)
-		// 뷰포트나 인스펙터로 에셋 전송
-		// ==========================================
 		if (!isDirectory && ImGui::BeginDragDropSource())
 		{
 			std::string pathString = path.string();
-
-			// "CONTENT_BROWSER_ITEM" 이라는 페이로드 키로 파일 경로 전달
 			ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", pathString.c_str(), pathString.size() + 1);
-
 			ImGui::Text("Dragging: %s", filename.c_str());
 			ImGui::EndDragDropSource();
 		}
 
-		// 파일명 텍스트 표시
 		ImGui::TextWrapped("%s", filename.c_str());
-
 		ImGui::NextColumn();
 		ImGui::PopID();
 	}
-
 	ImGui::Columns(1);
 }
 

@@ -1,4 +1,5 @@
 ﻿#include "Core.h"
+#include "Archive.h"
 
 FString::FString()
 	: mData(std::make_unique<std::string>())
@@ -52,12 +53,6 @@ FString& FString::operator=(FString&& other) noexcept
 	{
 		mData = std::move(other.mData);
 	}
-	return *this;
-}
-
-FString& FString::Append(std::string_view str)
-{
-	mData->append(str);
 	return *this;
 }
 
@@ -366,6 +361,32 @@ char& FString::operator[](int32 index)
 const char* FString::c_str() const noexcept
 {
 	return mData->c_str();
+}
+
+FArchive& operator<<(FArchive& Ar, FString& String)
+{
+	int32 StringLen = String.Len();
+	Ar << StringLen;
+
+	if (Ar.IsLoading())
+	{
+		String = FString("");
+		for (int32 i = 0; i < StringLen; ++i)
+		{
+			char c;
+			Ar << c;
+			String.AppendChar(c);
+		}
+	}
+	else
+	{
+		for (int32 i = 0; i < StringLen; ++i)
+		{
+			Ar << String[i];
+		}
+	}
+
+	return Ar;
 }
 
 const bool FString::empty() const noexcept

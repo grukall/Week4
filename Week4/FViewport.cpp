@@ -104,16 +104,6 @@ void FViewport::DrawViewportUI(
 				InOutActiveViewport = EditorClient;
 			}
 		}
-
-		// ActiveViewport 주황색 테두리 표시 (전체 뷰포트 영역 둘레)
-		if (mClient && mClient == InOutActiveViewport)
-		{
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			const ImVec2 pMin(screenCursorPos.x + rect.Left, screenCursorPos.y + rect.Top);
-			const ImVec2 pMax(screenCursorPos.x + rect.Right, screenCursorPos.y + rect.Bottom);
-
-			drawList->AddRect(pMin, pMax, IM_COL32(255, 140, 0, 255), 0.0f, 0, 2.0f);
-		}
 	}
 
 	// 2. 상단 툴바 (Toolbar Bar) 렌더링은 에디터 클라이언트에게 위임

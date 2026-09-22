@@ -7,6 +7,7 @@
 #include "FLogManager.h"
 #include "Material.h"
 #include "UStaticMeshComponent.h"
+#include "FAssetManager.h"
 
 namespace
 {
@@ -92,7 +93,7 @@ namespace
 		return isVectorChanged;
 	}
 	// UClass에 등록된 프로퍼티를 타입에 맞는 위젯으로 그린다
-	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
+	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont, const std::function<void()>& OnPropertyChanged)
 	{
 		void* ValuePtr = reinterpret_cast<char*>(Object) + Property.Offset;
 		const char* Label = Property.WidgetId.c_str(); // 등록 시점에 만들어 둔 "##Name"
@@ -197,34 +198,103 @@ namespace
 					}
 				}
 
-				// 해당 클래스와 그 파생만 나열된다.
-				for (TObjectIterator<UAsset> It(Property.ClassInfo); It; ++It)
-				{
-					UAsset* Asset = *It;
-					const bool bSelected = (Asset == CurrentAsset);
-
-					FString AssetName = Asset->GetAssetName().ToString();
-					if (ImGui::Selectable(AssetName.c_str(), bSelected))
+				// 로드 여부와 무관하게, FAssetManager가 아는 것(=디스크에서 스캔했거나 이미 로드된 것)을
+				// 전부 나열한다. 로드는 실제로 골랐을 때만 한다.
+				FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
 					{
-						*AssetSlot = Asset;
+						if (!MetaInfo.AssetClass || !MetaInfo.AssetClass->IsChildOf(Property.ClassInfo))
+						{
+							return;
+						}
 
-						if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>()) {
-							MeshComp->ClearMaterials();
-							if (UStaticMesh* NewMesh = Asset ? Asset->Cast<UStaticMesh>() : nullptr) {
-								TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
-								for (uint32 i = 0; i < MeshMaterials.Num();++i) {
-									MeshComp->SetMaterial(i, MeshMaterials[i]);
+						const bool bSelected = (MetaInfo.LoadedAsset == CurrentAsset);
+
+						FString AssetLabel = MetaInfo.Stem.ToString();
+						if (ImGui::Selectable(AssetLabel.c_str(), bSelected))
+						{
+							// 여기서 처음 로드될 수 있다 — 지금까지 존재만 알고 있던 걸 실제로 불러오는 시점.
+							UAsset* Asset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
+							*AssetSlot = Asset;
+
+							if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>())
+							{
+								MeshComp->ClearMaterials();
+								if (UStaticMesh* NewMesh = Asset ? Asset->Cast<UStaticMesh>() : nullptr)
+								{
+									TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
+									for (uint32 i = 0; i < MeshMaterials.Num(); ++i)
+									{
+										MeshComp->SetMaterial(i, MeshMaterials[i]);
+									}
 								}
 							}
+
+							if (OnPropertyChanged)
+							{
+								OnPropertyChanged();
+							}
 						}
-					}
-					if (bSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				}
+
+						if (bSelected)
+						{
+							ImGui::SetItemDefaultFocus();
+						}
+					});
+
 				ImGui::EndCombo();
 			}
+
+			UAsset* DroppedAsset = nullptr;
+
+			if (ImGui::BeginDragDropTarget())
+			{
+				const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM");
+
+				if (Payload && Payload->Data && Payload->DataSize > 0)
+				{
+					const char* DroppedPath = static_cast<const char*>(Payload->Data);
+					std::filesystem::path AssetPath(DroppedPath);
+					const std::string AssetStem = AssetPath.stem().string();
+
+					FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
+						{
+							if (!MetaInfo.AssetClass) return;
+							if (!MetaInfo.AssetClass->IsChildOf(Property.ClassInfo)) return;
+							if (MetaInfo.Stem.ToString() != FString(AssetStem.c_str())) return;
+
+							DroppedAsset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
+						});
+				}
+
+				// 먼저 DragDropTarget를 닫는다.
+				ImGui::EndDragDropTarget();
+			}
+
+			// EndDragDropTarget() 밖에서 실제 변경
+			if (DroppedAsset)
+			{
+				*AssetSlot = DroppedAsset;
+
+				if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>())
+				{
+					MeshComp->ClearMaterials();
+
+					if (UStaticMesh* NewMesh = DroppedAsset->Cast<UStaticMesh>())
+					{
+						TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
+						for (uint32 i = 0; i < MeshMaterials.Num(); ++i)
+						{
+							MeshComp->SetMaterial(i, MeshMaterials[i]);
+						}
+					}
+				}
+
+				if (OnPropertyChanged)
+				{
+					OnPropertyChanged();
+				}
+			}
+
 			break;
 		}
 		case EPropertyType::Array:
@@ -255,9 +325,7 @@ namespace
 				if (ImGui::BeginCombo("##Material",CurrentName.c_str()))
 				{
 					// None
-					if (ImGui::Selectable(
-						"None",
-						CurrentMaterial == nullptr))
+					if (ImGui::Selectable("None",CurrentMaterial == nullptr))
 					{
 						(*Materials)[Index] = nullptr;
 					}
@@ -320,14 +388,14 @@ namespace
 	// 클래스 계층을 따라 올라가며 각 단계의 프로퍼티를 표시.
 	// 기반 클래스부터 그려야 하므로 재귀로 먼저 최상위까지 올라간다.
 	// (계층을 배열에 모아 뒤집으면 매 프레임 TArray 할당이 생긴다)
-	void DrawProperties(UObject* Object, const FClassInfo* Class, ImFont* CustomFont)
+	void DrawProperties(UObject* Object, const FClassInfo* Class, ImFont* CustomFont, const std::function<void()>& OnPropertyChanged)
 	{
 		if (!Class)
 		{
 			return;
 		}
 
-		DrawProperties(Object, Class->SuperClass, CustomFont);
+		DrawProperties(Object, Class->SuperClass, CustomFont, OnPropertyChanged);
 
 		if (Class->GetProperties().IsEmpty())
 		{
@@ -339,77 +407,72 @@ namespace
 		{
 			for (const FProperty& Property : Class->GetProperties())
 			{
-				DrawProperty(Object, Property, CustomFont);
+				DrawProperty(Object, Property, CustomFont, OnPropertyChanged);
 			}
 		}
 		ImGui::PopID();
 	}
 
-	void DrawProperties(UObject* Object, ImFont* CustomFont)
+	void DrawProperties(UObject* Object, ImFont* CustomFont, const std::function<void()>& OnPropertyChanged)
 	{
 		if (!Object)
 		{
 			return;
 		}
 
-		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont);
+		DrawProperties(Object, Object->GetRuntimeClass(), CustomFont, OnPropertyChanged);
 	}
-	void DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
+
+	bool DrawStaticMeshMaterials(UStaticMeshComponent* Component) {
 		if (!Component) {
-			return;
+			return false;
 		}
 
-		UStaticMesh* StaticMesh = Component->GetStaticMesh();
+		bool bChanged = false;
 
-		if (!StaticMesh) {
-			return;
-		}
-
-		const TArray<FStaticMeshSection>& Sections = StaticMesh->GetSections();
-
-		if (Sections.IsEmpty()) {
-			return;
-		}
+		TArray<UMaterial*> ComponentMaterials = Component->GetMaterials();
 
 		ImGui::Separator();
 
 		if (!ImGui::CollapsingHeader("Static Mesh Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
-			return;
+			return false;
 		}
 
-		for (uint32 SectionIndex = 0;SectionIndex < Sections.Num();++SectionIndex) {
-			const FStaticMeshSection& Section = Sections[SectionIndex];
+		for (int32 SlotIndex = 0; SlotIndex < ComponentMaterials.Num(); ++SlotIndex) {
+			UMaterial* CurrentMaterial = ComponentMaterials[SlotIndex];
 
-			ImGui::PushID(static_cast<int>(SectionIndex));
+			const bool bNoneSelected =
+				(CurrentMaterial == nullptr || CurrentMaterial == UMaterial::DefaultMaterial);
 
-			ImGui::Text("Section %u", SectionIndex);
+			FString CurrentMaterialName = bNoneSelected
+				? FString("None")
+				: CurrentMaterial->GetAssetName().ToString();
 
-			ImGui::Text("Start Index : %u", Section.StartIndex);
+			ImGui::PushID(SlotIndex);
 
-			ImGui::Text("Index Count : %u", Section.IndexCount);
-
-			ImGui::Text("Material Slot : %u", Section.MaterialSlotIndex);
-
-			UMaterial* CurrentMaterial = Component->GetMaterial(Section.MaterialSlotIndex);
-
-			FString CurrentMaterialName = CurrentMaterial ? CurrentMaterial->GetAssetName().ToString() : FString("None");
+			ImGui::Text("Slot %d", SlotIndex);
 
 			ImGui::Text("Material");
 			ImGui::SameLine(120.0f);
 			ImGui::SetNextItemWidth(-1.0f);
 
 			if (ImGui::BeginCombo("##Material", CurrentMaterialName.c_str())) {
-				const bool bNoneSelected = (CurrentMaterial == nullptr);
+
+				// None
 				if (ImGui::Selectable("None", bNoneSelected)) {
-					FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
-					Component->SetMaterial(MutableSection.MaterialSlotIndex, nullptr);
+					Component->SetMaterial(
+						SlotIndex,
+						UMaterial::DefaultMaterial
+					);
+					bChanged = true;
 				}
 
 				if (bNoneSelected) {
 					ImGui::SetItemDefaultFocus();
 				}
 
-				for (TObjectIterator<UAsset> It(UMaterial::GetClass());It;++It) {
+				// 모든 Material 표시
+				for (TObjectIterator<UAsset> It(UMaterial::GetClass()); It; ++It) {
 					UAsset* Asset = *It;
 
 					if (!Asset) {
@@ -422,57 +485,54 @@ namespace
 						continue;
 					}
 
+					// DefaultMaterial은 None으로 표시하므로 제외
+					if (Material == UMaterial::DefaultMaterial) {
+						continue;
+					}
+
 					const bool bSelected = (Material == CurrentMaterial);
 
 					FString MaterialName = Material->GetAssetName().ToString();
 
 					if (ImGui::Selectable(MaterialName.c_str(), bSelected)) {
-						TArray<UMaterial*> MeshMaterials = Component->GetMaterials();
-						uint32 FoundSlotIndex = -1;
-						bool bFound = false;
-						for (uint32 i = 0; i < MeshMaterials.Num(); ++i) {
-							if (MeshMaterials[i] == Material) {
-								FoundSlotIndex = i;
-								bFound = true;
-								break;
-							}
-						}
-						if (!bFound) {
-							FoundSlotIndex = MeshMaterials.Num();
-						}
-
-						FStaticMeshSection& MutableSection = const_cast<FStaticMeshSection&>(Sections[SectionIndex]);
-						MutableSection.MaterialSlotIndex = FoundSlotIndex;
-
-						Component->SetMaterial(FoundSlotIndex, Material);
-						CurrentMaterial = Material;
+						Component->SetMaterial(
+							SlotIndex,
+							Material
+						);
+						bChanged = true;
 					}
 
 					if (bSelected) {
 						ImGui::SetItemDefaultFocus();
 					}
 				}
+
 				ImGui::EndCombo();
 			}
 
-			if (CurrentMaterial)
-			{
+			if (CurrentMaterial && CurrentMaterial != UMaterial::DefaultMaterial) {
 				ImGui::Spacing();
 
-				// Get 함수를 사용해 현재 UV Speed 값을 가져옴
 				FVector2 CurrentSpeed = CurrentMaterial->GetUVSpeed();
-				float Speed[2] = { static_cast<float>(CurrentSpeed.X), static_cast<float>(CurrentSpeed.Y) };
 
-				// ImGui에서 드래그로 값 수정 시 Set 함수 호출
-				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f))
-				{
-					CurrentMaterial->SetUVSpeed(FVector2(Speed[0], Speed[1]));
+				float Speed[2] = {
+					static_cast<float>(CurrentSpeed.X),
+					static_cast<float>(CurrentSpeed.Y)
+				};
+
+				if (ImGui::DragFloat2("UV Speed", Speed, 0.00001f)) {
+					CurrentMaterial->SetUVSpeed(
+						FVector2(Speed[0], Speed[1])
+					);
+					bChanged = true;
 				}
 			}
 
 			ImGui::Separator();
+
 			ImGui::PopID();
 		}
+		return bChanged;
 	}
 }
 
@@ -508,32 +568,39 @@ void FPropertyPanel::OnRender()
 	if (Target)
 	{
 		FTransform Transform = Target->GetTransform();
+
+		bool bTransformChanged = false;
+
 		DrawVector3Controller("Location", Transform.Location, 0.0f, 10.0f);
 
 		FVector Rotation = FVector(Transform.Rotation.Roll, Transform.Rotation.Pitch, Transform.Rotation.Yaw);
 		DrawVector3Controller("Rotation", Rotation, 0.0f, 10.0f);
 
 		Transform.Rotation = FRotator(Rotation.y, Rotation.z, Rotation.x);
-		DrawVector3Controller("Scale", Transform.Scale, 0.0f, 10.0f);
+		bTransformChanged |= DrawVector3Controller("Scale", Transform.Scale, 0.0f, 10.0f);
 
 		Target->SetLocation(Transform.Location);
 		Target->SetRotation(Transform.Rotation);
 		Target->SetScale(Transform.Scale);
 
+		if (bTransformChanged && OnPropertyChanged) {
+			OnPropertyChanged();
+		}
+
 		if (Target)
 		{
-			DrawProperties(Target, CustomFont);
+			DrawProperties(Target, CustomFont, OnPropertyChanged);
 
 			const TArray<UActorComponent*>& Components = Target->GetComponents();
 			for (UActorComponent* Component : Components)
 			{
-				DrawProperties(Component, CustomFont);
+				DrawProperties(Component, CustomFont, OnPropertyChanged);
 
 				UStaticMeshComponent* StaticMeshComponent = Component->Cast<UStaticMeshComponent>();
 
 				if (StaticMeshComponent)
 				{
-					DrawStaticMeshMaterials(StaticMeshComponent);
+					bool bStaticMeshChanged = DrawStaticMeshMaterials(StaticMeshComponent);
 				}
 			}
 		}

@@ -116,12 +116,42 @@ public:
 	float mViewportLeft = 0.0f;
 	float mViewportTop = 0.0f;
 
-private:
+	void FocusOnViewerActor();
+	void SetViewerActor(AActor* InActor);
+	void UpdateViewerCamera();
+	AActor* mViewerActor = nullptr;
 
-	void DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas,
+	FVector mViewerTarget = FVector(0.0f, 0.0f, 0.0f);
+	float mViewerYaw = 0.0f;
+	float mViewerPitch = 0.0f;
+	float mViewerDistance = 5.0f;
+	float mBaseRadius = 1.0f;
+	float mZoomFactor = 3.0f;
+
+	// 이 뷰포트에서 어떤 stat 커맨드가 켜져 있는가(UE5처럼 뷰포트마다 따로 켤 수 있다).
+	// 콘솔의 "Stat X" 명령이 ActiveViewportClient의 이 맵을 바꾼다.
+	TMap<FName, bool, FNameHasher> StatCommands;
+
+	// 콘솔 "Stat X" 명령이 호출한다. 이 뷰포트의 표시 여부를 바꾸고, 모든 뷰포트를 OR로
+	// 합쳐 FStatManager의 실측 여부(bEnabled)를 다시 계산한다.
+	void ToggleStatCommand(const FName& CommandName);
+	void ClearStatCommands();
+
+	// 뷰포트마다 렌더타겟과 2D 투영이 따로이므로, 그 뷰포트를 Render()하기 직전에
+	// (그 뷰포트 자신의 폭/높이와 자신의 StatCommands로) 호출해야 한다. Update()에서 부르면
+	// ActiveViewportClient 기준으로 만들어진 쿼드가 렌더 루프의 4개 뷰포트 모두에 그대로 찍혀버린다.
+	void DrawStatsHUD(const TMap<FName, bool, FNameHasher>& InStatCommands, UFontAtlas* Atlas,
 		FRenderCollector& Collector, float ViewportW, float ViewportH);
 
-	void GatherStatFPS(TArray<FStatRow>& Rows);
+private:
+	// 모든 뷰포트의 StatCommands를 OR로 합쳐 FStatManager::RefreshEnabled를 호출한다.
+	// 실측 코드는 뷰포트 구분 없이 전역으로 한 번만 돌기 때문에, 어느 한 뷰포트라도
+	// 요구하면 그 스탯의 수집 자체는 켜져 있어야 한다.
+	static void RefreshGlobalStatEnabled();
+
+private:
+
+	void GatherStatFPS(TArray<FStatRow>& Rows, bool bUnitAlsoEnabled);
 	void GatherStatUnit(TArray<FStatRow>& Rows);
 
 	void DrawStatMemoryTable(UFontAtlas* Atlas, FRenderCollector& RenderCollector, float ViewportW);

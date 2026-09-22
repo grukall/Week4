@@ -1,5 +1,6 @@
 #include "Material.h"
 #include "Json/json.hpp"
+#include "Archive.h"
 
 void UMaterial::Initialize(const FName& InAssetName, URenderer& InRenderer)
 {
@@ -42,4 +43,48 @@ void UMaterial::DeserializeClass(const json::JSON& inJson)
 	DiffuseColor.w = colorJson.at(3).ToFloat();
 
 	DiffuseTexturePath = FString(propertiesJson.at("DiffuseTexture").ToString());
+}
+UMaterial* UMaterial::DefaultMaterial = nullptr;
+void UMaterial::InitDefaultMaterial(URenderer* Renderer)
+{
+	if (DefaultMaterial != nullptr || Renderer == nullptr) return;
+
+	// "DefaultMaterial"을 FName("DefaultMaterial")으로 명시적 생성하여 전달
+	DefaultMaterial = FObjectFactory::ConstructObject<UMaterial>(
+		FName("None"),
+		*Renderer
+	);
+
+	// 디폴트 파라미터 설정
+	DefaultMaterial->SetAmbientColor({ 0.2f, 0.2f, 0.2f });
+	DefaultMaterial->SetDiffuseColor({ 0.6f, 0.6f, 0.6f, 1.0f });
+	DefaultMaterial->SetSpecularPower(32.0f);
+}
+
+void UMaterial::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	Ar << SpecularPower;
+	Ar << OpticalDensity;
+	Ar << Transparency;
+	Ar << IlluminationModel;
+	Ar << AmbientColor;
+	Ar << DiffuseColor;
+	Ar << SpecularColor;
+	Ar << EmissiveColor;
+	Ar << AmbientTexturePath;
+	Ar << DiffuseTexturePath;
+	Ar << SpecularTexturePath;
+	Ar << BumpTexturePath;
+	Ar << UVScroll;
+	Ar << UVSpeed;
+	Ar << TransmissionFilter;
+}
+
+void UMaterial::PostLoad(URenderer* Renderer)
+{
+	Super::PostLoad(Renderer);
+
+	// TODO: Texture re-linking logic
 }

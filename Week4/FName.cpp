@@ -3,6 +3,7 @@
 #include "TMap.h"
 #include <format>
 #include <limits>
+#include "Archive.h"
 #include "city.h"
 
 static constexpr uint32 FNameMaxBlockBits = 13;
@@ -504,4 +505,23 @@ FString FName::ToString() const
 	}
 
 	return Result;
+}
+
+FArchive& operator<<(FArchive& Ar, FName& Name)
+{
+	FString NameStr;
+
+	if (Ar.IsSaving())
+	{
+		NameStr = Name.ToString();
+	}
+
+	Ar << NameStr;
+
+	if (Ar.IsLoading())
+	{
+		Name = FName(NameStr);
+	}
+
+	return Ar;
 }

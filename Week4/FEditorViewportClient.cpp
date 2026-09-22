@@ -25,9 +25,9 @@
 #include "GlobalFNames.h"
 #include "LaunchEngineLoop.h"
 #include "FAssetManager.h"
-#include "psapi.h"
+#include <psapi.h>
 #include "Actor.h"
-
+#include "UStaticMeshComponent.h"
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	: mCamera(FTransform({ -2.0f, 1.0f, 1.0f }, { 0, 30, 0 }, { 1, 1, 1 }))
 	, mGizmo(InRenderer)
@@ -101,8 +101,33 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 	const FInputState& Input = WindowApplication.Input;
 	bool bAllowMouse = sceneManager->IsViewportHovered();
 	bool bAllowKeyboardInput = bAllowMouse && !ImGui::GetIO().WantCaptureKeyboard;
+#if IS_OBJ_VIEWER
 
-	// Camera Rotate / Pan
+	if (bAllowMouse && Input.IsDown(VK_LBUTTON) && mViewerActor != nullptr) {
+		constexpr float RotationSensitivity = 0.5f;
+		mViewerYaw += Input.MouseDX * RotationSensitivity;
+		mViewerPitch += Input.MouseDY * RotationSensitivity;
+		mViewerPitch = FMath::Clamp(mViewerPitch, -89.0f, 89.0f);
+		UpdateViewerCamera();
+	}
+
+	if (bAllowMouse && Input.MouseWheelDelta != 0.0f) {
+		mViewerDistance *= FMath::Pow(1.2f, -Input.MouseWheelDelta);
+		float minDistance = mBaseRadius * 0.1f;
+		float maxDistance = mBaseRadius * 10.0f;
+		mViewerDistance = FMath::Clamp(mViewerDistance, minDistance, maxDistance);
+
+		if (mBaseRadius > KINDA_SMALL_NUMBER) {
+			mZoomFactor = mViewerDistance / mBaseRadius;
+		}
+
+		UpdateViewerCamera();
+	}
+
+	mCamera.Velocity = FVector(0.0f);
+#else
+	// Camera Rotate
+	// 회전을 이동보다 먼저, 이번 프레임에 돌린 방향으로 바로 움직이게
 	if (bAllowMouse && Input.IsDown(VK_RBUTTON))
 	{
 		if (!bIsOrthographic)
@@ -212,13 +237,11 @@ void FEditorViewportClient::Update(float deltaTime, FSceneManager* sceneManager,
 		}
 	}
 
-	//Stat정보 표시가 켜져 있으면 드로우한다.
-	if (UFontAtlas* StatFontAtlas = GEngineLoop.GetAssetManager()->GetAssetAs<UFontAtlas>(FName("StatFontAtlas")))
-	{
-		// 좌표계가 뷰포트(ImGui 패널) 기준이므로 창 크기가 아니라 패널 크기를 넘긴다.
-		DrawStatsHUD(FStatManager::Get(), StatFontAtlas, RenderCollector,
-			sceneManager->GetViewportWidth(), sceneManager->GetViewportHeight());
-	}
+	// 스탯 HUD는 여기서 그리지 않는다. 뷰포트마다 렌더타겟과 2D 투영이 따로이므로,
+	// 그 뷰포트를 Render()하기 직전에 그 뷰포트 자신의 폭/높이로 그려야 한다.
+	// (렌더 루프에서 DrawStatsHUD를 직접 호출한다.)
+
+#endif
 }
 
 namespace
@@ -283,16 +306,102 @@ namespace
 	}
 }
 
-void FEditorViewportClient::DrawStatsHUD(FStatManager& StatManager, UFontAtlas* Atlas, FRenderCollector& RenderCollector, float ViewportW, float ViewportH)
+void FEditorViewportClient::FocusOnViewerActor()
+{
+	if (mViewerActor == nullptr) return;
+	UStaticMeshComponent* MeshComponent = static_cast<UStaticMeshComponent*>(mViewerActor->GetRootComponent());
+	if (MeshComponent == nullptr) return;
+	UStaticMesh* StaticMesh = MeshComponent->GetStaticMesh();
+	if (StaticMesh == nullptr) return;
+	const FAABB& Bounds = StaticMesh->GetLocalBoundingBox();
+
+	const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+	const FVector Extent = (Bounds.Max - Bounds.Min) * 0.5f;
+
+	const FVector ComponentScale = MeshComponent->GetRelativeScale3D();
+
+	const FVector ScaledExtent(Extent.x * FMath::Abs(ComponentScale.x), Extent.y * FMath::Abs(ComponentScale.y), Extent.z * FMath::Abs(ComponentScale.z));
+
+	const float Radius = ScaledExtent.Length();
+
+	if (Radius <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+	mBaseRadius = Radius;
+	mViewerTarget = Center;
+	mViewerDistance = Radius * mZoomFactor;
+	mCamera.farZ = mViewerDistance + Radius * 10.f;
+	UpdateViewerCamera();
+}
+
+void FEditorViewportClient::SetViewerActor(AActor* InActor)
+{
+	mViewerActor = InActor;
+}
+
+void FEditorViewportClient::UpdateViewerCamera()
+{
+#if IS_OBJ_VIEWER
+	constexpr float DegreeToRadian = PI / 180.0f;
+	constexpr float RadianToDegree = 180.0f / PI;
+	const float YawRadians = mViewerYaw * DegreeToRadian;
+	const float PitchRadians = mViewerPitch * DegreeToRadian;
+	const float CosPitch = cosf(PitchRadians);
+	const float SinPitch = sinf(PitchRadians);
+	const float CosYaw = cosf(YawRadians);
+	const float SinYaw = sinf(YawRadians);
+
+	const FVector Offset(CosPitch * CosYaw, CosPitch * SinYaw, SinPitch);
+
+	FVector WorldTarget = mViewerTarget;
+	if (mViewerActor != nullptr) {
+		FVector ActorLocation = mViewerActor->GetTransform().Location;
+		FRotator ActorRotation = mViewerActor->GetTransform().Rotation;
+		FVector ActorScale = mViewerActor->GetTransform().Scale;
+
+		FVector ScaledTarget = FVector(mViewerTarget.x * ActorScale.x, mViewerTarget.y * ActorScale.y, mViewerTarget.z * ActorScale.z);
+		FMatrix RotMatrix = FMatrix::Rotate(ActorRotation);
+		FVector RotatedTarget = RotMatrix.TransformPosition(ScaledTarget);
+
+		WorldTarget = ActorLocation + RotatedTarget;
+	}
+
+	mCamera.Transform.Location = WorldTarget + Offset * mViewerDistance;
+
+	FVector Direction = (WorldTarget - mCamera.Transform.Location);
+	Direction.Normalize();
+
+	const float Yaw = atan2f(Direction.y, Direction.x);
+	const float HorizontalLength = sqrtf(Direction.x * Direction.x + Direction.y * Direction.y);
+	const float Pitch = atan2f(Direction.z, HorizontalLength);
+	mCamera.Transform.Rotation = FRotator(Pitch * RadianToDegree, Yaw * RadianToDegree, 0.0f);
+#endif
+}
+
+namespace
+{
+	// TMap의 const operator[]는 std::map::at()과 같아서 키가 없으면 던진다.
+	// 커맨드를 한 번도 안 건드린 뷰포트는 StatCommands가 비어있을 수 있으므로 Find로 안전하게 읽는다.
+	bool IsStatCommandOn(const TMap<FName, bool, FNameHasher>& Commands, const FName& CommandName)
+	{
+		const bool* Value = Commands.Find(CommandName);
+		return Value ? *Value : false;
+	}
+}
+
+void FEditorViewportClient::DrawStatsHUD(const TMap<FName, bool, FNameHasher>& InStatCommands, UFontAtlas* Atlas, FRenderCollector& RenderCollector, float ViewportW, float ViewportH)
 {
 	// 열을 맞추려면 모든 줄의 라벨/값 폭을 알아야 하므로 먼저 다 모은다.
 	TArray<FStatRow> Rows;
 
-	if (StatManager.StatCommands[Name_FPS])
+	const bool bUnit = IsStatCommandOn(InStatCommands, Name_UNIT);
+
+	if (IsStatCommandOn(InStatCommands, Name_FPS))
 	{
-		GatherStatFPS(Rows);
+		GatherStatFPS(Rows, bUnit);
 	}
-	if (StatManager.StatCommands[Name_UNIT])
+	if (bUnit)
 	{
 		GatherStatUnit(Rows);
 	}
@@ -303,10 +412,45 @@ void FEditorViewportClient::DrawStatsHUD(FStatManager& StatManager, UFontAtlas* 
 	}
 
 	// 메모리는 표 형태라 좌상단에 따로 그린다. 우상단 블록과 겹치지 않는다.
-	if (StatManager.StatCommands[Name_MEMORY])
+	if (IsStatCommandOn(InStatCommands, Name_MEMORY))
 	{
 		DrawStatMemoryTable(Atlas, RenderCollector, ViewportW);
 	}
+}
+
+void FEditorViewportClient::ToggleStatCommand(const FName& CommandName)
+{
+	StatCommands[CommandName] = !StatCommands[CommandName];
+	RefreshGlobalStatEnabled();
+}
+
+void FEditorViewportClient::ClearStatCommands()
+{
+	StatCommands[Name_UNIT] = false;
+	StatCommands[Name_FPS] = false;
+	StatCommands[Name_MEMORY] = false;
+	RefreshGlobalStatEnabled();
+}
+
+void FEditorViewportClient::RefreshGlobalStatEnabled()
+{
+	bool bUnit = false;
+	bool bFps = false;
+	bool bMemory = false;
+
+	for (FEditorViewportClient* Client : GEngineLoop.GetViewportClients())
+	{
+		if (!Client)
+		{
+			continue;
+		}
+
+		bUnit |= Client->StatCommands[Name_UNIT];
+		bFps |= Client->StatCommands[Name_FPS];
+		bMemory |= Client->StatCommands[Name_MEMORY];
+	}
+
+	FStatManager::Get().RefreshEnabled(bUnit, bFps, bMemory);
 }
 
 float FEditorViewportClient::MeasureStatText(FFontAtlas* FontAtlas, const char* Text, float Scale)
@@ -416,7 +560,7 @@ void FEditorViewportClient::DrawStatRows(UFontAtlas* Atlas, FRenderCollector& Re
 	}
 }
 
-void FEditorViewportClient::GatherStatFPS(TArray<FStatRow>& Rows)
+void FEditorViewportClient::GatherStatFPS(TArray<FStatRow>& Rows, bool bUnitAlsoEnabled)
 {
 	FStatManager& StatManager = FStatManager::Get();
 
@@ -436,7 +580,7 @@ void FEditorViewportClient::GatherStatFPS(TArray<FStatRow>& Rows)
 	AddStatRow(Rows, nullptr, Buffer, MsToColor(FrameMs));
 
 	// stat unit이 같이 켜져 있으면 Frame을 거기서 그리므로 중복해서 넣지 않는다.
-	if (!StatManager.StatCommands[Name_UNIT])
+	if (!bUnitAlsoEnabled)
 	{
 		_snprintf_s(Buffer, sizeof(Buffer), _TRUNCATE, "%6.2f ms", FrameMs);
 		AddStatRow(Rows, nullptr, Buffer, MsToColor(FrameMs));

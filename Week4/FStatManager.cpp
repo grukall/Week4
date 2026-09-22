@@ -24,12 +24,8 @@ void FStatManager::Register(const FName& Name, EStatType Type)
 
 
 
-void FStatManager::RefreshEnabled()
+void FStatManager::RefreshEnabled(bool bUnit, bool bFps, bool bMemory)
 {
-	const bool bUnit = StatCommands[Name_UNIT];
-	const bool bFps = StatCommands[Name_FPS];
-	const bool bMemory = StatCommands[Name_MEMORY];
-
 	for (auto& Pair : Stats)
 	{
 		FStatEntry& Entry = Pair.second;

@@ -8,6 +8,8 @@
 #include <ctime>
 #include "FStatManager.h"
 #include "GlobalFNames.h"
+#include "FEditorViewportClient.h"
+#include "LaunchEngineLoop.h"
 
 namespace {
 	void ButtonHelper(bool& bShow, int type) {
@@ -447,37 +449,33 @@ void ConsoleWindow::ExecCommand(const char* command_line)
 	}
 	else if (Stricmp(command_line, "Stat UNIT") == 0)
 	{
-		FStatManager& StatManager = FStatManager::Get();
-
-		StatManager.StatCommands[Name_UNIT] = !StatManager.StatCommands[Name_UNIT];
-
-		// 어떤 스탯을 수집할지는 켜진 명령들로부터 통째로 다시 계산한다.
-		// 명령별로 따로 켜고 끄면 FPS와 UNIT이 공유하는 Frame을 서로 덮어쓴다.
-		StatManager.RefreshEnabled();
+		// 표시 여부는 뷰포트마다 다를 수 있어(UE5처럼) 콘솔이 향하는 현재 액티브 뷰포트에만 적용한다.
+		// 실측 자체(FStatManager::RefreshEnabled)는 ToggleStatCommand 안에서 전체 뷰포트를 OR로 합쳐 다시 계산된다.
+		if (FEditorViewportClient* Viewport = GEngineLoop.GetActiveViewportClient())
+		{
+			Viewport->ToggleStatCommand(Name_UNIT);
+		}
 	}
 	else if (Stricmp(command_line, "Stat FPS") == 0)
 	{
-		FStatManager& StatManager = FStatManager::Get();
-
-		StatManager.StatCommands[Name_FPS] = !StatManager.StatCommands[Name_FPS];
-		StatManager.RefreshEnabled();
+		if (FEditorViewportClient* Viewport = GEngineLoop.GetActiveViewportClient())
+		{
+			Viewport->ToggleStatCommand(Name_FPS);
+		}
 	}
 	else if (Stricmp(command_line, "Stat MEMORY") == 0)
 	{
-		FStatManager& StatManager = FStatManager::Get();
-
-		StatManager.StatCommands[Name_MEMORY] = !StatManager.StatCommands[Name_MEMORY];
-		StatManager.RefreshEnabled();
+		if (FEditorViewportClient* Viewport = GEngineLoop.GetActiveViewportClient())
+		{
+			Viewport->ToggleStatCommand(Name_MEMORY);
+		}
 	}
 	else if (Stricmp(command_line, "Stat NONE") == 0)
 	{
-		FStatManager& StatManager = FStatManager::Get();
-
-		StatManager.StatCommands[Name_UNIT] = false;
-		StatManager.StatCommands[Name_FPS] = false;
-		StatManager.StatCommands[Name_MEMORY] = false;
-
-		StatManager.RefreshEnabled();
+		if (FEditorViewportClient* Viewport = GEngineLoop.GetActiveViewportClient())
+		{
+			Viewport->ClearStatCommands();
+		}
 	}
 	else
 	{
