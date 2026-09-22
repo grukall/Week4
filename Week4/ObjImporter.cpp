@@ -174,9 +174,11 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 				int LastIndex = Data.FaceGroups.Num() - 1;
 
 				if (Data.FaceGroups.IsEmpty() ||
-					Data.FaceGroups[LastIndex].MaterialName != CurrentMaterialName)
+					Data.FaceGroups[LastIndex].MaterialName != CurrentMaterialName ||
+					Data.FaceGroups[LastIndex].GroupName != CurrentGroupName)
 				{
 					FFaceGroupData NewGroup;
+					NewGroup.GroupName = CurrentGroupName;
 					NewGroup.MaterialName = CurrentMaterialName;
 					Data.FaceGroups.Add(NewGroup);
 				}

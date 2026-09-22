@@ -24,6 +24,7 @@ struct FObjImporter
 
 	struct FFaceGroupData
 	{
+		FString GroupName;
 		FString MaterialName;
 		TArray<FFaceData> Faces;
 	};
