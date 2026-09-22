@@ -39,7 +39,7 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 		WindowClass,
 		Title,
 		WS_VISIBLE | WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT, 600, 1024,
+		CW_USEDEFAULT, CW_USEDEFAULT, 1600, 900,
 		nullptr, nullptr, hInstance, nullptr
 	);
 
@@ -52,6 +52,9 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 	GetClientRect(hWnd, &clientRect);
 	int clientWidth = clientRect.right - clientRect.left;
 	int clientHeight = clientRect.bottom - clientRect.top;
+
+	WindowApplication.PendingWidth = clientWidth;
+	WindowApplication.PendingHeight = clientHeight;
 
 	RAWINPUTDEVICE rid = {};
 	rid.usUsagePage = 0x01;		// Generic Desktop
@@ -264,6 +267,11 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 	// Input Threads & Active Viewport Update
 	WindowApplication.ProcessDeferredEvents();
+	if (WindowApplication.bPendingResize)
+	{
+		mGraphicsManager->OnResize(WindowApplication.PendingWidth, WindowApplication.PendingHeight);
+		WindowApplication.bPendingResize = false;
+	}
 	mGraphicsManager->UpdateProjectionTransition(deltaTime);
 	const float ActivePerspectiveRatio = ActiveViewportClient->GetPerspectiveRatio(mGraphicsManager->GetPerspectiveRatio());
 	ActiveViewportClient->Update(deltaTime, mSceneManager, ActivePerspectiveRatio, RenderCollector);

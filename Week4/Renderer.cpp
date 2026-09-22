@@ -1,4 +1,4 @@
-﻿#include "Renderer.h"
+#include "Renderer.h"
 
 constexpr uint32 MaxLineInstances = 1024;
 
@@ -167,10 +167,25 @@ void URenderer::CreateDeviceAndSwapChain(HWND hWindow)
 	CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-	D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE,
+	HRESULT hr = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE,
 		nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT | CreateDeviceFlags,
 		FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION,
 		&SwapChainDesc, &SwapChain, &Device, nullptr, &DeviceContext);
+
+	if (FAILED(hr) && (CreateDeviceFlags & D3D11_CREATE_DEVICE_DEBUG))
+	{
+		CreateDeviceFlags &= ~D3D11_CREATE_DEVICE_DEBUG;
+		hr = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE,
+			nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT | CreateDeviceFlags,
+			FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION,
+			&SwapChainDesc, &SwapChain, &Device, nullptr, &DeviceContext);
+	}
+
+	if (FAILED(hr) || !SwapChain)
+	{
+		assert(SwapChain != nullptr);
+		return;
+	}
 
 	SwapChain->GetDesc(&SwapChainDesc);
 	Width = SwapChainDesc.BufferDesc.Width;
@@ -230,17 +245,71 @@ void URenderer::CreateFrameBuffer()
 
 void URenderer::ReleaseFrameBuffer()
 {
-	if (FrameBuffer)
-	{
-		FrameBuffer->Release();
-		FrameBuffer = nullptr;
-	}
-
 	if (FrameBufferRTV)
 	{
 		FrameBufferRTV->Release();
 		FrameBufferRTV = nullptr;
 	}
+
+	if (FrameBuffer)
+	{
+		FrameBuffer->Release();
+		FrameBuffer = nullptr;
+	}
+}
+
+void URenderer::OnResize(UINT newWidth, UINT newHeight)
+{
+	if (newWidth == 0 || newHeight == 0)
+	{
+		return;
+	}
+
+	if (newWidth == Width && newHeight == Height)
+	{
+		return;
+	}
+
+	if (!SwapChain || !Device || !DeviceContext)
+	{
+		return;
+	}
+
+	// 1. Unbind render target
+	DeviceContext->OMSetRenderTargets(0, nullptr, nullptr);
+
+	// 2. Release swap chain backbuffer reference and RTV
+	ReleaseFrameBuffer();
+
+	// 3. Release depth stencil buffer & view
+	if (DepthStencilView)
+	{
+		DepthStencilView->Release();
+		DepthStencilView = nullptr;
+	}
+	if (DepthStencilBuffer)
+	{
+		DepthStencilBuffer->Release();
+		DepthStencilBuffer = nullptr;
+	}
+
+	// 4. Resize swap chain buffers
+	HRESULT hr = SwapChain->ResizeBuffers(0, newWidth, newHeight, DXGI_FORMAT_UNKNOWN, 0);
+	if (FAILED(hr))
+	{
+		return;
+	}
+
+	Width = newWidth;
+	Height = newHeight;
+
+	// 5. Recreate FrameBuffer RTV and DepthStencil
+	CreateFrameBuffer();
+	CreateDepthStencilBuffer();
+
+	// 6. Update Viewport and 2D projection matrix
+	ViewportInfo = { 0.0f, 0.0f, static_cast<float>(Width), static_cast<float>(Height), 0.0f, 1.0f };
+	Projection2D = FMatrix::Ortho(0.0f, static_cast<float>(Width), static_cast<float>(Height), 0.0f, 0.0f, 1.0f);
 }
 
 void URenderer::Release()
@@ -754,7 +823,7 @@ void URenderer::CreateDepthStencilBuffer()
 
 	D3D11_DEPTH_STENCIL_VIEW_DESC DsvDesc = {};
 	DsvDesc.Format = DepthTextureDesc.Format;
-	DsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+	DsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 
 	Device->CreateDepthStencilView(DepthStencilBuffer, &DsvDesc, &DepthStencilView);
 }

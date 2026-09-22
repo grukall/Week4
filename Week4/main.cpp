@@ -1,4 +1,4 @@
-﻿#include <windows.h>
+#include <windows.h>
 
 #include "Sphere.h"
 #include "Renderer.h"
@@ -102,18 +102,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_EXITSIZEMOVE:
 		KillTimer(hWnd, RESIZE_TIMER_ID);
+		GEngineLoop.Tick(false);
 		return 0;
 
 	case WM_TIMER:
 		if (wParam == RESIZE_TIMER_ID)
 		{
 			GEngineLoop.Tick(false);
+			return 0;
 		}
+		break;
+
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 
-	return 0;
+	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 void ProcessMessage(bool& bIsExit)

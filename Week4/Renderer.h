@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Core.h"
 #include <d3d11.h>
@@ -452,6 +452,7 @@ public:
 	void RenderWorldGrid(const FMatrix& ViewProjection, const FVector& CameraLocation, float GridGap) const;
 
 	void SwapBuffer();
+	void OnResize(UINT newWidth, UINT newHeight);
 
 	FORCEINLINE uint32 GetWidth() const { return Width; }
 	FORCEINLINE uint32 GetHeight() const { return Height; }

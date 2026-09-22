@@ -321,6 +321,9 @@ void FGraphicsManager::OnResize(UINT width, UINT height)
 		return;
 	}
 
+	mRenderer->OnResize(width, height);
+	mAspect = static_cast<float>(width) / static_cast<float>(height);
+
 	if (mSceneRenderTarget)
 	{
 		mSceneRenderTarget = mRenderer->CreateRenderTarget2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM);
