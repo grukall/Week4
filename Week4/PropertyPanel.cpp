@@ -525,14 +525,11 @@ namespace
 			if (CurrentMaterial &&
 				CurrentMaterial != UMaterial::DefaultMaterial)
 			{
-				std::filesystem::path MaterialPath = std::filesystem::path("Assets/Baked/Materials") / std::filesystem::path(CurrentMaterial->GetAssetName().ToString().Append(".uasset").c_str());
-				ImTextureID MaterialThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(MaterialPath);
+				ImTextureID MaterialThumbnail = FThumbnailManager::Get().GetUAssetThumbnail(CurrentMaterial->GetAssetName().ToString().c_str());
 
 				if (MaterialThumbnail)
 				{
-					ImGui::Image(
-						MaterialThumbnail,
-						ImVec2(64.0f, 64.0f));
+					ImGui::Image(MaterialThumbnail, ImVec2(64.0f, 64.0f));
 
 					ImGui::SameLine();
 				}
