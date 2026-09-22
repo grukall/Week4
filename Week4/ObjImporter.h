@@ -38,7 +38,6 @@ struct FObjImporter
 	};
 
 	bool LoadObjModel(FString& FileContent, FStaticMesh& Mesh, TArray<FString>& MaterialFiles);
-	bool ParseMtlFile(FString& FileContent, TArray<FMaterialData>& Materials);
 private:
 	void BuildMeshData(const FObjData& RawData, FStaticMesh& Mesh);
 	bool ParseObjFile(FString& FileContent, FObjData& Data);
