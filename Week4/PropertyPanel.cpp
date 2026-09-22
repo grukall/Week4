@@ -339,7 +339,7 @@ namespace
 
 			break;
 		}
-		case EPropertyType::Array:
+/*		case EPropertyType::Array:
 		{
 			if (Property.ElementType != EPropertyType::Asset ||
 				Property.ElementClassInfo == nullptr)
@@ -420,7 +420,7 @@ namespace
 			}
 
 			break;
-		}
+		}*/
 		default:
 			ImGui::TextDisabled("(Unsupported)");
 			break;

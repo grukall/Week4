@@ -68,10 +68,7 @@ static constexpr uint32_t DDS_FOURCC_DX10 = 0x30315844;
 
 static uint32_t MakeRGBA(uint8_t R, uint8_t G, uint8_t B, uint8_t A = 255)
 {
-	return static_cast<uint32_t>(R)
-		| (static_cast<uint32_t>(G) << 8)
-		| (static_cast<uint32_t>(B) << 16)
-		| (static_cast<uint32_t>(A) << 24);
+	return static_cast<uint32_t>(R) | (static_cast<uint32_t>(G) << 8) | (static_cast<uint32_t>(B) << 16) | (static_cast<uint32_t>(A) << 24);
 }
 
 void FThumbnailManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, FAssetManager* assetManager, FGraphicsManager* graphicsManager)
@@ -97,8 +94,7 @@ void FThumbnailManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
 		return;
 	}
 
-	FAssetManager::Get().ForEachMetaInfo(
-		[&](FAssetMetaInfo& MetaInfo)
+	FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
 		{
 			if (mMaterialPreviewSphere)
 			{
@@ -152,19 +148,12 @@ ImTextureID FThumbnailManager::GetThumbnail(const std::filesystem::path& Path, b
 
 	std::string Ext = Path.extension().string();
 
-	std::transform(
-		Ext.begin(),
-		Ext.end(),
-		Ext.begin(),
-		[](unsigned char C)
+	std::transform(Ext.begin(), Ext.end(), Ext.begin(), [](unsigned char C)
 		{
 			return static_cast<char>(std::tolower(C));
 		});
 
-	if (Ext == ".png" ||
-		Ext == ".jpg" ||
-		Ext == ".jpeg" ||
-		Ext == ".bmp")
+	if (Ext == ".png" || Ext == ".jpg" || Ext == ".jpeg" || Ext == ".bmp")
 	{
 		const std::string Key = Path.lexically_normal().string();
 
@@ -246,8 +235,7 @@ ImTextureID FThumbnailManager::GetUAssetThumbnail(const std::filesystem::path& P
 
 	if (!Asset)
 	{
-		FAssetManager::Get().ForEachMetaInfo(
-			[&](FAssetMetaInfo& MetaInfo)
+		FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
 			{
 				if (Asset)
 				{
@@ -329,10 +317,12 @@ ImTextureID FThumbnailManager::GetAssetThumbnail(UAsset* Asset)
 	}
 
 	const FGuid& AssetGuid = Asset->GetAssetGuid();
+
 	if (AssetGuid.IsValid())
 	{
 		const std::string Key = std::string(AssetGuid.ToString().CStr());
 		auto It = mThumbnailCache.find(Key);
+
 		if (It != mThumbnailCache.end())
 		{
 			return reinterpret_cast<ImTextureID>(It->second.Get());
@@ -340,6 +330,7 @@ ImTextureID FThumbnailManager::GetAssetThumbnail(UAsset* Asset)
 	}
 
 	std::filesystem::path AssetPath;
+
 	if (!FAssetRegistry::Get().FindPath(Asset->GetAssetGuid(), AssetPath))
 	{
 		// 디스크에 없는 런타임 전용 에셋(DefaultMaterial 등)은 굽힌 파일이 없다.
@@ -356,9 +347,7 @@ ImTextureID FThumbnailManager::GetStaticMeshThumbnail(const std::filesystem::pat
 		return GetFileThumbnail();
 	}
 
-	const std::string Key = !Path.empty()
-		? MakeThumbnailKey(Path)
-		: "StaticMeshPtr_" + std::to_string(reinterpret_cast<uintptr_t>(Mesh));
+	const std::string Key = !Path.empty() ? MakeThumbnailKey(Path) : "StaticMeshPtr_" + std::to_string(reinterpret_cast<uintptr_t>(Mesh));
 
 	auto It = mThumbnailCache.find(Key);
 
@@ -369,28 +358,21 @@ ImTextureID FThumbnailManager::GetStaticMeshThumbnail(const std::filesystem::pat
 
 	if (!Path.empty())
 	{
-		const std::filesystem::path DDSPath =
-			GetThumbnailCachePath(Path);
+		const std::filesystem::path DDSPath = GetThumbnailCachePath(Path);
 
 		if (std::filesystem::exists(DDSPath))
 		{
-			ID3D11ShaderResourceView* SRV =
-				LoadThumbnailDDS(DDSPath);
+			ID3D11ShaderResourceView* SRV = LoadThumbnailDDS(DDSPath);
 
 			if (SRV)
 			{
 				mThumbnailCache[Key].Attach(SRV);
-
-				return reinterpret_cast<ImTextureID>(
-					mThumbnailCache[Key].Get());
+				return reinterpret_cast<ImTextureID>(mThumbnailCache[Key].Get());
 			}
 		}
 	}
 
-	ID3D11ShaderResourceView* SRV =
-		LoadStaticMeshThumbnail(
-			Path,
-			Mesh);
+	ID3D11ShaderResourceView* SRV = LoadStaticMeshThumbnail(Path, Mesh);
 
 	if (!SRV)
 	{
@@ -399,8 +381,7 @@ ImTextureID FThumbnailManager::GetStaticMeshThumbnail(const std::filesystem::pat
 
 	mThumbnailCache[Key].Attach(SRV);
 
-	return reinterpret_cast<ImTextureID>(
-		mThumbnailCache[Key].Get());
+	return reinterpret_cast<ImTextureID>(mThumbnailCache[Key].Get());
 }
 
 ImTextureID FThumbnailManager::GetMaterialThumbnail(const std::filesystem::path& Path, UMaterial* Material)
@@ -410,38 +391,30 @@ ImTextureID FThumbnailManager::GetMaterialThumbnail(const std::filesystem::path&
 		return GetFileThumbnail();
 	}
 
-	const std::string Key =
-		Path.lexically_normal().string();
+	const std::string Key = Path.lexically_normal().string();
 
 	auto It = mThumbnailCache.find(Key);
 
 	if (It != mThumbnailCache.end())
 	{
-		return reinterpret_cast<ImTextureID>(
-			It->second.Get());
+		return reinterpret_cast<ImTextureID>(It->second.Get());
 	}
 
-	const std::filesystem::path DDSPath =
-		GetThumbnailCachePath(Path);
+	const std::filesystem::path DDSPath = GetThumbnailCachePath(Path);
 
 	if (std::filesystem::exists(DDSPath))
 	{
-		ID3D11ShaderResourceView* SRV =
-			LoadThumbnailDDS(DDSPath);
+		ID3D11ShaderResourceView* SRV = LoadThumbnailDDS(DDSPath);
 
 		if (SRV)
 		{
 			mThumbnailCache[Key].Attach(SRV);
 
-			return reinterpret_cast<ImTextureID>(
-				mThumbnailCache[Key].Get());
+			return reinterpret_cast<ImTextureID>(mThumbnailCache[Key].Get());
 		}
 	}
 
-	ID3D11ShaderResourceView* SRV =
-		LoadMaterialThumbnail(
-			Path,
-			Material);
+	ID3D11ShaderResourceView* SRV = LoadMaterialThumbnail(Path, Material);
 
 	if (!SRV)
 	{
@@ -450,8 +423,7 @@ ImTextureID FThumbnailManager::GetMaterialThumbnail(const std::filesystem::path&
 
 	mThumbnailCache[Key].Attach(SRV);
 
-	return reinterpret_cast<ImTextureID>(
-		mThumbnailCache[Key].Get());
+	return reinterpret_cast<ImTextureID>(mThumbnailCache[Key].Get());
 }
 
 ID3D11ShaderResourceView* FThumbnailManager::LoadMaterialThumbnail(const std::filesystem::path& Path, UMaterial* Material)
@@ -466,37 +438,26 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadMaterialThumbnail(const std::fi
 		return nullptr;
 	}
 
-	return LoadStaticMeshThumbnail(
-		Path,
-		mMaterialPreviewSphere,
-		Material);
+	return LoadStaticMeshThumbnail(Path, mMaterialPreviewSphere, Material);
 }
 
 ID3D11ShaderResourceView* FThumbnailManager::LoadStaticMeshThumbnail(const std::filesystem::path& Path, UStaticMesh* Mesh, UMaterial* OverrideMaterial)
 {
 	constexpr UINT ThumbnailSize = 128;
 
-	if (!mGraphicsManager ||
-		!mDevice ||
-		!mContext ||
-		!mThumbRT.Texture ||
-		!mThumbRT.RTV ||
-		!mThumbRT.DSV ||
-		!Mesh)
+	if (!mGraphicsManager || !mDevice || !mContext || !mThumbRT.Texture || !mThumbRT.RTV || !mThumbRT.DSV || !Mesh)
 	{
 		return nullptr;
 	}
 
-	const TArray<FStaticMeshSection>& Sections =
-		Mesh->GetSections();
+	const TArray<FStaticMeshSection>& Sections = Mesh->GetSections();
 
 	if (Sections.IsEmpty())
 	{
 		return nullptr;
 	}
 
-	if (!Mesh->GetIndexBuffer() ||
-		Mesh->GetIndexCount() == 0)
+	if (!Mesh->GetIndexBuffer() || Mesh->GetIndexCount() == 0)
 	{
 		return nullptr;
 	}
@@ -504,60 +465,35 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadStaticMeshThumbnail(const std::
 	ID3D11RenderTargetView* PreviousRTV = nullptr;
 	ID3D11DepthStencilView* PreviousDSV = nullptr;
 
-	mContext->OMGetRenderTargets(
-		1,
-		&PreviousRTV,
-		&PreviousDSV);
+	mContext->OMGetRenderTargets(1, &PreviousRTV, &PreviousDSV);
 
 	constexpr UINT MaxViewports = 16;
 
 	D3D11_VIEWPORT PreviousViewports[MaxViewports] = {};
 	UINT PreviousViewportCount = MaxViewports;
 
-	mContext->RSGetViewports(
-		&PreviousViewportCount,
-		PreviousViewports);
+	mContext->RSGetViewports(&PreviousViewportCount, PreviousViewports);
 
-	FRenderCollector& RenderCollector =
-		mGraphicsManager->GetRenderCollector();
+	FRenderCollector& RenderCollector = mGraphicsManager->GetRenderCollector();
 
-	TArray<FRenderInfo> SavedRenderInfos =
-		RenderCollector.RenderInfos;
-
-	TArray<FRenderLineInfo> SavedLineInfos =
-		RenderCollector.LineInfos;
-
-	TArray<UPrimitiveComponent*> SavedPickTargets =
-		RenderCollector.PickTargets;
-
-	FCamera* SavedCamera =
-		RenderCollector.Camera;
+	TArray<FRenderInfo> SavedRenderInfos = RenderCollector.RenderInfos;
+	TArray<FRenderLineInfo> SavedLineInfos = RenderCollector.LineInfos;
+	TArray<UPrimitiveComponent*> SavedPickTargets = RenderCollector.PickTargets;
+	FCamera* SavedCamera = RenderCollector.Camera;
 
 	auto RestoreState = [&]()
 		{
-			mContext->OMSetRenderTargets(
-				1,
-				&PreviousRTV,
-				PreviousDSV);
+			mContext->OMSetRenderTargets(1, &PreviousRTV, PreviousDSV);
 
 			if (PreviousViewportCount > 0)
 			{
-				mContext->RSSetViewports(
-					PreviousViewportCount,
-					PreviousViewports);
+				mContext->RSSetViewports(PreviousViewportCount, PreviousViewports);
 			}
 
-			RenderCollector.RenderInfos =
-				SavedRenderInfos;
-
-			RenderCollector.LineInfos =
-				SavedLineInfos;
-
-			RenderCollector.PickTargets =
-				SavedPickTargets;
-
-			RenderCollector.Camera =
-				SavedCamera;
+			RenderCollector.RenderInfos = SavedRenderInfos;
+			RenderCollector.LineInfos = SavedLineInfos;
+			RenderCollector.PickTargets = SavedPickTargets;
+			RenderCollector.Camera = SavedCamera;
 
 			if (PreviousRTV)
 			{
@@ -572,8 +508,7 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadStaticMeshThumbnail(const std::
 			}
 		};
 
-	URenderer* Renderer =
-		mGraphicsManager->GetRenderer();
+	URenderer* Renderer = mGraphicsManager->GetRenderer();
 
 	if (!Renderer)
 	{
@@ -581,233 +516,118 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadStaticMeshThumbnail(const std::
 		return nullptr;
 	}
 
-	FEditorViewportClient ThumbnailViewport(
-		*Renderer);
+	FEditorViewportClient ThumbnailViewport(*Renderer);
 
-	ThumbnailViewport.mWidth =
-		ThumbnailSize;
+	ThumbnailViewport.mWidth = ThumbnailSize;
+	ThumbnailViewport.mHeight = ThumbnailSize;
+	ThumbnailViewport.mCamera.mFovDegree = 45.0f;
 
-	ThumbnailViewport.mHeight =
-		ThumbnailSize;
+	const FAABB LocalBounds = Mesh->GetLocalBoundingBox();
 
-	ThumbnailViewport.mCamera.mFovDegree =
-		45.0f;
+	FVector LocalMin = LocalBounds.Min;
+	FVector LocalMax = LocalBounds.Max;
+	FVector Center = (LocalMin + LocalMax) * 0.5f;
+	FVector Extent = (LocalMax - LocalMin) * 0.5f;
 
-	const FAABB LocalBounds =
-		Mesh->GetLocalBoundingBox();
+	float Radius = std::sqrt(Extent.x * Extent.x + Extent.y * Extent.y + Extent.z * Extent.z);
 
-	FVector LocalMin =
-		LocalBounds.Min;
-
-	FVector LocalMax =
-		LocalBounds.Max;
-
-	FVector Center =
-		(LocalMin + LocalMax) * 0.5f;
-
-	FVector Extent =
-		(LocalMax - LocalMin) * 0.5f;
-
-	float Radius =
-		std::sqrt(
-			Extent.x * Extent.x +
-			Extent.y * Extent.y +
-			Extent.z * Extent.z);
-
-	if (Radius < 0.001f ||
-		std::isnan(Radius))
+	if (Radius < 0.001f || std::isnan(Radius))
 	{
 		Radius = 1.0f;
-		Center =
-			FVector(
-				0.0f,
-				0.0f,
-				0.0f);
+		Center = FVector(0.0f, 0.0f, 0.0f);
 	}
 
-	const float CameraDistance =
-		Radius * 3.0f;
+	const float CameraDistance = Radius * 3.0f;
 
-	ThumbnailViewport.mCamera.Transform.Rotation =
-		FRotator(
-			-20.0f,
-			45.0f,
-			0.0f);
+	ThumbnailViewport.mCamera.Transform.Rotation = FRotator(-20.0f, 45.0f, 0.0f);
 
-	FVector Forward =
-		ThumbnailViewport.mCamera.GetForwardVector();
+	FVector Forward = ThumbnailViewport.mCamera.GetForwardVector();
 
-	ThumbnailViewport.mCamera.Transform.Location =
-		FVector(
-			1000.0f,
-			1000.0f,
-			1000.0f)
-		-
-		Forward * CameraDistance;
+	ThumbnailViewport.mCamera.Transform.Location = FVector(1000.0f, 1000.0f, 1000.0f) - Forward * CameraDistance;
 
 	FTransform MeshTransform;
 
-	MeshTransform.Location =
-		FVector(
-			1000.0f - Center.x,
-			1000.0f - Center.y,
-			1000.0f - Center.z);
+	MeshTransform.Location = FVector(1000.0f - Center.x, 1000.0f - Center.y, 1000.0f - Center.z);
 
-	MeshTransform.Rotation =
-		FRotator(
-			0.0f,
-			0.0f,
-			0.0f);
+	MeshTransform.Rotation = FRotator(0.0f, 0.0f, 0.0f);
 
-	MeshTransform.Scale =
-		FVector(
-			1.0f,
-			1.0f,
-			1.0f);
+	MeshTransform.Scale = FVector(1.0f, 1.0f, 1.0f);
 
-	const FMatrix WorldMatrix =
-		MeshTransform.MakeMatrix();
+	const FMatrix WorldMatrix = MeshTransform.MakeMatrix();
 
 	RenderCollector.RenderInfos.Empty();
 	RenderCollector.LineInfos.Empty();
 	RenderCollector.PickTargets.Empty();
 
-	RenderCollector.Camera =
-		&ThumbnailViewport.mCamera;
+	RenderCollector.Camera = &ThumbnailViewport.mCamera;
 
-	for (uint32 SectionIndex = 0;
-		SectionIndex < Sections.Num();
-		++SectionIndex)
+	for (uint32 SectionIndex = 0; SectionIndex < Sections.Num(); ++SectionIndex)
 	{
-		const FStaticMeshSection& Section =
-			Sections[SectionIndex];
+		const FStaticMeshSection& Section = Sections[SectionIndex];
 
-		UMaterial* Material =
-			OverrideMaterial;
+		UMaterial* Material = OverrideMaterial;
 
 		if (!Material)
 		{
-			Material =
-				Mesh->GetMaterial(
-					Section.MaterialSlotIndex);
+			Material = Mesh->GetMaterial(Section.MaterialSlotIndex);
 		}
 
 		if (!Material)
 		{
-			Material =
-				UMaterial::DefaultMaterial;
+			Material = UMaterial::DefaultMaterial;
 		}
 
 		FRenderInfo RenderInfo{};
 
-		RenderInfo.StaticMesh =
-			Mesh;
+		RenderInfo.StaticMesh = Mesh;
+		RenderInfo.Material = Material;
+		RenderInfo.WorldTransformMatrix = WorldMatrix;
+		RenderInfo.ObejctID = FObjectID{ 0, 0 };
+		RenderInfo.SectionIndex = SectionIndex;
 
-		RenderInfo.Material =
-			Material;
-
-		RenderInfo.WorldTransformMatrix =
-			WorldMatrix;
-
-		RenderInfo.ObejctID =
-			FObjectID{
-			0,
-			0 };
-
-		RenderInfo.SectionIndex =
-			SectionIndex;
-
-		RenderCollector.RenderInfos.Add(
-			RenderInfo);
+		RenderCollector.RenderInfos.Add(RenderInfo);
 	}
 
-	mContext->OMSetRenderTargets(
-		1,
-		&mThumbRT.RTV,
-		mThumbRT.DSV);
+	mContext->OMSetRenderTargets(1, &mThumbRT.RTV, mThumbRT.DSV);
 
 	D3D11_VIEWPORT ThumbnailViewportDesc = {};
 
-	ThumbnailViewportDesc.TopLeftX =
-		0.0f;
+	ThumbnailViewportDesc.TopLeftX = 0.0f;
+	ThumbnailViewportDesc.TopLeftY = 0.0f;
+	ThumbnailViewportDesc.Width = static_cast<float>(ThumbnailSize);
+	ThumbnailViewportDesc.Height = static_cast<float>(ThumbnailSize);
+	ThumbnailViewportDesc.MinDepth = 0.0f;
+	ThumbnailViewportDesc.MaxDepth = 1.0f;
 
-	ThumbnailViewportDesc.TopLeftY =
-		0.0f;
+	mContext->RSSetViewports(1, &ThumbnailViewportDesc);
 
-	ThumbnailViewportDesc.Width =
-		static_cast<float>(
-			ThumbnailSize);
+	const float ClearColor[4] = { 0.15f, 0.15f, 0.15f, 1.0f };
 
-	ThumbnailViewportDesc.Height =
-		static_cast<float>(
-			ThumbnailSize);
+	mContext->ClearRenderTargetView(mThumbRT.RTV, ClearColor);
 
-	ThumbnailViewportDesc.MinDepth =
-		0.0f;
+	mContext->ClearDepthStencilView(mThumbRT.DSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-	ThumbnailViewportDesc.MaxDepth =
-		1.0f;
-
-	mContext->RSSetViewports(
-		1,
-		&ThumbnailViewportDesc);
-
-	const float ClearColor[4] =
-	{
-	0.15f,
-	0.15f,
-	0.15f,
-	1.0f
-	};
-
-	mContext->ClearRenderTargetView(
-		mThumbRT.RTV,
-		ClearColor);
-
-	mContext->ClearDepthStencilView(
-		mThumbRT.DSV,
-		D3D11_CLEAR_DEPTH |
-		D3D11_CLEAR_STENCIL,
-		1.0f,
-		0);
-
-	mGraphicsManager->Prepare(
-		&ThumbnailViewport.mCamera,
-		static_cast<float>(ThumbnailSize),
-		static_cast<float>(ThumbnailSize));
+	mGraphicsManager->Prepare(&ThumbnailViewport.mCamera, static_cast<float>(ThumbnailSize), static_cast<float>(ThumbnailSize));
 
 	RenderCollector.LineInfos.Empty();
 
-	mContext->IASetPrimitiveTopology(
-		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	bool bSavedGridFlag =
-		FShowFlags::Get().IsEnabled(
-			EShowFlag::Grid);
+	bool bSavedGridFlag = FShowFlags::Get().IsEnabled(EShowFlag::Grid);
 
-	FShowFlags::Get().SetEnabled(
-		EShowFlag::Grid,
-		false);
+	FShowFlags::Get().SetEnabled(EShowFlag::Grid, false);
 
 	mGraphicsManager->Render();
 
-	FShowFlags::Get().SetEnabled(
-		EShowFlag::Grid,
-		bSavedGridFlag);
+	FShowFlags::Get().SetEnabled(EShowFlag::Grid, bSavedGridFlag);
 
 	D3D11_TEXTURE2D_DESC TextureDesc = {};
 
-	mThumbRT.Texture->GetDesc(
-		&TextureDesc);
+	mThumbRT.Texture->GetDesc(&TextureDesc);
 
-	Microsoft::WRL::ComPtr<ID3D11Texture2D>
-		ThumbnailTexture;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> ThumbnailTexture;
 
-	HRESULT HR =
-		mDevice->CreateTexture2D(
-			&TextureDesc,
-			nullptr,
-			ThumbnailTexture.GetAddressOf());
+	HRESULT HR = mDevice->CreateTexture2D(&TextureDesc, nullptr, ThumbnailTexture.GetAddressOf());
 
 	if (FAILED(HR))
 	{
@@ -815,42 +635,25 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadStaticMeshThumbnail(const std::
 		return nullptr;
 	}
 
-	mContext->CopyResource(
-		ThumbnailTexture.Get(),
-		mThumbRT.Texture);
+	mContext->CopyResource(ThumbnailTexture.Get(), mThumbRT.Texture);
 
 	if (!Path.empty())
 	{
-		const std::filesystem::path DDSPath =
-			GetThumbnailCachePath(Path);
+		const std::filesystem::path DDSPath = GetThumbnailCachePath(Path);
 
-		SaveThumbnailDDS(
-			DDSPath,
-			mThumbRT.Texture);
+		SaveThumbnailDDS(DDSPath, mThumbRT.Texture);
 	}
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 
-	SRVDesc.Format =
-		TextureDesc.Format;
+	SRVDesc.Format = TextureDesc.Format;
+	SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	SRVDesc.Texture2D.MostDetailedMip = 0;
+	SRVDesc.Texture2D.MipLevels = TextureDesc.MipLevels;
 
-	SRVDesc.ViewDimension =
-		D3D11_SRV_DIMENSION_TEXTURE2D;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> ThumbnailSRV;
 
-	SRVDesc.Texture2D.MostDetailedMip =
-		0;
-
-	SRVDesc.Texture2D.MipLevels =
-		TextureDesc.MipLevels;
-
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
-		ThumbnailSRV;
-
-	HR =
-		mDevice->CreateShaderResourceView(
-			ThumbnailTexture.Get(),
-			&SRVDesc,
-			ThumbnailSRV.GetAddressOf());
+	HR = mDevice->CreateShaderResourceView(ThumbnailTexture.Get(), &SRVDesc, ThumbnailSRV.GetAddressOf());
 
 	if (FAILED(HR))
 	{
@@ -874,13 +677,7 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadTextureThumbnail(const std::fil
 	int Height = 0;
 	int Channels = 0;
 
-	unsigned char* Data =
-		stbi_load(
-			Path.string().c_str(),
-			&Width,
-			&Height,
-			&Channels,
-			4);
+	unsigned char* Data = stbi_load(Path.string().c_str(), &Width, &Height, &Channels, 4);
 
 	if (!Data)
 	{
@@ -889,49 +686,24 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadTextureThumbnail(const std::fil
 
 	D3D11_TEXTURE2D_DESC Desc = {};
 
-	Desc.Width =
-		static_cast<UINT>(Width);
-
-	Desc.Height =
-		static_cast<UINT>(Height);
-
-	Desc.MipLevels =
-		1;
-
-	Desc.ArraySize =
-		1;
-
-	Desc.Format =
-		DXGI_FORMAT_R8G8B8A8_UNORM;
-
-	Desc.SampleDesc.Count =
-		1;
-
-	Desc.SampleDesc.Quality =
-		0;
-
-	Desc.Usage =
-		D3D11_USAGE_DEFAULT;
-
-	Desc.BindFlags =
-		D3D11_BIND_SHADER_RESOURCE;
+	Desc.Width = static_cast<UINT>(Width);
+	Desc.Height = static_cast<UINT>(Height);
+	Desc.MipLevels = 1;
+	Desc.ArraySize = 1;
+	Desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	Desc.SampleDesc.Count = 1;
+	Desc.SampleDesc.Quality = 0;
+	Desc.Usage = D3D11_USAGE_DEFAULT;
+	Desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
 	D3D11_SUBRESOURCE_DATA InitData = {};
 
-	InitData.pSysMem =
-		Data;
+	InitData.pSysMem = Data;
+	InitData.SysMemPitch = static_cast<UINT>(Width * 4);
 
-	InitData.SysMemPitch =
-		static_cast<UINT>(Width * 4);
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
 
-	Microsoft::WRL::ComPtr<ID3D11Texture2D>
-		Texture;
-
-	HRESULT HR =
-		mDevice->CreateTexture2D(
-			&Desc,
-			&InitData,
-			Texture.GetAddressOf());
+	HRESULT HR = mDevice->CreateTexture2D(&Desc, &InitData, Texture.GetAddressOf());
 
 	stbi_image_free(Data);
 
@@ -940,14 +712,9 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadTextureThumbnail(const std::fil
 		return nullptr;
 	}
 
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
-		SRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;
 
-	HR =
-		mDevice->CreateShaderResourceView(
-			Texture.Get(),
-			nullptr,
-			SRV.GetAddressOf());
+	HR = mDevice->CreateShaderResourceView(Texture.Get(), nullptr, SRV.GetAddressOf());
 
 	if (FAILED(HR))
 	{
@@ -964,71 +731,40 @@ ID3D11ShaderResourceView* FThumbnailManager::CreateIconTexture(const std::vector
 		return nullptr;
 	}
 
-	if (Pixels.size() !=
-		static_cast<size_t>(Width) * Height)
+	if (Pixels.size() != static_cast<size_t>(Width) * Height)
 	{
 		return nullptr;
 	}
 
 	D3D11_TEXTURE2D_DESC TextureDesc = {};
 
-	TextureDesc.Width =
-		Width;
-
-	TextureDesc.Height =
-		Height;
-
-	TextureDesc.MipLevels =
-		1;
-
-	TextureDesc.ArraySize =
-		1;
-
-	TextureDesc.Format =
-		DXGI_FORMAT_R8G8B8A8_UNORM;
-
-	TextureDesc.SampleDesc.Count =
-		1;
-
-	TextureDesc.SampleDesc.Quality =
-		0;
-
-	TextureDesc.Usage =
-		D3D11_USAGE_DEFAULT;
-
-	TextureDesc.BindFlags =
-		D3D11_BIND_SHADER_RESOURCE;
+	TextureDesc.Width = Width;
+	TextureDesc.Height = Height;
+	TextureDesc.MipLevels = 1;
+	TextureDesc.ArraySize = 1;
+	TextureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	TextureDesc.SampleDesc.Count = 1;
+	TextureDesc.SampleDesc.Quality = 0;
+	TextureDesc.Usage = D3D11_USAGE_DEFAULT;
+	TextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
 	D3D11_SUBRESOURCE_DATA InitialData = {};
 
-	InitialData.pSysMem =
-		Pixels.data();
+	InitialData.pSysMem = Pixels.data();
+	InitialData.SysMemPitch = Width * sizeof(uint32_t);
 
-	InitialData.SysMemPitch =
-		Width * sizeof(uint32_t);
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
 
-	Microsoft::WRL::ComPtr<ID3D11Texture2D>
-		Texture;
-
-	HRESULT HR =
-		mDevice->CreateTexture2D(
-			&TextureDesc,
-			&InitialData,
-			Texture.GetAddressOf());
+	HRESULT HR = mDevice->CreateTexture2D(&TextureDesc, &InitialData, Texture.GetAddressOf());
 
 	if (FAILED(HR))
 	{
 		return nullptr;
 	}
 
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
-		SRV;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;
 
-	HR =
-		mDevice->CreateShaderResourceView(
-			Texture.Get(),
-			nullptr,
-			SRV.GetAddressOf());
+	HR = mDevice->CreateShaderResourceView(Texture.Get(), nullptr, SRV.GetAddressOf());
 
 	if (FAILED(HR))
 	{
@@ -1042,503 +778,265 @@ ImTextureID FThumbnailManager::GetDirectoryThumbnail()
 {
 	if (mDirectoryThumbnail)
 	{
-		return reinterpret_cast<ImTextureID>(
-			mDirectoryThumbnail.Get());
+		return reinterpret_cast<ImTextureID>(mDirectoryThumbnail.Get());
 	}
 
-	constexpr UINT Width =
-		128;
+	constexpr UINT Width = 128;
+	constexpr UINT Height = 128;
 
-	constexpr UINT Height =
-		128;
+	std::vector<uint32_t> Pixels(Width * Height, MakeRGBA(64, 64, 64));
 
-	std::vector<uint32_t> Pixels(
-		Width * Height,
-		MakeRGBA(
-			64,
-			64,
-			64));
-
-	auto SetPixel =
-		[&](UINT X, UINT Y, uint32_t Color)
+	auto SetPixel = [&](UINT X, UINT Y, uint32_t Color)
 		{
-			if (X < Width &&
-				Y < Height)
+			if (X < Width && Y < Height)
 			{
-				Pixels[Y * Width + X] =
-					Color;
+				Pixels[Y * Width + X] = Color;
 			}
 		};
 
-	for (UINT Y = 32;
-		Y < 96;
-		++Y)
+	for (UINT Y = 32; Y < 96; ++Y)
 	{
-		for (UINT X = 20;
-			X < 108;
-			++X)
+		for (UINT X = 20; X < 108; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					25,
-					25,
-					25));
+			SetPixel(X, Y, MakeRGBA(25, 25, 25));
 		}
 	}
 
-	for (UINT Y = 40;
-		Y < 92;
-		++Y)
+	for (UINT Y = 40; Y < 92; ++Y)
 	{
-		for (UINT X = 24;
-			X < 104;
-			++X)
+		for (UINT X = 24; X < 104; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					61,
-					139,
-					255));
+			SetPixel(X, Y, MakeRGBA(61, 139, 255));
 		}
 	}
 
-	for (UINT Y = 32;
-		Y < 44;
-		++Y)
+	for (UINT Y = 32; Y < 44; ++Y)
 	{
-		for (UINT X = 28;
-			X < 68;
-			++X)
+		for (UINT X = 28; X < 68; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					105,
-					167,
-					255));
+			SetPixel(X, Y, MakeRGBA(105, 167, 255));
 		}
 	}
 
-	ID3D11ShaderResourceView* SRV =
-		CreateIconTexture(
-			Pixels,
-			Width,
-			Height);
+	ID3D11ShaderResourceView* SRV = CreateIconTexture(Pixels, Width, Height);
 
 	if (!SRV)
 	{
 		return ImTextureID{};
 	}
 
-	mDirectoryThumbnail.Attach(
-		SRV);
+	mDirectoryThumbnail.Attach(SRV);
 
-	return reinterpret_cast<ImTextureID>(
-		mDirectoryThumbnail.Get());
+	return reinterpret_cast<ImTextureID>(mDirectoryThumbnail.Get());
 }
 
 ImTextureID FThumbnailManager::GetFontThumbnail()
 {
 	if (mFontIconSRV)
 	{
-		return reinterpret_cast<ImTextureID>(
-			mFontIconSRV.Get());
+		return reinterpret_cast<ImTextureID>(mFontIconSRV.Get());
 	}
 
-	constexpr UINT Width =
-		128;
+	constexpr UINT Width = 128;
+	constexpr UINT Height = 128;
 
-	constexpr UINT Height =
-		128;
+	std::vector<uint32_t> Pixels(Width * Height, MakeRGBA(55, 55, 55));
 
-	std::vector<uint32_t> Pixels(
-		Width * Height,
-		MakeRGBA(
-			55,
-			55,
-			55));
-
-	auto SetPixel =
-		[&](UINT X, UINT Y, uint32_t Color)
+	auto SetPixel = [&](UINT X, UINT Y, uint32_t Color)
 		{
-			if (X < Width &&
-				Y < Height)
+			if (X < Width && Y < Height)
 			{
-				Pixels[Y * Width + X] =
-					Color;
+				Pixels[Y * Width + X] = Color;
 			}
 		};
 
-	for (UINT Y = 20;
-		Y < 108;
-		++Y)
+	for (UINT Y = 20; Y < 108; ++Y)
 	{
-		for (UINT X = 28;
-			X < 100;
-			++X)
+		for (UINT X = 28; X < 100; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					235,
-					235,
-					235));
+			SetPixel(X, Y, MakeRGBA(235, 235, 235));
 		}
 	}
 
-	for (UINT Y = 20;
-		Y < 38;
-		++Y)
+	for (UINT Y = 20; Y < 38; ++Y)
 	{
-		for (UINT X = 82;
-			X < 100;
-			++X)
+		for (UINT X = 82; X < 100; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					180,
-					180,
-					180));
+			SetPixel(X, Y, MakeRGBA(180, 180, 180));
 		}
 	}
 
-	for (UINT Y = 44;
-		Y < 54;
-		++Y)
+	for (UINT Y = 44; Y < 54; ++Y)
 	{
-		for (UINT X = 42;
-			X < 86;
-			++X)
+		for (UINT X = 42; X < 86; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					65,
-					95,
-					170));
+			SetPixel(X, Y, MakeRGBA(65, 95, 170));
 		}
 	}
 
-	for (UINT Y = 50;
-		Y < 90;
-		++Y)
+	for (UINT Y = 50; Y < 90; ++Y)
 	{
-		for (UINT X = 58;
-			X < 70;
-			++X)
+		for (UINT X = 58; X < 70; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					65,
-					95,
-					170));
+			SetPixel(X, Y, MakeRGBA(65, 95, 170));
 		}
 	}
 
-	ID3D11ShaderResourceView* SRV =
-		CreateIconTexture(
-			Pixels,
-			Width,
-			Height);
+	ID3D11ShaderResourceView* SRV = CreateIconTexture(Pixels, Width, Height);
 
 	if (!SRV)
 	{
 		return ImTextureID{};
 	}
 
-	mFontIconSRV.Attach(
-		SRV);
+	mFontIconSRV.Attach(SRV);
 
-	return reinterpret_cast<ImTextureID>(
-		mFontIconSRV.Get());
+	return reinterpret_cast<ImTextureID>(mFontIconSRV.Get());
 }
 
 ImTextureID FThumbnailManager::GetShaderThumbnail()
 {
 	if (mShaderIconSRV)
 	{
-		return reinterpret_cast<ImTextureID>(
-			mShaderIconSRV.Get());
+		return reinterpret_cast<ImTextureID>(mShaderIconSRV.Get());
 	}
 
-	constexpr UINT Width =
-		128;
+	constexpr UINT Width = 128;
+	constexpr UINT Height = 128;
 
-	constexpr UINT Height =
-		128;
+	std::vector<uint32_t> Pixels(Width * Height, MakeRGBA(35, 35, 35));
 
-	std::vector<uint32_t> Pixels(
-		Width * Height,
-		MakeRGBA(
-			35,
-			35,
-			35));
-
-	auto SetPixel =
-		[&](UINT X, UINT Y, uint32_t Color)
+	auto SetPixel = [&](UINT X, UINT Y, uint32_t Color)
 		{
-			if (X < Width &&
-				Y < Height)
+			if (X < Width && Y < Height)
 			{
-				Pixels[Y * Width + X] =
-					Color;
+				Pixels[Y * Width + X] = Color;
 			}
 		};
 
-	const uint32_t Green =
-		MakeRGBA(
-			80,
-			190,
-			110);
+	const uint32_t Green = MakeRGBA(80, 190, 110);
+	const uint32_t White  = MakeRGBA(220, 220, 220);
 
-	const uint32_t White =
-		MakeRGBA(
-			220,
-			220,
-			220);
-
-	for (UINT Y = 35;
-		Y < 41;
-		++Y)
+	for (UINT Y = 35; Y < 41; ++Y)
 	{
-		for (UINT X = 32;
-			X < 88;
-			++X)
+		for (UINT X = 32; X < 88; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				Green);
+			SetPixel(X, Y, Green);
 		}
 	}
 
-	for (UINT Y = 48;
-		Y < 54;
-		++Y)
+	for (UINT Y = 48; Y < 54; ++Y)
 	{
-		for (UINT X = 32;
-			X < 78;
-			++X)
+		for (UINT X = 32; X < 78; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				White);
+			SetPixel(X, Y, White);
 		}
 	}
 
-	for (UINT Y = 61;
-		Y < 67;
-		++Y)
+	for (UINT Y = 61; Y < 67; ++Y)
 	{
-		for (UINT X = 32;
-			X < 92;
-			++X)
+		for (UINT X = 32; X < 92; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				Green);
+			SetPixel(X, Y, Green);
 		}
 	}
 
-	for (UINT Y = 74;
-		Y < 80;
-		++Y)
+	for (UINT Y = 74; Y < 80; ++Y)
 	{
-		for (UINT X = 32;
-			X < 68;
-			++X)
+		for (UINT X = 32; X < 68; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				White);
+			SetPixel(X, Y, White);
 		}
 	}
 
-	for (UINT I = 0;
-		I < 20;
-		++I)
+	for (UINT I = 0; I < 20; ++I)
 	{
-		SetPixel(
-			88 - I,
-			45 + I,
-			Green);
-
-		SetPixel(
-			88 - I,
-			83 - I,
-			Green);
+		SetPixel(88 - I, 45 + I, Green);
+		SetPixel(88 - I, 83 - I, Green);
 	}
 
-	ID3D11ShaderResourceView* SRV =
-		CreateIconTexture(
-			Pixels,
-			Width,
-			Height);
+	ID3D11ShaderResourceView* SRV = CreateIconTexture(Pixels, Width, Height);
 
 	if (!SRV)
 	{
 		return ImTextureID{};
 	}
 
-	mShaderIconSRV.Attach(
-		SRV);
+	mShaderIconSRV.Attach(SRV);
 
-	return reinterpret_cast<ImTextureID>(
-		mShaderIconSRV.Get());
+	return reinterpret_cast<ImTextureID>(mShaderIconSRV.Get());
 }
 
 ImTextureID FThumbnailManager::GetFileThumbnail()
 {
 	if (mFileIconSRV)
 	{
-		return reinterpret_cast<ImTextureID>(
-			mFileIconSRV.Get());
+		return reinterpret_cast<ImTextureID>(mFileIconSRV.Get());
 	}
 
-	constexpr UINT Width =
-		128;
+	constexpr UINT Width = 128;
+	constexpr UINT Height = 128;
 
-	constexpr UINT Height =
-		128;
+	std::vector<uint32_t> Pixels(Width * Height, MakeRGBA(55, 55, 55));
 
-	std::vector<uint32_t> Pixels(
-		Width * Height,
-		MakeRGBA(
-			55,
-			55,
-			55));
-
-	auto SetPixel =
-		[&](UINT X, UINT Y, uint32_t Color)
+	auto SetPixel = [&](UINT X, UINT Y, uint32_t Color)
 		{
-			if (X < Width &&
-				Y < Height)
+			if (X < Width && Y < Height)
 			{
-				Pixels[Y * Width + X] =
-					Color;
+				Pixels[Y * Width + X] = Color;
 			}
 		};
 
-	for (UINT Y = 20;
-		Y < 108;
-		++Y)
+	for (UINT Y = 20; Y < 108; ++Y)
 	{
-		for (UINT X = 28;
-			X < 100;
-			++X)
+		for (UINT X = 28; X < 100; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					225,
-					225,
-					225));
+			SetPixel(X, Y, MakeRGBA(225, 225, 225));
 		}
 	}
 
-	for (UINT Y = 20;
-		Y < 40;
-		++Y)
+	for (UINT Y = 20; Y < 40; ++Y)
 	{
-		for (UINT X = 80;
-			X < 100;
-			++X)
+		for (UINT X = 80; X < 100; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					180,
-					180,
-					180));
+			SetPixel(X, Y, MakeRGBA(180, 180, 180));
 		}
 	}
 
-	for (UINT Y = 48;
-		Y < 54;
-		++Y)
+	for (UINT Y = 48; Y < 54; ++Y)
 	{
-		for (UINT X = 42;
-			X < 86;
-			++X)
+		for (UINT X = 42; X < 86; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					110,
-					110,
-					110));
+			SetPixel(X, Y, MakeRGBA(110, 110, 110));
 		}
 	}
 
-	for (UINT Y = 62;
-		Y < 68;
-		++Y)
+	for (UINT Y = 62; Y < 68; ++Y)
 	{
-		for (UINT X = 42;
-			X < 82;
-			++X)
+		for (UINT X = 42; X < 82; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					110,
-					110,
-					110));
+			SetPixel(X, Y, MakeRGBA(110, 110, 110));
 		}
 	}
 
-	for (UINT Y = 76;
-		Y < 82;
-		++Y)
+	for (UINT Y = 76; Y < 82; ++Y)
 	{
-		for (UINT X = 42;
-			X < 76;
-			++X)
+		for (UINT X = 42; X < 76; ++X)
 		{
-			SetPixel(
-				X,
-				Y,
-				MakeRGBA(
-					110,
-					110,
-					110));
+			SetPixel(X, Y, MakeRGBA(110, 110, 110));
 		}
 	}
 
-	ID3D11ShaderResourceView* SRV =
-		CreateIconTexture(
-			Pixels,
-			Width,
-			Height);
+	ID3D11ShaderResourceView* SRV = CreateIconTexture(Pixels, Width, Height);
 
 	if (!SRV)
 	{
 		return ImTextureID{};
 	}
 
-	mFileIconSRV.Attach(
-		SRV);
+	mFileIconSRV.Attach(SRV);
 
-	return reinterpret_cast<ImTextureID>(
-		mFileIconSRV.Get());
+	return reinterpret_cast<ImTextureID>(mFileIconSRV.Get());
 }
 
 void FThumbnailManager::CreateThumbnailRenderTarget(int width, int height)
@@ -1550,67 +1048,27 @@ void FThumbnailManager::CreateThumbnailRenderTarget(int width, int height)
 
 	D3D11_TEXTURE2D_DESC Desc = {};
 
-	Desc.Width =
-		static_cast<UINT>(width);
+	Desc.Width = static_cast<UINT>(width);
+	Desc.Height = static_cast<UINT>(height);
+	Desc.MipLevels = 1;
+	Desc.ArraySize = 1;
+	Desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	Desc.SampleDesc.Count = 1;
+	Desc.SampleDesc.Quality = 0;
+	Desc.Usage = D3D11_USAGE_DEFAULT;
+	Desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-	Desc.Height =
-		static_cast<UINT>(height);
+	mDevice->CreateTexture2D(&Desc, nullptr, &mThumbRT.Texture);
+	mDevice->CreateRenderTargetView(mThumbRT.Texture, nullptr, &mThumbRT.RTV);
+	mDevice->CreateShaderResourceView(mThumbRT.Texture, nullptr, &mThumbRT.SRV);
 
-	Desc.MipLevels =
-		1;
+	D3D11_TEXTURE2D_DESC DepthDesc = Desc;
 
-	Desc.ArraySize =
-		1;
+	DepthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	DepthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
-	Desc.Format =
-		DXGI_FORMAT_R8G8B8A8_UNORM;
-
-	Desc.SampleDesc.Count =
-		1;
-
-	Desc.SampleDesc.Quality =
-		0;
-
-	Desc.Usage =
-		D3D11_USAGE_DEFAULT;
-
-	Desc.BindFlags =
-		D3D11_BIND_RENDER_TARGET |
-		D3D11_BIND_SHADER_RESOURCE;
-
-	mDevice->CreateTexture2D(
-		&Desc,
-		nullptr,
-		&mThumbRT.Texture);
-
-	mDevice->CreateRenderTargetView(
-		mThumbRT.Texture,
-		nullptr,
-		&mThumbRT.RTV);
-
-	mDevice->CreateShaderResourceView(
-		mThumbRT.Texture,
-		nullptr,
-		&mThumbRT.SRV);
-
-	D3D11_TEXTURE2D_DESC DepthDesc =
-		Desc;
-
-	DepthDesc.Format =
-		DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-	DepthDesc.BindFlags =
-		D3D11_BIND_DEPTH_STENCIL;
-
-	mDevice->CreateTexture2D(
-		&DepthDesc,
-		nullptr,
-		&mThumbRT.DepthStencil);
-
-	mDevice->CreateDepthStencilView(
-		mThumbRT.DepthStencil,
-		nullptr,
-		&mThumbRT.DSV);
+	mDevice->CreateTexture2D(&DepthDesc, nullptr, &mThumbRT.DepthStencil);
+	mDevice->CreateDepthStencilView(mThumbRT.DepthStencil, nullptr, &mThumbRT.DSV);
 }
 
 void FThumbnailManager::ReleaseThumbnailRenderTarget()
@@ -1648,210 +1106,108 @@ void FThumbnailManager::ReleaseThumbnailRenderTarget()
 
 bool FThumbnailManager::SaveThumbnailDDS(const std::filesystem::path& Path, ID3D11Texture2D* SourceTexture)
 {
-	if (!SourceTexture ||
-		!mDevice ||
-		!mContext)
+	if (!SourceTexture || !mDevice || !mContext)
 	{
 		return false;
 	}
 
 	D3D11_TEXTURE2D_DESC SourceDesc = {};
 
-	SourceTexture->GetDesc(
-		&SourceDesc);
+	SourceTexture->GetDesc(&SourceDesc);
 
 	if (SourceDesc.SampleDesc.Count != 1)
 	{
 		return false;
 	}
 
-	if (SourceDesc.Format !=
-		DXGI_FORMAT_R8G8B8A8_UNORM &&
-		SourceDesc.Format !=
-		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
-		SourceDesc.Format !=
-		DXGI_FORMAT_B8G8R8A8_UNORM &&
-		SourceDesc.Format !=
-		DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
+	if (SourceDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM && SourceDesc.Format != 
+		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB && SourceDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM && SourceDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
 	{
 		return false;
 	}
 
 	D3D11_TEXTURE2D_DESC StagingDesc = {};
 
-	StagingDesc.Width =
-		SourceDesc.Width;
+	StagingDesc.Width = SourceDesc.Width;
+	StagingDesc.Height = SourceDesc.Height;
+	StagingDesc.MipLevels = 1;
+	StagingDesc.ArraySize = 1;
+	StagingDesc.Format = SourceDesc.Format;
+	StagingDesc.SampleDesc.Count = 1;
+	StagingDesc.SampleDesc.Quality = 0;
+	StagingDesc.Usage = D3D11_USAGE_STAGING;
+	StagingDesc.BindFlags = 0;
+	StagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+	StagingDesc.MiscFlags = 0;
 
-	StagingDesc.Height =
-		SourceDesc.Height;
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> StagingTexture;
 
-	StagingDesc.MipLevels =
-		1;
-
-	StagingDesc.ArraySize =
-		1;
-
-	StagingDesc.Format =
-		SourceDesc.Format;
-
-	StagingDesc.SampleDesc.Count =
-		1;
-
-	StagingDesc.SampleDesc.Quality =
-		0;
-
-	StagingDesc.Usage =
-		D3D11_USAGE_STAGING;
-
-	StagingDesc.BindFlags =
-		0;
-
-	StagingDesc.CPUAccessFlags =
-		D3D11_CPU_ACCESS_READ;
-
-	StagingDesc.MiscFlags =
-		0;
-
-	Microsoft::WRL::ComPtr<ID3D11Texture2D>
-		StagingTexture;
-
-	HRESULT HR =
-		mDevice->CreateTexture2D(
-			&StagingDesc,
-			nullptr,
-			StagingTexture.GetAddressOf());
+	HRESULT HR = mDevice->CreateTexture2D(&StagingDesc, nullptr, StagingTexture.GetAddressOf());
 
 	if (FAILED(HR))
 	{
 		return false;
 	}
 
-	mContext->CopyResource(
-		StagingTexture.Get(),
-		SourceTexture);
+	mContext->CopyResource(StagingTexture.Get(), SourceTexture);
 
 	D3D11_MAPPED_SUBRESOURCE Mapped = {};
 
-	HR =
-		mContext->Map(
-			StagingTexture.Get(),
-			0,
-			D3D11_MAP_READ,
-			0,
-			&Mapped);
+	HR = mContext->Map(StagingTexture.Get(), 0, D3D11_MAP_READ, 0, &Mapped);
 
 	if (FAILED(HR))
 	{
 		return false;
 	}
 
-	std::filesystem::create_directories(
-		Path.parent_path());
+	std::filesystem::create_directories(Path.parent_path());
 
-	std::ofstream File(
-		Path,
-		std::ios::binary);
+	std::ofstream File(Path, std::ios::binary);
 
 	if (!File.is_open())
 	{
-		mContext->Unmap(
-			StagingTexture.Get(),
-			0);
-
+		mContext->Unmap(StagingTexture.Get(), 0);
 		return false;
 	}
 
 	FDDS_HEADER Header = {};
 
-	Header.Size =
-		124;
-
-	Header.Flags =
-		DDS_HEADER_FLAGS;
-
-	Header.Height =
-		SourceDesc.Height;
-
-	Header.Width =
-		SourceDesc.Width;
-
-	Header.PitchOrLinearSize =
-		SourceDesc.Width * 4;
-
-	Header.Depth =
-		0;
-
-	Header.MipMapCount =
-		1;
-
-	Header.PixelFormat.Size =
-		32;
-
-	Header.PixelFormat.Flags =
-		DDS_PIXELFORMAT_FLAGS_FOURCC;
-
-	Header.PixelFormat.FourCC =
-		DDS_FOURCC_DX10;
-
-	Header.Caps =
-		DDS_CAPS_TEXTURE;
+	Header.Size = 124;
+	Header.Flags = DDS_HEADER_FLAGS;
+	Header.Height = SourceDesc.Height;
+	Header.Width = SourceDesc.Width;
+	Header.PitchOrLinearSize = SourceDesc.Width * 4;
+	Header.Depth = 0;
+	Header.MipMapCount = 1;
+	Header.PixelFormat.Size = 32;
+	Header.PixelFormat.Flags = DDS_PIXELFORMAT_FLAGS_FOURCC;
+	Header.PixelFormat.FourCC = DDS_FOURCC_DX10;
+	Header.Caps = DDS_CAPS_TEXTURE;
 
 	FDDS_HEADER_DXT10 DX10Header = {};
 
-	DX10Header.DXGIFormat =
-		static_cast<uint32_t>(
-			SourceDesc.Format);
+	DX10Header.DXGIFormat = static_cast<uint32_t>(SourceDesc.Format);
+	DX10Header.ResourceDimension = 3;
+	DX10Header.MiscFlag = 0;
+	DX10Header.ArraySize = 1;
+	DX10Header.MiscFlags2 = 0;
 
-	DX10Header.ResourceDimension =
-		3;
+	File.write(reinterpret_cast<const char*>(&DDS_MAGIC), sizeof(DDS_MAGIC));
+	File.write(reinterpret_cast<const char*>(&Header), sizeof(Header));
+	File.write(reinterpret_cast<const char*>(&DX10Header), sizeof(DX10Header));
 
-	DX10Header.MiscFlag =
-		0;
+	const uint32_t RowBytes = SourceDesc.Width * 4;
 
-	DX10Header.ArraySize =
-		1;
-
-	DX10Header.MiscFlags2 =
-		0;
-
-	File.write(
-		reinterpret_cast<const char*>(
-			&DDS_MAGIC),
-		sizeof(DDS_MAGIC));
-
-	File.write(
-		reinterpret_cast<const char*>(
-			&Header),
-		sizeof(Header));
-
-	File.write(
-		reinterpret_cast<const char*>(
-			&DX10Header),
-		sizeof(DX10Header));
-
-	const uint32_t RowBytes =
-		SourceDesc.Width * 4;
-
-	for (uint32_t Y = 0;
-		Y < SourceDesc.Height;
-		++Y)
+	for (uint32_t Y = 0; Y < SourceDesc.Height; ++Y)
 	{
-		const uint8_t* Row =
-			static_cast<const uint8_t*>(
-				Mapped.pData) +
-			Mapped.RowPitch * Y;
+		const uint8_t* Row = static_cast<const uint8_t*>(Mapped.pData) + Mapped.RowPitch * Y;
 
-		File.write(
-			reinterpret_cast<const char*>(
-				Row),
-			RowBytes);
+		File.write(reinterpret_cast<const char*>(Row), RowBytes);
 	}
 
 	File.close();
 
-	mContext->Unmap(
-		StagingTexture.Get(),
-		0);
+	mContext->Unmap(StagingTexture.Get(), 0);
 
 	return true;
 }
@@ -1863,204 +1219,119 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadThumbnailDDS(const std::filesys
 		return nullptr;
 	}
 
-	std::ifstream File(
-		Path,
-		std::ios::binary |
-		std::ios::ate);
+	std::ifstream File(Path, std::ios::binary | std::ios::ate);
 
 	if (!File.is_open())
 	{
 		return nullptr;
 	}
 
-	const std::streamsize FileSize =
-		File.tellg();
+	const std::streamsize FileSize = File.tellg();
 
 	if (FileSize <= 0)
 	{
 		return nullptr;
 	}
 
-	File.seekg(
-		0,
-		std::ios::beg);
+	File.seekg(0, std::ios::beg);
 
-	std::vector<uint8_t> Data(
-		static_cast<size_t>(
-			FileSize));
+	std::vector<uint8_t> Data(static_cast<size_t>(FileSize));
 
-	if (!File.read(
-		reinterpret_cast<char*>(
-			Data.data()),
-		FileSize))
+	if (!File.read(reinterpret_cast<char*>(Data.data()), FileSize))
 	{
 		return nullptr;
 	}
 
-	size_t Offset =
-		0;
+	size_t Offset = 0;
 
-	if (Data.size() <
-		sizeof(uint32_t) +
-		sizeof(FDDS_HEADER) +
-		sizeof(FDDS_HEADER_DXT10))
+	if (Data.size() < sizeof(uint32_t) + sizeof(FDDS_HEADER) + sizeof(FDDS_HEADER_DXT10))
 	{
 		return nullptr;
 	}
 
-	uint32_t Magic =
-		0;
+	uint32_t Magic = 0;
 
-	memcpy(
-		&Magic,
-		Data.data(),
-		sizeof(uint32_t));
+	memcpy(&Magic, Data.data(), sizeof(uint32_t));
 
-	Offset +=
-		sizeof(uint32_t);
+	Offset += sizeof(uint32_t);
 
-	if (Magic !=
-		DDS_MAGIC)
+	if (Magic != DDS_MAGIC)
 	{
 		return nullptr;
 	}
 
 	FDDS_HEADER Header = {};
 
-	memcpy(
-		&Header,
-		Data.data() +
-		Offset,
-		sizeof(FDDS_HEADER));
+	memcpy(&Header, Data.data() + Offset, sizeof(FDDS_HEADER));
 
-	Offset +=
-		sizeof(FDDS_HEADER);
+	Offset += sizeof(FDDS_HEADER);
 
-	if (Header.Size !=
-		124)
+	if (Header.Size != 124)
 	{
 		return nullptr;
 	}
 
-	if (Header.PixelFormat.FourCC !=
-		DDS_FOURCC_DX10)
+	if (Header.PixelFormat.FourCC != DDS_FOURCC_DX10)
 	{
 		return nullptr;
 	}
 
 	FDDS_HEADER_DXT10 DX10Header = {};
 
-	memcpy(
-		&DX10Header,
-		Data.data() +
-		Offset,
-		sizeof(FDDS_HEADER_DXT10));
+	memcpy(&DX10Header, Data.data() + Offset, sizeof(FDDS_HEADER_DXT10));
 
-	Offset +=
-		sizeof(FDDS_HEADER_DXT10);
+	Offset += sizeof(FDDS_HEADER_DXT10);
 
-	if (DX10Header.ResourceDimension !=
-		3 ||
-		DX10Header.ArraySize !=
-		1)
+	if (DX10Header.ResourceDimension != 3 || DX10Header.ArraySize != 1)
 	{
 		return nullptr;
 	}
 
-	const DXGI_FORMAT Format =
-		static_cast<DXGI_FORMAT>(
-			DX10Header.DXGIFormat);
+	const DXGI_FORMAT Format = static_cast<DXGI_FORMAT>(DX10Header.DXGIFormat);
 
-	if (Format !=
-		DXGI_FORMAT_R8G8B8A8_UNORM &&
-		Format !=
-		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
-		Format !=
-		DXGI_FORMAT_B8G8R8A8_UNORM &&
-		Format !=
-		DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
+	if (Format != DXGI_FORMAT_R8G8B8A8_UNORM && Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB && Format != DXGI_FORMAT_B8G8R8A8_UNORM && Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
 	{
 		return nullptr;
 	}
 
-	const uint32_t Width =
-		Header.Width;
+	const uint32_t Width = Header.Width;
+	const uint32_t Height = Header.Height;
 
-	const uint32_t Height =
-		Header.Height;
-
-	if (Width == 0 ||
-		Height == 0)
+	if (Width == 0 || Height == 0)
 	{
 		return nullptr;
 	}
 
-	const size_t RowBytes =
-		static_cast<size_t>(
-			Width) * 4;
+	const size_t RowBytes = static_cast<size_t>(Width) * 4;
+	const size_t RequiredBytes = RowBytes * Height;
 
-	const size_t RequiredBytes =
-		RowBytes * Height;
-
-	if (Offset +
-		RequiredBytes >
-		Data.size())
+	if (Offset + RequiredBytes > Data.size())
 	{
 		return nullptr;
 	}
 
 	D3D11_TEXTURE2D_DESC TextureDesc = {};
 
-	TextureDesc.Width =
-		Width;
-
-	TextureDesc.Height =
-		Height;
-
-	TextureDesc.MipLevels =
-		1;
-
-	TextureDesc.ArraySize =
-		1;
-
-	TextureDesc.Format =
-		Format;
-
-	TextureDesc.SampleDesc.Count =
-		1;
-
-	TextureDesc.SampleDesc.Quality =
-		0;
-
-	TextureDesc.Usage =
-		D3D11_USAGE_DEFAULT;
-
-	TextureDesc.BindFlags =
-		D3D11_BIND_SHADER_RESOURCE;
-
-	TextureDesc.CPUAccessFlags =
-		0;
-
-	TextureDesc.MiscFlags =
-		0;
+	TextureDesc.Width = Width;
+	TextureDesc.Height = Height;
+	TextureDesc.MipLevels = 1;
+	TextureDesc.ArraySize = 1;
+	TextureDesc.Format = Format;
+	TextureDesc.SampleDesc.Count = 1;
+	TextureDesc.SampleDesc.Quality = 0;
+	TextureDesc.Usage = D3D11_USAGE_DEFAULT;
+	TextureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	TextureDesc.CPUAccessFlags = 0;
+	TextureDesc.MiscFlags = 0;
 
 	D3D11_SUBRESOURCE_DATA InitialData = {};
 
-	InitialData.pSysMem =
-		Data.data() + Offset;
+	InitialData.pSysMem = Data.data() + Offset;
+	InitialData.SysMemPitch = static_cast<UINT>(RowBytes);
 
-	InitialData.SysMemPitch =
-		static_cast<UINT>(
-			RowBytes);
+	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
 
-	Microsoft::WRL::ComPtr<ID3D11Texture2D>
-		Texture;
-
-	HRESULT HR =
-		mDevice->CreateTexture2D(
-			&TextureDesc,
-			&InitialData,
-			Texture.GetAddressOf());
+	HRESULT HR = mDevice->CreateTexture2D(&TextureDesc, &InitialData, Texture.GetAddressOf());
 
 	if (FAILED(HR))
 	{
@@ -2069,26 +1340,14 @@ ID3D11ShaderResourceView* FThumbnailManager::LoadThumbnailDDS(const std::filesys
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 
-	SRVDesc.Format =
-		Format;
+	SRVDesc.Format = Format;
+	SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	SRVDesc.Texture2D.MostDetailedMip = 0;
+	SRVDesc.Texture2D.MipLevels = 1;
 
-	SRVDesc.ViewDimension =
-		D3D11_SRV_DIMENSION_TEXTURE2D;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;
 
-	SRVDesc.Texture2D.MostDetailedMip =
-		0;
-
-	SRVDesc.Texture2D.MipLevels =
-		1;
-
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
-		SRV;
-
-	HR =
-		mDevice->CreateShaderResourceView(
-			Texture.Get(),
-			&SRVDesc,
-			SRV.GetAddressOf());
+	HR = mDevice->CreateShaderResourceView(Texture.Get(), &SRVDesc, SRV.GetAddressOf());
 
 	if (FAILED(HR))
 	{
@@ -2103,6 +1362,7 @@ std::string FThumbnailManager::MakeThumbnailKey(const std::filesystem::path& Ass
 	// 에셋으로 등록된 파일이면 GUID를 키로 쓴다 — 파일을 옮기거나 이름을 바꿔도
 	// 캐시와 .dds가 그대로 따라온다. 레지스트리가 모르는 파일(원본 png 등)은 경로로 떨어진다.
 	FGuid Guid;
+
 	if (FAssetRegistry::Get().FindGuidByPath(AssetPath, Guid) && Guid.IsValid())
 	{
 		return std::string(Guid.ToString().CStr());
@@ -2113,23 +1373,16 @@ std::string FThumbnailManager::MakeThumbnailKey(const std::filesystem::path& Ass
 
 std::filesystem::path FThumbnailManager::GetThumbnailCachePath(const std::filesystem::path& AssetPath) const
 {
-	const std::filesystem::path CacheDirectory =
-		"Saved/Thumbnails";
+	const std::filesystem::path CacheDirectory = "Saved/Thumbnails";
 
 	// GUID를 아는 에셋이면 그걸 파일명에 쓰고, 모르면 예전처럼 경로 해시로 떨어진다.
 	// (키 문자열을 그대로 파일명에 넣으면 경로의 \ 와 : 때문에 못 쓰는 이름이 된다.)
 	FGuid Guid;
-	const std::string Suffix =
-		(FAssetRegistry::Get().FindGuidByPath(AssetPath, Guid) && Guid.IsValid())
-		? std::string(Guid.ToString().CStr())
-		: std::to_string(std::hash<std::string>{}(AssetPath.lexically_normal().generic_string()));
 
-	const std::string FileName =
-		AssetPath.stem().string() +
-		"_" +
-		Suffix +
-		".dds";
+	const std::string Suffix = (FAssetRegistry::Get().FindGuidByPath(AssetPath, Guid) && Guid.IsValid()) ?
+		std::string(Guid.ToString().CStr()) : std::to_string(std::hash<std::string>{}(AssetPath.lexically_normal().generic_string()));
 
-	return CacheDirectory /
-		FileName;
+	const std::string FileName = AssetPath.stem().string() + "_" + Suffix + ".dds";
+
+	return CacheDirectory / FileName;
 }

@@ -5,8 +5,8 @@
 
 constexpr float PI = 3.1415926535897932f;
 constexpr double DOUBLE_PI = 3.1415926535897932;
-constexpr float SMALL_NUMBER = 1.e-8f;
-constexpr float KINDA_SMALL_NUMBER = 1.e-4f;
+constexpr float SMALL_NUMBER = 1.e-37f;
+constexpr float KINDA_SMALL_NUMBER = 1.e-37f;
 
 // [[nodiscard]] -> 반환값을 버리면 경고 표시
 // FORCEINLINE -> 인라인 강제(한줄짜리 함수에 사용)
