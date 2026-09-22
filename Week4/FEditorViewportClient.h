@@ -101,6 +101,9 @@ public:
 	float GetViewportLeft() const;
 	float GetViewportTop() const;
 
+	void SaveConfig(const char* Section, const char* IniPath = ".\\editor.ini");
+	void LoadConfig(const char* Section, const char* IniPath = ".\\editor.ini");
+
 	EViewportType ViewportType = EViewportType::Perspective;
 	EViewModeIndex ViewMode = EViewModeIndex::VMI_Lit;
 	bool bIsOrthographic = false;

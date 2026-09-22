@@ -328,6 +328,17 @@ ImTextureID FThumbnailManager::GetAssetThumbnail(UAsset* Asset)
 		return GetFileThumbnail();
 	}
 
+	const FGuid& AssetGuid = Asset->GetAssetGuid();
+	if (AssetGuid.IsValid())
+	{
+		const std::string Key = std::string(AssetGuid.ToString().CStr());
+		auto It = mThumbnailCache.find(Key);
+		if (It != mThumbnailCache.end())
+		{
+			return reinterpret_cast<ImTextureID>(It->second.Get());
+		}
+	}
+
 	std::filesystem::path AssetPath;
 	if (!FAssetRegistry::Get().FindPath(Asset->GetAssetGuid(), AssetPath))
 	{

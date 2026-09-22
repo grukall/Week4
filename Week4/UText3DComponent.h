@@ -9,6 +9,7 @@
 #include "MathUtility.h"
 #include "Json/json.hpp"
 #include "Property.h"
+#include "UStaticMeshComponent.h"
 
 
 class UText3DComponent : public USceneComponent
@@ -70,25 +71,42 @@ public:
 		SetDepthState(false, false);
 	}
 
+	FVector GetWorldPivotLocation() const
+	{
+		if (!mOwner)
+		{
+			return GetRelativeLocation();
+		}
+
+		const FTransform ParentTransform = mOwner->GetTransform();
+
+		for (UActorComponent* Component : mOwner->GetComponents())
+		{
+			if (UStaticMeshComponent* MeshComp = Component->Cast<UStaticMeshComponent>())
+			{
+				if (UStaticMesh* Mesh = MeshComp->GetStaticMesh())
+				{
+					const FAABB& LocalBox = Mesh->GetLocalBoundingBox();
+					if (LocalBox.Max.z > LocalBox.Min.z)
+					{
+						const FMatrix WorldMatrix = ParentTransform.MakeMatrix();
+						const FAABB WorldBox = LocalBox.ToWorld(WorldMatrix);
+						const FVector Center = (WorldBox.Min + WorldBox.Max) * 0.5f;
+						return FVector(Center.x, Center.y, WorldBox.Max.z + 0.3f);
+					}
+				}
+			}
+		}
+
+		return ParentTransform.Location + FVector(0.f, 0.f, 1.2f);
+	}
+
 	void Tick(float DeltaTime) override
 	{
-		//if (mBillboardCamera && mbBillboard)
-		//{
-		//	// Match the camera's full orientation, including roll.
-		//	SetRelativeRotation(mBillboardCamera->Transform.Rotation);
-		//}
-		//
-		//USceneComponent* RootComponent = mOwner->GetRootComponent();
-		//if (RootComponent)
-		//{
-		//	FVector Location = RootComponent->GetRelativeLocation();
-		//	// Place billboard labels above the actor along the camera's screen-up axis.
-		//	const FVector LabelUp = (mBillboardCamera && mbBillboard)
-		//		? mBillboardCamera->GetUpVector()
-		//		: FVector(0.f, 0.f, 1.f);
-		//	Location += LabelUp * 1.0f;
-		//	SetRelativeLocation(Location);
-		//}
+		if (mOwner)
+		{
+			SetRelativeLocation(GetWorldPivotLocation());
+		}
 	}
 
 	void Render(FRenderCollector& RenderCollector) override
@@ -97,6 +115,11 @@ public:
 		if (!FShowFlags::Get().IsEnabled(EShowFlag::UUIDText))
 		{
 			return;
+		}
+
+		if (mText.empty() && mOwner)
+		{
+			mText = Utf2Wide(std::format("UUID: {}", mOwner->UUID));
 		}
 
 		if (!mFontAtlasAsset)
@@ -150,6 +173,10 @@ public:
 
 		// Append the text quads to the output array
 		FTransform PivotTransform = GetTransformMatrix();
+		if (mOwner)
+		{
+			PivotTransform.Location = GetWorldPivotLocation();
+		}
 
 		FVector TextLocation = FVector(0.f, -TotalWidth * 0.5f, TotalHeight * 0.5f - WorldAscender);
 		for (wchar_t C : mText)

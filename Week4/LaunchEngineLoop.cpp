@@ -126,11 +126,7 @@ void FEngineLoop::Init(HINSTANCE hInstance, WNDPROC WndProc, const char* CmdLine
 	FThumbnailManager::Get().Initialize(renderer->GetDevice(), renderer->GetDeviceContext(), mAssetManager, mGraphicsManager);
 	mSceneManager = new FSceneManager(Viewports);
 
-	char Value[64] = {};
-	GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), ".\\editor.ini");
-	int32 GridGap = 1;
-	sscanf_s(Value, "%d", &	GridGap);
-	mGraphicsManager->SetGridGap(GridGap);
+	LoadEditorConfig();
 #if IS_OBJ_VIEWER
 	mSceneManager->InitObjViewer(CmdLine);
 #else
@@ -296,12 +292,11 @@ void FEngineLoop::Tick(bool bPumpMessages)
 #else
 	// Mouse Picking & Gizmo
 	{
-		// 피킹 로직
-		AActor* HitActor = ActiveViewportClient->PerformMousePicking(ActivePerspectiveRatio, RenderCollector, *mSceneManager);
-
+		// 마우스 좌클릭 시에만 뷰포트 내 피킹(RayCast) 수행
 		if (mSceneManager->IsViewportHovered() && Input.WasPressed(VK_LBUTTON) &&
 			!ActiveViewportClient->mGizmo.IsDragging() && !ActiveViewportClient->mGizmo.IsMouseOverHandle())
 		{
+			AActor* HitActor = ActiveViewportClient->PerformMousePicking(ActivePerspectiveRatio, RenderCollector, *mSceneManager);
 			if (HitActor) mSceneManager->SetSelectedActor(HitActor);
 			else          mSceneManager->ResetSelectedActor();
 		}
@@ -378,6 +373,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 		// ImGui
 		SCOPE_CYCLE_COUNTER("ImGui");
 		mSceneManager->UpdateGUI({ *FrameTimer, mGraphicsManager, ActiveViewportClient, mFileManager, mAssetManager });
+
 		mGraphicsManager->GetRenderer()->BindFrameBuffer();
 		ImGui::Render();
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -401,21 +397,85 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	GInTick = false;
 }
 
+void FEngineLoop::LoadEditorConfig()
+{
+	const char* IniPath = ".\\editor.ini";
+
+	for (int i = 0; i < ViewportClients.Num(); ++i)
+	{
+		std::string Section = std::format("Viewport_{}", i);
+		ViewportClients[i]->LoadConfig(Section.c_str(), IniPath);
+	}
+
+	char Value[64] = {};
+	if (GetPrivateProfileStringA("General", "ActiveViewport", "", Value, sizeof(Value), IniPath) > 0)
+	{
+		int ActiveIdx = 1;
+		if (sscanf_s(Value, "%d", &ActiveIdx) == 1 && ActiveIdx >= 0 && ActiveIdx < ViewportClients.Num())
+		{
+			ActiveViewportClient = ViewportClients[ActiveIdx];
+		}
+	}
+
+	if (GetPrivateProfileStringA("Grid", "Gap", "", Value, sizeof(Value), IniPath) > 0)
+	{
+		int32 GridGap = 1;
+		if (sscanf_s(Value, "%d", &GridGap) == 1 && GridGap > 0)
+		{
+			mGraphicsManager->SetGridGap(GridGap);
+		}
+	}
+}
+
+void FEngineLoop::SaveEditorConfig()
+{
+	const char* IniPath = ".\\editor.ini";
+
+	// 1. 모든 뷰포트 클라이언트의 카메라 및 뷰포트 상태 저장
+	for (int i = 0; i < ViewportClients.Num(); ++i)
+	{
+		std::string Section = std::format("Viewport_{}", i);
+		ViewportClients[i]->SaveConfig(Section.c_str(), IniPath);
+	}
+
+	// 2. 활성 뷰포트 인덱스 저장
+	int ActiveIndex = 1;
+	for (int i = 0; i < ViewportClients.Num(); ++i)
+	{
+		if (ViewportClients[i] == ActiveViewportClient)
+		{
+			ActiveIndex = i;
+			break;
+		}
+	}
+	std::string ValActive = std::format("{:d}", ActiveIndex);
+	WritePrivateProfileStringA("General", "ActiveViewport", ValActive.c_str(), IniPath);
+
+	// 3. 스플리터 상태 (비율 및 최대화 상태) 저장
+	if (mSceneManager)
+	{
+		mSceneManager->SaveConfig(IniPath);
+	}
+
+	// 4. 그리드 간격 저장
+	if (mGraphicsManager)
+	{
+		const std::string ValueGrid = std::format("{:d}", mGraphicsManager->GetGridGap());
+		WritePrivateProfileStringA("Grid", "Gap", ValueGrid.c_str(), IniPath);
+	}
+
+	// 5. 하위 호환성을 위해 [Camera] Sensitivity도 함께 저장
+	if (ActiveViewportClient)
+	{
+		const std::string ValueSens = std::format("{:.6f}", ActiveViewportClient->GetCamera().Sensitivity);
+		WritePrivateProfileStringA("Camera", "Sensitivity", ValueSens.c_str(), IniPath);
+	}
+}
+
 void FEngineLoop::End()
 {
-	const std::string Value = std::format("{:.6f}", ActiveViewportClient->GetCamera().Sensitivity);
+	SaveEditorConfig();
 
-	if (!WritePrivateProfileStringA("Camera", "Sensitivity", Value.c_str(), ".\\editor.ini"))
-	{
-		UE_LOG_ERROR("Failed to save camera sensitivity to editor.ini");
-	}
-
-	const std::string ValueGrid = std::format("{:6d}", mGraphicsManager->GetGridGap());
-
-	if (!WritePrivateProfileStringA("Grid", "Gap", ValueGrid.c_str(), ".\\editor.ini"))
-	{
-		UE_LOG_ERROR("Failed to save grid gap to editor.ini");
-	}
 	mSceneManager->DeleteScene();
 
 	ImGui_ImplDX11_Shutdown();

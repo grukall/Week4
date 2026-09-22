@@ -26,6 +26,8 @@
 #include "LaunchEngineLoop.h"
 #include "FAssetManager.h"
 #include <psapi.h>
+#include <format>
+#include <string>
 #include "Actor.h"
 #include "UStaticMeshComponent.h"
 FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
@@ -33,13 +35,6 @@ FEditorViewportClient::FEditorViewportClient(URenderer& InRenderer)
 	, mGizmo(InRenderer)
 	, mRenderer(&InRenderer)
 {
-	char Value[64] = {};
-	GetPrivateProfileStringA("Camera", "Sensitivity", "", Value, sizeof(Value), ".\\editor.ini");
-	float Sensitivity = 0.1f;
-	if (sscanf_s(Value, "%f", &Sensitivity) == 1 && Sensitivity >= 0.01f && Sensitivity <= 1.0f)
-	{
-		mCamera.SetSensitivity(Sensitivity);
-	}
 }
 
 AActor* FEditorViewportClient::PerformMousePicking(float perspectiveRatio, const FRenderCollector& RenderCollector, FSceneManager &SceneManager)
@@ -983,6 +978,140 @@ void FEditorViewportClient::SetViewportType(EViewportType InType)
 		mCamera.Transform.Location = FVector(0.0f, 20.0f, 0.0f);
 		mCamera.Velocity = FVector(0.0f);
 		break;
+	}
+}
+
+static const char* ViewportTypeToString(EViewportType Type)
+{
+	switch (Type)
+	{
+	case EViewportType::Perspective: return "Perspective";
+	case EViewportType::Top:         return "Top";
+	case EViewportType::Bottom:      return "Bottom";
+	case EViewportType::Left:        return "Left";
+	case EViewportType::Right:       return "Right";
+	case EViewportType::Front:       return "Front";
+	case EViewportType::Back:        return "Back";
+	default:                         return "Perspective";
+	}
+}
+
+static EViewportType StringToViewportType(const char* Str, EViewportType Default)
+{
+	if (_stricmp(Str, "Perspective") == 0 || strcmp(Str, "0") == 0) return EViewportType::Perspective;
+	if (_stricmp(Str, "Top") == 0         || strcmp(Str, "1") == 0) return EViewportType::Top;
+	if (_stricmp(Str, "Bottom") == 0      || strcmp(Str, "2") == 0) return EViewportType::Bottom;
+	if (_stricmp(Str, "Left") == 0        || strcmp(Str, "3") == 0) return EViewportType::Left;
+	if (_stricmp(Str, "Right") == 0       || strcmp(Str, "4") == 0) return EViewportType::Right;
+	if (_stricmp(Str, "Front") == 0       || strcmp(Str, "5") == 0) return EViewportType::Front;
+	if (_stricmp(Str, "Back") == 0        || strcmp(Str, "6") == 0) return EViewportType::Back;
+	return Default;
+}
+
+static const char* ViewModeToString(EViewModeIndex Mode)
+{
+	switch (Mode)
+	{
+	case EViewModeIndex::VMI_Lit:       return "Lit";
+	case EViewModeIndex::VMI_Unlit:     return "Unlit";
+	case EViewModeIndex::VMI_Wireframe: return "Wireframe";
+	default:                            return "Lit";
+	}
+}
+
+static EViewModeIndex StringToViewMode(const char* Str, EViewModeIndex Default)
+{
+	if (_stricmp(Str, "Lit") == 0       || strcmp(Str, "0") == 0) return EViewModeIndex::VMI_Lit;
+	if (_stricmp(Str, "Unlit") == 0     || strcmp(Str, "1") == 0) return EViewModeIndex::VMI_Unlit;
+	if (_stricmp(Str, "Wireframe") == 0 || strcmp(Str, "2") == 0) return EViewModeIndex::VMI_Wireframe;
+	return Default;
+}
+
+void FEditorViewportClient::SaveConfig(const char* Section, const char* IniPath)
+{
+	WritePrivateProfileStringA(Section, "Type", ViewportTypeToString(ViewportType), IniPath);
+	WritePrivateProfileStringA(Section, "ViewMode", ViewModeToString(ViewMode), IniPath);
+
+	WritePrivateProfileStringA(Section, "CameraPosX", std::format("{:.6f}", mCamera.Transform.Location.x).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "CameraPosY", std::format("{:.6f}", mCamera.Transform.Location.y).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "CameraPosZ", std::format("{:.6f}", mCamera.Transform.Location.z).c_str(), IniPath);
+
+	WritePrivateProfileStringA(Section, "CameraPitch", std::format("{:.6f}", mCamera.Transform.Rotation.Pitch).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "CameraYaw", std::format("{:.6f}", mCamera.Transform.Rotation.Yaw).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "CameraRoll", std::format("{:.6f}", mCamera.Transform.Rotation.Roll).c_str(), IniPath);
+
+	WritePrivateProfileStringA(Section, "FOV", std::format("{:.6f}", mCamera.mFovDegree).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "Speed", std::format("{:.6f}", mCamera.Speed).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "Sensitivity", std::format("{:.6f}", mCamera.Sensitivity).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "OrthoDistance", std::format("{:.6f}", mCamera.mOrthoDistance).c_str(), IniPath);
+	WritePrivateProfileStringA(Section, "OrthoHeight", std::format("{:.6f}", mCamera.mOrthoHeight).c_str(), IniPath);
+}
+
+void FEditorViewportClient::LoadConfig(const char* Section, const char* IniPath)
+{
+	char Value[128] = {};
+	if (GetPrivateProfileStringA(Section, "Type", "", Value, sizeof(Value), IniPath) > 0)
+	{
+		SetViewportType(StringToViewportType(Value, ViewportType));
+	}
+
+	if (GetPrivateProfileStringA(Section, "ViewMode", "", Value, sizeof(Value), IniPath) > 0)
+	{
+		ViewMode = StringToViewMode(Value, ViewMode);
+	}
+
+	float PosX = mCamera.Transform.Location.x;
+	float PosY = mCamera.Transform.Location.y;
+	float PosZ = mCamera.Transform.Location.z;
+	bool bHasPos = false;
+	if (GetPrivateProfileStringA(Section, "CameraPosX", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &PosX) == 1) bHasPos = true;
+	if (GetPrivateProfileStringA(Section, "CameraPosY", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &PosY) == 1) bHasPos = true;
+	if (GetPrivateProfileStringA(Section, "CameraPosZ", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &PosZ) == 1) bHasPos = true;
+	if (bHasPos)
+	{
+		mCamera.Transform.Location = FVector(PosX, PosY, PosZ);
+	}
+
+	float Pitch = mCamera.Transform.Rotation.Pitch;
+	float Yaw = mCamera.Transform.Rotation.Yaw;
+	float Roll = mCamera.Transform.Rotation.Roll;
+	bool bHasRot = false;
+	if (GetPrivateProfileStringA(Section, "CameraPitch", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &Pitch) == 1) bHasRot = true;
+	if (GetPrivateProfileStringA(Section, "CameraYaw", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &Yaw) == 1) bHasRot = true;
+	if (GetPrivateProfileStringA(Section, "CameraRoll", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &Roll) == 1) bHasRot = true;
+	if (bHasRot)
+	{
+		mCamera.Transform.Rotation = FRotator(Pitch, Yaw, Roll);
+	}
+
+	float Fov = mCamera.mFovDegree;
+	if (GetPrivateProfileStringA(Section, "FOV", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &Fov) == 1)
+	{
+		mCamera.mFovDegree = std::clamp(Fov, 5.0f, 170.0f);
+	}
+
+	float Spd = mCamera.Speed;
+	if (GetPrivateProfileStringA(Section, "Speed", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &Spd) == 1)
+	{
+		mCamera.Speed = std::clamp(Spd, 0.1f, 100.0f);
+	}
+
+	float Sens = mCamera.Sensitivity;
+	if (GetPrivateProfileStringA(Section, "Sensitivity", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &Sens) == 1)
+	{
+		mCamera.SetSensitivity(std::clamp(Sens, 0.01f, 1.0f));
+	}
+
+	float OrthoDist = mCamera.mOrthoDistance;
+	if (GetPrivateProfileStringA(Section, "OrthoDistance", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &OrthoDist) == 1)
+	{
+		mCamera.mOrthoDistance = std::clamp(OrthoDist, 0.1f, 1000.0f);
+	}
+
+	float OrthoH = mCamera.mOrthoHeight;
+	if (GetPrivateProfileStringA(Section, "OrthoHeight", "", Value, sizeof(Value), IniPath) > 0 && sscanf_s(Value, "%f", &OrthoH) == 1)
+	{
+		mCamera.mOrthoHeight = std::clamp(OrthoH, 0.1f, 1000.0f);
 	}
 }
 

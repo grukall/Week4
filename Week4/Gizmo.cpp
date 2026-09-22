@@ -270,9 +270,12 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
         return Axis == (bIsSelected ? SelectedAxis : HoveredAxis) ? FVector4(1,1,0,1) : Color;
     };
 
+    TArray<FRenderLineInfo> GizmoLines;
+
     auto DrawLineAxis = [&](const FVector& DrawAxis, const FVector& ApplyAxis, const FVector4& Color, EAxisEndPointStyle Style, EAxisNumber Axis)
     {
-        const FVector2 End = WorldToScreen(Transform.Location + DrawAxis * AxisLength, ViewProjection, ScreenWidth, ScreenHeight);
+        const FVector EndWorld = Transform.Location + DrawAxis * AxisLength;
+        const FVector2 End = WorldToScreen(EndWorld, ViewProjection, ScreenWidth, ScreenHeight);
 
         FVector2 ScreenAxis = End - Center;
 		if (ScreenAxis.LengthSquared() < 0.01f)
@@ -287,7 +290,7 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
         const FVector2 RAxis = REnd - RCenter;
 
 		const FVector4 Highlight = AxisColor(Axis, Color);
-        Renderer.RenderLine2D(RCenter, REnd, Highlight, 5.f);
+        GizmoLines.Add({ Highlight, Transform.Location, 5.f, EndWorld, 0.f });
         
 		if (Style == EAxisEndPointStyle::Arrow)
 		{
@@ -325,7 +328,7 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
 			}
 
             HandleScreenSegments.Add({ Start, End, FVector::cross(U,V), Axis });
-            Renderer.RenderLine2D(ToRenderer(Start), ToRenderer(End), AxisColor(Axis, Color), 2.f);
+            GizmoLines.Add({ AxisColor(Axis, Color), StartWorld, 2.f, EndWorld, 0.f });
         }
     };
 
@@ -368,6 +371,11 @@ void FGizmo::Render(FSceneManager* SceneManager, const FVector& CameraPosition, 
         DrawLineAxis(ForwardAxis, ForwardAxis, FVector4(1, 0, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::X);
         DrawLineAxis(RightAxis, RightAxis, FVector4(0, 1, 0, 1), EAxisEndPointStyle::Circle, EAxisNumber::Y);
         DrawLineAxis(UpAxis, UpAxis, FVector4(0, 0, 1, 1), EAxisEndPointStyle::Circle, EAxisNumber::Z);
+    }
+
+    if (!GizmoLines.IsEmpty())
+    {
+        Renderer.RenderLines(GizmoLines, ViewProjection, FVector2(ScreenWidth, ScreenHeight), false);
     }
 
     Renderer.RenderCircle2D(ToRenderer(Center), FVector4(0.8f, 0.8f, 0.8f, 1), 5.f);

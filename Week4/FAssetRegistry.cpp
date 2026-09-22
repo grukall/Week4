@@ -83,6 +83,45 @@ std::filesystem::path FAssetRegistry::MakeMetaPath(const std::filesystem::path& 
 	return MetaPath;
 }
 
+static FString NormalizePathFast(const std::filesystem::path& Path)
+{
+	if (Path.empty())
+	{
+		return FString("");
+	}
+
+	std::error_code EC;
+	std::filesystem::path AbsPath = std::filesystem::absolute(Path, EC);
+	if (EC)
+	{
+		AbsPath = Path;
+	}
+
+	std::string Key = AbsPath.lexically_normal().generic_string();
+	for (char& Character : Key)
+	{
+		Character = static_cast<char>(std::tolower(static_cast<unsigned char>(Character)));
+	}
+
+	return FString(Key);
+}
+
+static FString NormalizeLexicalFast(const std::filesystem::path& Path)
+{
+	if (Path.empty())
+	{
+		return FString("");
+	}
+
+	std::string Key = Path.lexically_normal().generic_string();
+	for (char& Character : Key)
+	{
+		Character = static_cast<char>(std::tolower(static_cast<unsigned char>(Character)));
+	}
+
+	return FString(Key);
+}
+
 FString FAssetRegistry::MakePathKey(const std::filesystem::path& Path, FFileManager& FileManager) const
 {
 	std::string Key = FileManager.MakeRelativeToRoot(Path).generic_string();
@@ -105,6 +144,8 @@ void FAssetRegistry::Register(const FGuid& Guid, const std::filesystem::path& Pa
 	}
 
 	const FString PathKey = MakePathKey(Path, FileManager);
+	const FString AbsKey = NormalizePathFast(Path);
+	const FString LexKey = NormalizeLexicalFast(Path);
 
 	if (FAssetRegistryEntry* Existing = Entries.Find(Guid))
 	{
@@ -122,8 +163,13 @@ void FAssetRegistry::Register(const FGuid& Guid, const std::filesystem::path& Pa
 				Guid.ToString().CStr(), Existing->Path.string().c_str(), Path.string().c_str());
 
 			PathToGuid.Remove(ExistingKey);
+			PathToGuid.Remove(NormalizePathFast(Existing->Path));
+			PathToGuid.Remove(NormalizeLexicalFast(Existing->Path));
+
 			Existing->Path = Path;
 			PathToGuid.Add(PathKey, Guid);
+			PathToGuid.Add(AbsKey, Guid);
+			PathToGuid.Add(LexKey, Guid);
 			return;
 		}
 
@@ -142,6 +188,8 @@ void FAssetRegistry::Register(const FGuid& Guid, const std::filesystem::path& Pa
 
 	Entries.Add(Guid, Entry);
 	PathToGuid.Add(PathKey, Guid);
+	PathToGuid.Add(AbsKey, Guid);
+	PathToGuid.Add(LexKey, Guid);
 }
 
 void FAssetRegistry::SetImportSource(const FGuid& AssetGuid, const FGuid& ImportSourceGuid)
@@ -191,13 +239,17 @@ void FAssetRegistry::Unregister(const FGuid& Guid)
 
 	// 경로 인덱스는 등록 때 쓴 키로 지워야 한다. FileManager 없이 지우려고
 	// 경로를 다시 정규화하면 어긋날 수 있어서, 값으로 찾아 지운다.
+	TArray<FString> KeysToRemove;
 	for (const auto& Pair : PathToGuid)
 	{
 		if (Pair.second == Guid)
 		{
-			PathToGuid.Remove(Pair.first);
-			break;
+			KeysToRemove.Add(Pair.first);
 		}
+	}
+	for (const FString& Key : KeysToRemove)
+	{
+		PathToGuid.Remove(Key);
 	}
 
 	// 원본 역인덱스에서도 빼준다. 안 빼면 지워진 에셋이 재임포트 판정에 계속 잡힌다.
@@ -239,22 +291,41 @@ bool FAssetRegistry::FindPath(const FGuid& Guid, std::filesystem::path& OutPath)
 bool FAssetRegistry::FindGuidByPath(const std::filesystem::path& Path, FGuid& OutGuid, FFileManager& FileManager) const
 {
 	const FGuid* Found = PathToGuid.Find(MakePathKey(Path, FileManager));
-	if (!Found)
+	if (Found)
 	{
-		return false;
+		OutGuid = *Found;
+		return true;
 	}
 
-	OutGuid = *Found;
-	return true;
+	return FindGuidByPath(Path, OutGuid);
 }
 
 bool FAssetRegistry::FindGuidByPath(const std::filesystem::path& Path, FGuid& OutGuid) const
 {
-	const std::filesystem::path Normalized = std::filesystem::weakly_canonical(Path);
+	if (Path.empty())
+	{
+		return false;
+	}
 
+	// 1. 절대 경로 정규화 키로 O(1) 조회
+	if (const FGuid* Found = PathToGuid.Find(NormalizePathFast(Path)))
+	{
+		OutGuid = *Found;
+		return true;
+	}
+
+	// 2. 상대 경로 어휘 정규화 키로 O(1) 조회
+	if (const FGuid* Found = PathToGuid.Find(NormalizeLexicalFast(Path)))
+	{
+		OutGuid = *Found;
+		return true;
+	}
+
+	// 3. 인메모리 문자열 선형 비교 (디스크 I/O 없이 순수 메모리 비교)
+	const FString TargetKey = NormalizeLexicalFast(Path);
 	for (const auto& Pair : Entries)
 	{
-		if (std::filesystem::weakly_canonical(Pair.second.Path) == Normalized)
+		if (NormalizeLexicalFast(Pair.second.Path).Equals(TargetKey))
 		{
 			OutGuid = Pair.second.Guid;
 			return true;

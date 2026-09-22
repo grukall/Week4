@@ -39,6 +39,8 @@ public:
 private:
 	void InitAssetManager();
 	void InitStatManager();
+	void LoadEditorConfig();
+	void SaveEditorConfig();
 
 private:
 	// Todo: Make as pointer

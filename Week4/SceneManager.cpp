@@ -71,6 +71,8 @@ FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports)
 
 	// SceneManager의 루트 윈도우로 등록
 	mRootWindow = RootSplitter;
+
+	LoadConfig(".\\editor.ini");
 }
 
 FSceneManager::~FSceneManager()
@@ -973,6 +975,55 @@ void FSceneManager::LoadScene(
 	mPropertyPanel->SetWorld(mCurrentWorld);
 	UEngineStatics::SetNextUUID(nextUUID);
 	ResetSelectedActor();
+}
+
+void FSceneManager::SaveConfig(const char* IniPath)
+{
+	if (SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mRootWindow))
+	{
+		std::string ValX = std::format("{:.6f}", QuadSplitter->SplitRatioX);
+		WritePrivateProfileStringA("Splitter", "SplitRatioX", ValX.c_str(), IniPath);
+
+		std::string ValY = std::format("{:.6f}", QuadSplitter->SplitRatioY);
+		WritePrivateProfileStringA("Splitter", "SplitRatioY", ValY.c_str(), IniPath);
+
+		std::string ValMax = std::format("{:d}", mMaximizedViewportIndex);
+		WritePrivateProfileStringA("Splitter", "MaximizedIndex", ValMax.c_str(), IniPath);
+	}
+}
+
+void FSceneManager::LoadConfig(const char* IniPath)
+{
+	if (SSplitterQuad* QuadSplitter = dynamic_cast<SSplitterQuad*>(mRootWindow))
+	{
+		char Value[64] = {};
+		if (GetPrivateProfileStringA("Splitter", "SplitRatioX", "", Value, sizeof(Value), IniPath) > 0)
+		{
+			float RatioX = 0.5f;
+			if (sscanf_s(Value, "%f", &RatioX) == 1)
+			{
+				QuadSplitter->SplitRatioX = std::clamp(RatioX, 0.05f, 0.95f);
+			}
+		}
+
+		if (GetPrivateProfileStringA("Splitter", "SplitRatioY", "", Value, sizeof(Value), IniPath) > 0)
+		{
+			float RatioY = 0.5f;
+			if (sscanf_s(Value, "%f", &RatioY) == 1)
+			{
+				QuadSplitter->SplitRatioY = std::clamp(RatioY, 0.05f, 0.95f);
+			}
+		}
+
+		if (GetPrivateProfileStringA("Splitter", "MaximizedIndex", "", Value, sizeof(Value), IniPath) > 0)
+		{
+			int MaxIndex = -1;
+			if (sscanf_s(Value, "%d", &MaxIndex) == 1)
+			{
+				mMaximizedViewportIndex = (MaxIndex >= 0 && MaxIndex < 4) ? MaxIndex : -1;
+			}
+		}
+	}
 }
 
 void  FSceneManager::SetSelectedActor(AActor* actor)

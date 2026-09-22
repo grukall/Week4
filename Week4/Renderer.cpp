@@ -36,6 +36,13 @@ void URenderer::Create(HWND hWindow)
 	LinePipeline->AddConstantBuffer<FCameraConstants>();
 	LinePipeline->SetShaderResource(0, LineStructuredBuffer->SRV);
 
+	LineNoDepthPipeline = CreateRenderPipeline();
+	LineNoDepthPipeline->SetRasterRizerState(D3D11_CULL_NONE);
+	LineNoDepthPipeline->SetDepthStencilState(false, false);
+	LineNoDepthPipeline->SetShader("Assets/Shaders/Line.hlsl");
+	LineNoDepthPipeline->AddConstantBuffer<FCameraConstants>();
+	LineNoDepthPipeline->SetShaderResource(0, LineStructuredBuffer->SRV);
+
 	PrimitivePipeline = CreateRenderPipeline();
 	PrimitivePipeline->SetRasterRizerState(D3D11_CULL_BACK, 0, {EViewModeIndex::VMI_Lit, EViewModeIndex::VMI_Wireframe});
 	PrimitivePipeline->SetShader("Assets/Shaders/Mesh.hlsl");
@@ -368,7 +375,7 @@ void URenderer::SwapBuffer()
 	SwapChain->Present(0, 0);
 }
 
-void URenderer::Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D)
+void URenderer::Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D, const FVector2& InViewportSize)
 {
 	FGpuTimerSlot& Slot = GpuTimers[GpuTimerIndex];
 
@@ -386,9 +393,12 @@ void URenderer::Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDP
 
 	FCameraConstants CameraConstants;
 	CameraConstants.ViewProjectionMatrix = ViewProjectionMatrix;
-	CameraConstants.ViewportSize = FVector2((float)Width, (float)Height);
+	CameraConstants.ViewportSize = (InViewportSize.X > 0.0f && InViewportSize.Y > 0.0f)
+		? InViewportSize
+		: FVector2((float)Width, (float)Height);
 
 	LinePipeline->UpdateConstantBuffer(0, CameraConstants);
+	LineNoDepthPipeline->UpdateConstantBuffer(0, CameraConstants);
 	PrimitivePipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	StencilMarkPipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
 	StencilOutlinePipeline->UpdateConstantBuffer(1, ViewProjectionMatrix);
@@ -589,12 +599,52 @@ void URenderer::BindRenderTarget(const TSharedPtr<FRenderTarget2D>& RenderTarget
 	DeviceContext->RSSetViewports(1, &Viewport);
 }
 
-void URenderer::RenderLines(const TArray<FRenderLineInfo>& Lines) const
+void URenderer::RenderLines(const TArray<FRenderLineInfo>& Lines, bool bEnableDepthTest) const
 {
+	if (Lines.IsEmpty())
+	{
+		return;
+	}
+
 	uint32 Remaining = Lines.Num();
 	const FRenderLineInfo* Offset = Lines.Data();
 
-	BindPipeline(LinePipeline);
+	BindPipeline(bEnableDepthTest ? LinePipeline : LineNoDepthPipeline);
+
+	while (Remaining > 0)
+	{
+		uint32 BatchSize = FGenericPlatformMath::Min(Remaining, MaxLineInstances);
+		LineStructuredBuffer->UpdateStructuredBuffer(Offset, BatchSize);
+
+		UINT OffsetIndex = 0;
+		DeviceContext->IASetVertexBuffers(0, 0, NULL, NULL, &OffsetIndex);
+		DeviceContext->DrawInstanced(6, BatchSize, 0, 0);
+		INC_DWORD_STAT("Draws");
+		INC_DWORD_STAT_BY("Prims", BatchSize * 2);
+
+		Remaining -= BatchSize;
+		Offset += BatchSize;
+	}
+}
+
+void URenderer::RenderLines(const TArray<FRenderLineInfo>& Lines, const FMatrix& ViewProjection, const FVector2& ViewportSize, bool bEnableDepthTest) const
+{
+	if (Lines.IsEmpty())
+	{
+		return;
+	}
+
+	FCameraConstants CameraConstants;
+	CameraConstants.ViewProjectionMatrix = ViewProjection;
+	CameraConstants.ViewportSize = ViewportSize;
+
+	TSharedPtr<FRenderPipeline> Pipeline = bEnableDepthTest ? LinePipeline : LineNoDepthPipeline;
+	Pipeline->UpdateConstantBuffer(0, CameraConstants);
+
+	uint32 Remaining = Lines.Num();
+	const FRenderLineInfo* Offset = Lines.Data();
+
+	BindPipeline(Pipeline);
 
 	while (Remaining > 0)
 	{

@@ -67,7 +67,7 @@ void FGraphicsManager::Prepare(const FCamera* mCamera, float viewportWidth, floa
 
 	// 스탯 HUD 등 화면 좌표 오버레이용. 뷰포트 크기가 바뀌면 여기서 매 프레임 다시 만들어진다.
 	const FMatrix HUDProjection2D = FMatrix::Ortho(0.f, viewportWidth, viewportHeight, 0.f, 0.0f, 1.0f);
-	mRenderer->Prepare(view * projection_u, HUDProjection2D);
+	mRenderer->Prepare(view * projection_u, HUDProjection2D, FVector2(viewportWidth, viewportHeight));
 
 	float orthoHeight = mCamera->mOrthoHeight;
 	float orthoWidth = orthoHeight * mAspect;

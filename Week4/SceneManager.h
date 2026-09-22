@@ -66,6 +66,9 @@ public:
 	void SaveScene(const std::filesystem::path& scenePath, const FFileManager& fileManager);
 	void LoadScene(const std::filesystem::path& scenePath, const FFileManager& fileManager);
 
+	void SaveConfig(const char* IniPath = ".\\editor.ini");
+	void LoadConfig(const char* IniPath = ".\\editor.ini");
+
 	UWorld* GetCurrentWorld() const { return mCurrentWorld; }
 
 	AActor* GetSelectedActor() const { return mSelectedActor; }

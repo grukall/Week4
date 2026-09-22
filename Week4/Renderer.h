@@ -424,7 +424,7 @@ public:
 	//Rendering
 	// HUDProjection2D는 뷰포트(ImGui 패널) 크기 기준 직교 투영. 씬 RT가 패널 크기로 늘어나
 	// 표시되므로, 그 스트레치를 상쇄하려면 창 크기가 아니라 패널 크기를 기준으로 삼아야 한다.
-	void Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D);
+	void Prepare(const FMatrix& ViewProjectionMatrix, const FMatrix& HUDProjection2D, const FVector2& InViewportSize = FVector2(0.0f, 0.0f));
 
 	TSharedPtr<FRenderPipeline> CreateRenderPipeline();
 
@@ -433,7 +433,8 @@ public:
 	void BindFrameBuffer();
 	void BindRenderTarget(const TSharedPtr<FRenderTarget2D>& RenderTarget, const TSharedPtr<FDepthStencil>& DepthStencil, bool bClear = true);
 
-	void RenderLines(const TArray<FRenderLineInfo>& Lines) const;
+	void RenderLines(const TArray<FRenderLineInfo>& Lines, bool bEnableDepthTest = true) const;
+	void RenderLines(const TArray<FRenderLineInfo>& Lines, const FMatrix& ViewProjection, const FVector2& ViewportSize, bool bEnableDepthTest = true) const;
 	void RenderHighlight(Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer, UINT NumVertices, Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer, UINT NumIndices, const FMatrix& Model, const FMatrix& OutlineModel, const FVector4& OutlineColor) const;
 	void RenderQuad(const FRenderQuadInfo& Info) const;
 	void RenderQuad2D(const FRenderQuadInfo& Info) const;
@@ -488,6 +489,7 @@ private:
 	TSharedPtr<FStructuredBuffer> LineStructuredBuffer;
 
 	TSharedPtr<FRenderPipeline> LinePipeline;
+	TSharedPtr<FRenderPipeline> LineNoDepthPipeline;
 	TSharedPtr<FRenderPipeline> PrimitivePipeline;
 	TSharedPtr<FRenderPipeline> StencilMarkPipeline;
 	TSharedPtr<FRenderPipeline> StencilOutlinePipeline;

@@ -42,7 +42,8 @@ PS_INPUT mainVS(uint instance_id : SV_InstanceID, uint vertex_id : SV_VertexID)
     
     float2 pixel_delta = (proj_end_ndc.xy - proj_start_ndc.xy) * viewport_size * 0.5f;
     
-    float2 normal = normalize(Perpendicular(pixel_delta));
+    float len = length(pixel_delta);
+    float2 normal = len > 0.0001f ? Perpendicular(pixel_delta) / len : float2(0.0f, 0.0f);
     float2 offset_pixels = normal * current_line.thickness * 0.5f;
     float2 offset = offset_pixels * 2.0f / viewport_size;
     
