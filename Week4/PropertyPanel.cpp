@@ -904,9 +904,10 @@ void FPropertyPanel::OnRender()
 		FTransform Transform = Target->GetTransform();
 
 		bool bTransformChanged = false;
-
+#if IS_OBJ_VIEWER
+#else
 		DrawVector3Controller("Location", Transform.Location, 0.0f, 10.0f);
-
+#endif
 		FVector Rotation = FVector(Transform.Rotation.Roll, Transform.Rotation.Pitch, Transform.Rotation.Yaw);
 		DrawVector3Controller("Rotation", Rotation, 0.0f, 10.0f);
 

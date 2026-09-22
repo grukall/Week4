@@ -260,7 +260,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	const FInputState& Input = WindowApplication.Input;
 #if IS_OBJ_VIEWER
 	if (!ViewportClients.IsEmpty()) {
-		ActiveViewportClient = ViewportClients[0];
+		ActiveViewportClient = ViewportClients[1];
 	}
 #endif
 	RenderCollector.Camera = &ActiveViewportClient->GetCamera();
@@ -292,8 +292,8 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	const FMatrix ActiveViewProjMatrix =
 		ActiveViewportClient->GetCamera().GetViewMatrix() *
 		ActiveViewportClient->GetCamera().GetUnifiedProjectionMatrix(ActiveAspect, ActiveViewportClient->GetCamera().mFovDegree, ActiveViewportClient->GetCamera().mOrthoDistance, 0.1f, 1000.f, ActivePerspectiveRatio);
-
-
+#if IS_OBJ_VIEWER
+#else
 	// Mouse Picking & Gizmo
 	{
 		// 피킹 로직
@@ -351,7 +351,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 			static_cast<float>(ActiveViewportClient->GetHeight())
 		);
 	}
-
+#endif
 	// Render Threads
 	{
 		SCOPE_CYCLE_COUNTER("Draw");
@@ -365,7 +365,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 
 #if IS_OBJ_VIEWER
 		if (!Viewports.IsEmpty()) {
-			Viewports[0]->Draw(mGraphicsManager, mSceneManager);
+			Viewports[1]->Draw(mGraphicsManager, mSceneManager);
 		}
 #else
 		// 4개의 뷰포트 드로우콜
