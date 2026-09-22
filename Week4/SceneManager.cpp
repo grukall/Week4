@@ -57,10 +57,10 @@ FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports, FThumbnailMa
 
 	// 4개의 리프 노드(뷰포트) 생성 후 대응 뷰포트를 바로 꽂는다.
 	// 순서: TopLeft=0, TopRight=1, BottomLeft=2, BottomRight=3
-	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->Viewport     = inViewports[0]; VP_TopLeft->OwningClient     = inViewports[0]->GetClientAs<FEditorViewportClient>();
-	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->Viewport    = inViewports[1]; VP_TopRight->OwningClient    = inViewports[1]->GetClientAs<FEditorViewportClient>();
-	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->Viewport  = inViewports[2]; VP_BottomLeft->OwningClient  = inViewports[2]->GetClientAs<FEditorViewportClient>();
-	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->Viewport = inViewports[3]; VP_BottomRight->OwningClient = inViewports[3]->GetClientAs<FEditorViewportClient>();
+	SWindow* VP_TopLeft     = new SWindow(); VP_TopLeft->Viewport     = inViewports[0];
+	SWindow* VP_TopRight    = new SWindow(); VP_TopRight->Viewport    = inViewports[1];
+	SWindow* VP_BottomLeft  = new SWindow(); VP_BottomLeft->Viewport  = inViewports[2];
+	SWindow* VP_BottomRight = new SWindow(); VP_BottomRight->Viewport = inViewports[3];
 
 	// 4분할 루트 스플리터 생성 및 조립
 	SSplitterQuad* RootSplitter = new SSplitterQuad();
@@ -77,6 +77,11 @@ FSceneManager::FSceneManager(const TArray<FViewport*>& inViewports, FThumbnailMa
 
 FSceneManager::~FSceneManager()
 {
+	if (mRootWindow)
+	{
+		delete mRootWindow;
+		mRootWindow = nullptr;
+	}
 	delete mCurrentWorld;
 }
 
@@ -259,7 +264,7 @@ void FSceneManager::UpdateGUI(const FGuiReference& guiReference)
 								{
 									for (int i = 0; i < 4; ++i)
 									{
-										if (Leaves[i] && Leaves[i]->OwningClient == guiReference.ActiveViewport)
+										if (Leaves[i] && Leaves[i]->Viewport && Leaves[i]->Viewport->GetClient() == guiReference.ActiveViewport)
 										{
 											ActiveWindow = Leaves[i];
 											break;

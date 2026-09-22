@@ -3,7 +3,6 @@
 #include "FLogManager.h"
 
 class FViewport;
-struct FEditorViewportClient; // 전방 선언 – 실제 정의(FEditorViewportClient.h)가 struct 이므로 일치시켜야 MSVC 이름 맹글링이 같아진다
 
 struct FPoint
 {
@@ -44,7 +43,6 @@ public:
     // 이 윈도우(리프)에 대응하는 뷰포트. 리프가 아닌 노드(SSplitterQuad 등)는 nullptr.
     // 소유권은 FEngineLoop 가 보유하며, SWindow 는 포인터만 빌려쓴다.
     FViewport* Viewport = nullptr;
-    FEditorViewportClient* OwningClient = nullptr;
 
     virtual ~SWindow() = default;
 

@@ -11,6 +11,9 @@ class FViewportClient
 public:
 	virtual ~FViewportClient() = default;
 
+	virtual void SetViewport(FViewport* InViewport) {}
+	virtual FViewport* GetViewport() const { return nullptr; }
+
 	// 뷰포트 렌더링 호출 (FViewport::Draw()에서 호출됨)
 	virtual void Draw(FViewport* Viewport, FGraphicsManager* GraphicsMgr, FSceneManager* SceneMgr) = 0;
 

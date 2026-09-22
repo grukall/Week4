@@ -93,8 +93,8 @@ public:
 
 	float GetPerspectiveRatio(float GlobalPerspectiveRatio = 1.0f) const { return bIsOrthographic ? 0.0f : GlobalPerspectiveRatio; }
 
-	void SetViewport(FViewport* InViewport) { mViewport = InViewport; }
-	FViewport* GetViewport() const { return mViewport; }
+	virtual void SetViewport(FViewport* InViewport) override { mViewport = InViewport; }
+	virtual FViewport* GetViewport() const override { return mViewport; }
 
 	uint32 GetWidth() const;
 	uint32 GetHeight() const;

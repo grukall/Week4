@@ -11,10 +11,7 @@ FViewport::FViewport(FViewportClient* InClient)
 {
 	if (mClient)
 	{
-		if (FEditorViewportClient* EditorClient = dynamic_cast<FEditorViewportClient*>(mClient))
-		{
-			EditorClient->SetViewport(this);
-		}
+		mClient->SetViewport(this);
 	}
 }
 
@@ -23,10 +20,7 @@ void FViewport::SetClient(FViewportClient* InClient)
 	mClient = InClient;
 	if (mClient)
 	{
-		if (FEditorViewportClient* EditorClient = dynamic_cast<FEditorViewportClient*>(mClient))
-		{
-			EditorClient->SetViewport(this);
-		}
+		mClient->SetViewport(this);
 	}
 }
 
@@ -36,11 +30,6 @@ void FViewport::SetViewportArea(float InLeft, float InTop, float InWidth, float 
 	mViewportTop = InTop;
 	mWidth = std::max<uint32>(1, static_cast<uint32>(InWidth));
 	mHeight = std::max<uint32>(1, static_cast<uint32>(InHeight));
-
-	if (FEditorViewportClient* EditorClient = dynamic_cast<FEditorViewportClient*>(mClient))
-	{
-		EditorClient->SetViewportArea(InLeft, InTop, InWidth, InHeight);
-	}
 }
 
 void FViewport::ResizeRenderTarget(FGraphicsManager* GraphicsManager)
