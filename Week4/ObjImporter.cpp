@@ -144,7 +144,7 @@ bool FObjImporter::ParseObjFile(FString& FileContent, FObjData& Data)
 				iss >> vnx >> vny >> vnz;
 				Data.Normals.Add({ vnx, vny, vnz });
 			}
-			else if (prefix == "g") // group
+			else if (prefix == "g" || prefix == "o") // group or object
 			{
 				std::string GroupName;
 				if (iss >> GroupName)
