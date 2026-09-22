@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.h"
+#include "FGuid.h"
 #include "FName.h"
 #include "Object.h"
 
@@ -25,30 +26,51 @@ public:
 	inline void MarkDirty(bool bDirty = true) { bIsDirty = bDirty; }
 	inline const bool IsDirty() const { return bIsDirty; }
 
-	// 이 에셋을 구울 때 쓴 원본 소스 파일의 절대경로(있다면). .uasset 안에 저장해두면,
-	// 앱을 재시작해 AssetManager가 메모리부터 새로 시작해도(ImportSource는 런타임 전용이라
-	// 재시작하면 날아간다) ScanBakedAssets가 이걸 읽어 ImportSource를 복원할 수 있다 —
-	// 그래야 재시작 후에도 같은 원본을 다시 임포트했을 때 새 .uasset(_1, _2 ...)을 안 만들고
-	// 재임포트로 인식한다.
-	inline const FString& GetAssetPath() const { return AssetPath; }
-	inline void SetAssetPath(const FString& InPath) { AssetPath = InPath; }
+	// 이 에셋을 구울 때 쓴 원본(obj/mtl 등)의 GUID. 원본 옆의 .meta 사이드카에 적혀 있는 값이다.
+	// 경로가 아니라 GUID라서, 원본을 다른 폴더로 옮기거나 이름을 바꿔도 같은 원본으로 인식된다.
+	// 굽지 않은 원본이 없는 에셋(엔진 내장 프리미티브 등)은 비어 있다.
+	inline const FGuid& GetImportSourceGuid() const { return ImportSourceGuid; }
+	inline void SetImportSourceGuid(const FGuid& InGuid) { ImportSourceGuid = InGuid; }
+
+	// 이 에셋의 영구 식별자. 경로/이름이 바뀌어도 따라가는 유일한 값이라, 다른 에셋이
+	// 이걸 참조로 저장한다. 굽기 직전에 FAssetRegistry::AcquireGuidForBake로 채워주면 되고,
+	// 한 번 발급된 뒤에는 재임포트를 해도 절대 새로 발급하지 않는다(발급하면 참조가 끊긴다).
+	inline const FGuid& GetAssetGuid() const { return AssetGuid; }
+	inline void SetAssetGuid(const FGuid& InGuid) { AssetGuid = InGuid; }
+
+	// .uasset 맨 앞에 붙는 고정 헤더. 필드를 넣거나 순서를 바꾸면 Version을 올려야 하고,
+	// FAssetRegistry::ReadAssetHeader도 같이 고쳐야 한다.
+	static constexpr uint32 AssetFileMagic = 0x54534155;	// 'UAST' (리틀엔디언)
+	// 2: UStaticMesh가 머티리얼 참조를 FName 키 대신 FGuid로 저장하기 시작했다.
+	// 3: 원본 경로 문자열(AssetPath)을 원본의 GUID(ImportSourceGuid)로 교체했다.
+	// 4: UMaterial이 텍스처 참조를 경로 문자열 대신 FGuid로 저장한다. UTexture2D도 굽기 대상이 됐다.
+	static constexpr uint32 AssetFileVersion = 4;
 
 	virtual void Serialize(FArchive& Ar) override
 	{
 		UObject::Serialize(Ar);
 
+		// 포맷이 바뀐 옛날 .uasset을 그대로 읽으면 엉뚱한 길이를 문자열 길이로 해석해서
+		// 거대한 할당으로 터진다. 매직과 버전을 맨 앞에 둬서 읽는 쪽이 먼저 걸러내게 한다.
+		uint32 Magic = AssetFileMagic;
+		uint32 Version = AssetFileVersion;
+		Ar << Magic;
+		Ar << Version;
+
 		FString ClassName = Ar.IsSaving() ? FString(GetRuntimeClass()->Name) : FString();
 		Ar << ClassName;
 
+		Ar << AssetGuid;
 		Ar << AssetName;
-		Ar << AssetPath;
+		Ar << ImportSourceGuid;
 	}
 
 	virtual void PostLoad(URenderer* Renderer) {}
 
 protected:
 	FName AssetName;
-	FString AssetPath;
+	FGuid AssetGuid;
+	FGuid ImportSourceGuid;
 	bool bIsDirty = false;
 };
 

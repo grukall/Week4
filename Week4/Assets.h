@@ -14,6 +14,7 @@
 
 #include FT_FREETYPE_H
 #include "StaticMesh.h"
+#include "FGuid.h"
 
 class FFileManager;
 class FFontManager;
@@ -84,9 +85,11 @@ public:
 	inline void ClearMaterials() { Materials.Empty(); }
 
 	// .uasset에는 UMaterial* 포인터를 그대로 저장할 수 없어서(FArchive는 raw memcpy라 의미 없는 값이 됨),
-	// 슬롯 순서대로 FAssetManager 조회 키를 대신 저장한다. 로드 후 이 키들로 실제 UMaterial*를 다시 구한다.
-	inline void SetMaterialKeys(const TArray<FName>& InKeys) { MaterialKeys = InKeys; }
-	inline const TArray<FName>& GetMaterialKeys() const { return MaterialKeys; }
+	// 슬롯 순서대로 머티리얼의 GUID를 대신 저장한다. 로드 후 FAssetRegistry에 위치를 물어
+	// 실제 UMaterial*를 다시 구한다. 경로가 아니라 GUID라서, 머티리얼 .uasset을 옮기거나
+	// 이름을 바꿔도 이 참조는 끊어지지 않는다.
+	inline void SetMaterialGuids(const TArray<FGuid>& InGuids) { MaterialGuids = InGuids; }
+	inline const TArray<FGuid>& GetMaterialGuids() const { return MaterialGuids; }
 
 	int32 FindMaterialSlot(UMaterial* InMaterial) const;
 
@@ -111,8 +114,10 @@ private:
 	TArray<FStaticMeshSection> Sections;
 	TArray<UMaterial*> Materials;
 
-	// Materials와 같은 순서. .uasset에 저장/복원되는 건 이 키 배열뿐이다.
-	TArray<FName> MaterialKeys;
+	// Materials와 같은 순서. .uasset에 저장/복원되는 건 이 GUID 배열뿐이다.
+	// 슬롯 인덱스가 곧 FStaticMeshSection::MaterialSlotIndex라, 중간에 빠진 머티리얼이 있어도
+	// 자리를 비워두고 순서를 유지해야 한다(유효하지 않은 FGuid가 그 자리에 들어간다).
+	TArray<FGuid> MaterialGuids;
 };
 
 class UTexture2D : public UAsset
@@ -147,6 +152,20 @@ public:
 	inline uint32 GetHeight() const { return Height; }
 
 	inline DXGI_FORMAT GetFormat() const { return Format; }
+
+	const TArray<uint8>& GetRawData() const { return PixelData; }
+
+	void SetRawData(uint32 InWidth, uint32 InHeight, DXGI_FORMAT InFormat, const TArray<uint8>& InPixelData)
+	{
+		Width = InWidth;
+		Height = InHeight;
+		Format = InFormat;
+		PixelData = InPixelData;
+	}
+
+	void ClearRawData() { PixelData.Empty(); }
+
+	virtual void Serialize(FArchive& Ar) override;
 	
 protected:
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
@@ -155,6 +174,7 @@ protected:
 	uint32 Width = 0;
 	uint32 Height = 0;
 	DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+	TArray<uint8> PixelData;
 };
 
 class FTexture2DAssetLoader : public FAssetLoader
@@ -165,6 +185,10 @@ public:
 
 	virtual UAsset* LoadAsset(const FName& AssetName, FAssetSource& AssetSource) override;
 	virtual void UnloadAsset(UAsset* Asset) override;
+
+	// png 등을 .uasset으로 굽고 등록한다. 반환값은 이 텍스처의 영구 식별자 —
+	// 머티리얼은 이 GUID를 참조로 저장한다(경로가 아니라).
+	FGuid Import(const std::filesystem::path& SourceTexturePath, FFileManager& InFileManager);
 
 private:
 	URenderer& Renderer;

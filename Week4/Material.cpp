@@ -19,7 +19,7 @@ void UMaterial::SerializeClass(json::JSON& outJson) const
 	propertiesJson["DiffuseColor"].append(DiffuseColor.z);
 	propertiesJson["DiffuseColor"].append(DiffuseColor.w);
 
-	propertiesJson["DiffuseTexture"] = DiffuseTexturePath;
+	propertiesJson["DiffuseTexture"] = DiffuseTextureGuid.ToString();
 }
 
 void UMaterial::DeserializeClass(const json::JSON& inJson)
@@ -42,20 +42,20 @@ void UMaterial::DeserializeClass(const json::JSON& inJson)
 	DiffuseColor.z = colorJson.at(2).ToFloat();
 	DiffuseColor.w = colorJson.at(3).ToFloat();
 
-	DiffuseTexturePath = FString(propertiesJson.at("DiffuseTexture").ToString());
+	FGuid::Parse(FString(propertiesJson.at("DiffuseTexture").ToString()), DiffuseTextureGuid);
 }
 UMaterial* UMaterial::DefaultMaterial = nullptr;
 void UMaterial::InitDefaultMaterial(URenderer* Renderer)
 {
 	if (DefaultMaterial != nullptr || Renderer == nullptr) return;
 
-	// "DefaultMaterial"À» FName("DefaultMaterial")À¸·Î ¸í½ÃÀû »ý¼ºÇÏ¿© Àü´Þ
+	// "DefaultMaterial"ï¿½ï¿½ FName("DefaultMaterial")ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï¿ï¿½ ï¿½ï¿½ï¿½ï¿½
 	DefaultMaterial = FObjectFactory::ConstructObject<UMaterial>(
 		FName("None"),
 		*Renderer
 	);
 
-	// µðÆúÆ® ÆÄ¶ó¹ÌÅÍ ¼³Á¤
+	// ï¿½ï¿½ï¿½ï¿½Æ® ï¿½Ä¶ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	DefaultMaterial->SetAmbientColor({ 0.2f, 0.2f, 0.2f });
 	DefaultMaterial->SetDiffuseColor({ 0.6f, 0.6f, 0.6f, 1.0f });
 	DefaultMaterial->SetSpecularPower(32.0f);
@@ -73,10 +73,10 @@ void UMaterial::Serialize(FArchive& Ar)
 	Ar << DiffuseColor;
 	Ar << SpecularColor;
 	Ar << EmissiveColor;
-	Ar << AmbientTexturePath;
-	Ar << DiffuseTexturePath;
-	Ar << SpecularTexturePath;
-	Ar << BumpTexturePath;
+	Ar << AmbientTextureGuid;
+	Ar << DiffuseTextureGuid;
+	Ar << SpecularTextureGuid;
+	Ar << BumpTextureGuid;
 	Ar << UVScroll;
 	Ar << UVSpeed;
 	Ar << TransmissionFilter;
