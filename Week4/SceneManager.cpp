@@ -1074,13 +1074,17 @@ void FSceneManager::UpdateObjViewerGUI(const FGuiReference& guiReference)
 			mViewportY = ScreenPos.y;
 			mViewportWidth = Size.x;
 			mViewportHeight = Size.y;
-
-			ViewportClient->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+			FViewport* Viewport = ViewportClient ? ViewportClient->GetViewport() : nullptr;
+			if (Viewport) {
+				Viewport->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+			} else if (ViewportClient) {
+				ViewportClient->SetViewportArea(0.0f, 0.0f, Size.x, Size.y);
+			}
 
 			guiReference.ActiveViewport = ViewportClient;
 
-			if (ViewportClient->mRenderTarget && ViewportClient->mRenderTarget->SRV) {
-				ImTextureID SRV = (ImTextureID)(intptr_t)ViewportClient->mRenderTarget->SRV.Get();
+			if (Viewport && Viewport->GetRenderTarget() && Viewport->GetRenderTarget()->SRV) {
+				ImTextureID SRV = (ImTextureID)(intptr_t)Viewport->GetRenderTarget()->SRV.Get();
 
 				ImGui::Image(SRV, Size);
 
