@@ -230,6 +230,7 @@ void FEngineLoop::Tick(bool bPumpMessages)
 	if (GInTick) return;
 	GInTick = true;
 
+	mStatManager->ResetFrame();
 	FrameTimer->StartFrame();
 	SCOPE_CYCLE_COUNTER("Frame");
 	float deltaTime = FrameTimer->GetDeltaTime();
