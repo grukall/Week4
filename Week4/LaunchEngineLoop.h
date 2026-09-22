@@ -11,6 +11,7 @@
 #include "FAssetManager.h"
 #include "FFontManager.h"
 #include "FComponentVisualizer.h"
+#include "FThumbnailManager.h"
 
 #include <d3d11.h>
 
@@ -54,6 +55,8 @@ private:
 
 	FComponentVisualizerManager* mComponentVisualizerManager;
 	FStatManager* mStatManager;
+
+	FThumbnailManager* mThumbnailManager = nullptr;
 };
 
 inline FEngineLoop GEngineLoop;

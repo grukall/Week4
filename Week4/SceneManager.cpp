@@ -42,7 +42,7 @@
 
 #include "Material.h"
 
-FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
+FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients, FThumbnailManager* thumbnailManager)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	mPanelWidth = io.DisplaySize.x * MIN_WIDTH_RATIO;
@@ -70,6 +70,8 @@ FSceneManager::FSceneManager(const TArray<FEditorViewportClient*>& clients)
 
 	// SceneManager의 루트 윈도우로 등록
 	mRootWindow = RootSplitter;
+
+	mThumbnailManager = thumbnailManager;
 }
 
 FSceneManager::~FSceneManager()
@@ -1397,13 +1399,11 @@ void FSceneManager::drawFolderTree(const std::filesystem::path& currentPath)
 // ----------------------------------------------------
 // 우측: 반응형 에셋 타일 그리드 & Drag & Drop
 // ----------------------------------------------------
-void FSceneManager::drawAssetGrid()
-{
+void FSceneManager::drawAssetGrid() {
 	if (!std::filesystem::exists(mCurrentDirectory)) return;
 
 	float padding = 16.0f;
 	float cellSize = mThumbnailSize + padding;
-
 	float panelWidth = ImGui::GetContentRegionAvail().x;
 	int columnCount = static_cast<int>(panelWidth / cellSize);
 	if (columnCount < 1) columnCount = 1;
@@ -1414,67 +1414,52 @@ void FSceneManager::drawAssetGrid()
 	{
 		const auto& path = entry.path();
 		std::string filename = path.filename().string();
+		bool isDirectory = entry.is_directory();
 
-		// 검색 필터 적용
 		if (strlen(mSearchBuffer) > 0 && filename.find(mSearchBuffer) == std::string::npos)
-		{
 			continue;
-		}
 
 		ImGui::PushID(filename.c_str());
 
-		bool isDirectory = entry.is_directory();
+		// [핵심 연결] ThumbnailManager로부터 ImTextureID(ID3D11ShaderResourceView*) 획득
+		ImTextureID thumbID = mThumbnailManager->GetThumbnail(path, isDirectory);
 
-		// 아이콘 레이블 (실제 엔진에서는 ImTextureID를 받아 ImGui::ImageButton을 사용)
-		const char* iconText = isDirectory ? "[FOLDER]" : "[FILE]";
+		ImVec4 bgColor = (mSelectedAssetPath == path) ? ImVec4(0.2f, 0.6f, 1.0f, 0.6f) : ImVec4(0, 0, 0, 0);
 
-		// 선택 여부 하이라이트 표시
 		if (mSelectedAssetPath == path)
-		{
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 0.6f));
-		}
 
-		ImGui::Button(iconText, ImVec2(mThumbnailSize, mThumbnailSize));
+		// 글자 버튼 대신 이미지 버튼으로 렌더링
+		bool clicked = ImGui::ImageButton(
+			filename.c_str(),
+			thumbID,
+			ImVec2(mThumbnailSize, mThumbnailSize),
+			ImVec2(0, 0), ImVec2(1, 1),
+			bgColor,
+			ImVec4(1, 1, 1, 1)
+		);
 
 		if (mSelectedAssetPath == path)
-		{
 			ImGui::PopStyleColor();
-		}
 
-		// 클릭 선택
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-		{
+		if (clicked || ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			mSelectedAssetPath = path;
-		}
 
-		// 폴더 더블 클릭 시 이동
 		if (isDirectory && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-		{
 			mCurrentDirectory /= path.filename();
-		}
 
-		// ==========================================
-		// 에셋 드래그 앤 드롭 (Drag Source)
-		// 뷰포트나 인스펙터로 에셋 전송
-		// ==========================================
 		if (!isDirectory && ImGui::BeginDragDropSource())
 		{
 			std::string pathString = path.string();
-
-			// "CONTENT_BROWSER_ITEM" 이라는 페이로드 키로 파일 경로 전달
 			ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", pathString.c_str(), pathString.size() + 1);
-
 			ImGui::Text("Dragging: %s", filename.c_str());
 			ImGui::EndDragDropSource();
 		}
 
-		// 파일명 텍스트 표시
 		ImGui::TextWrapped("%s", filename.c_str());
-
 		ImGui::NextColumn();
 		ImGui::PopID();
 	}
-
 	ImGui::Columns(1);
 }
 

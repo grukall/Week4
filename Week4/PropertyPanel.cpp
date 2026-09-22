@@ -201,42 +201,100 @@ namespace
 				// 로드 여부와 무관하게, FAssetManager가 아는 것(=디스크에서 스캔했거나 이미 로드된 것)을
 				// 전부 나열한다. 로드는 실제로 골랐을 때만 한다.
 				FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
-				{
-					if (!MetaInfo.AssetClass || !MetaInfo.AssetClass->IsChildOf(Property.ClassInfo))
 					{
-						return;
-					}
+						if (!MetaInfo.AssetClass || !MetaInfo.AssetClass->IsChildOf(Property.ClassInfo))
+						{
+							return;
+						}
 
-					const bool bSelected = (MetaInfo.LoadedAsset == CurrentAsset);
+						const bool bSelected = (MetaInfo.LoadedAsset == CurrentAsset);
 
-					FString AssetLabel = MetaInfo.Stem.ToString();
-					if (ImGui::Selectable(AssetLabel.c_str(), bSelected))
-					{
-						// 여기서 처음 로드될 수 있다 — 지금까지 존재만 알고 있던 걸 실제로 불러오는 시점.
-						UAsset* Asset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
-						*AssetSlot = Asset;
+						FString AssetLabel = MetaInfo.Stem.ToString();
+						if (ImGui::Selectable(AssetLabel.c_str(), bSelected))
+						{
+							// 여기서 처음 로드될 수 있다 — 지금까지 존재만 알고 있던 걸 실제로 불러오는 시점.
+							UAsset* Asset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
+							*AssetSlot = Asset;
 
-						if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>()) {
-							MeshComp->ClearMaterials();
-							if (UStaticMesh* NewMesh = Asset ? Asset->Cast<UStaticMesh>() : nullptr) {
-								TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
-								for (uint32 i = 0; i < MeshMaterials.Num();++i) {
-									MeshComp->SetMaterial(i, MeshMaterials[i]);
+							if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>())
+							{
+								MeshComp->ClearMaterials();
+								if (UStaticMesh* NewMesh = Asset ? Asset->Cast<UStaticMesh>() : nullptr)
+								{
+									TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
+									for (uint32 i = 0; i < MeshMaterials.Num(); ++i)
+									{
+										MeshComp->SetMaterial(i, MeshMaterials[i]);
+									}
 								}
 							}
+
+							if (OnPropertyChanged)
+							{
+								OnPropertyChanged();
+							}
 						}
-						if (OnPropertyChanged)
+
+						if (bSelected)
 						{
-							OnPropertyChanged();
+							ImGui::SetItemDefaultFocus();
 						}
-					}
-					if (bSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				});
+					});
+
 				ImGui::EndCombo();
 			}
+
+			UAsset* DroppedAsset = nullptr;
+
+			if (ImGui::BeginDragDropTarget())
+			{
+				const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM");
+
+				if (Payload && Payload->Data && Payload->DataSize > 0)
+				{
+					const char* DroppedPath = static_cast<const char*>(Payload->Data);
+					std::filesystem::path AssetPath(DroppedPath);
+					const std::string AssetStem = AssetPath.stem().string();
+
+					FAssetManager::Get().ForEachMetaInfo([&](FAssetMetaInfo& MetaInfo)
+						{
+							if (!MetaInfo.AssetClass) return;
+							if (!MetaInfo.AssetClass->IsChildOf(Property.ClassInfo)) return;
+							if (MetaInfo.Stem.ToString() != FString(AssetStem.c_str())) return;
+
+							DroppedAsset = FAssetManager::Get().GetAsset(MetaInfo.AssetName, true);
+						});
+				}
+
+				// 먼저 DragDropTarget를 닫는다.
+				ImGui::EndDragDropTarget();
+			}
+
+			// EndDragDropTarget() 밖에서 실제 변경
+			if (DroppedAsset)
+			{
+				*AssetSlot = DroppedAsset;
+
+				if (UStaticMeshComponent* MeshComp = Object->Cast<UStaticMeshComponent>())
+				{
+					MeshComp->ClearMaterials();
+
+					if (UStaticMesh* NewMesh = DroppedAsset->Cast<UStaticMesh>())
+					{
+						TArray<UMaterial*> MeshMaterials = NewMesh->GetMaterials();
+						for (uint32 i = 0; i < MeshMaterials.Num(); ++i)
+						{
+							MeshComp->SetMaterial(i, MeshMaterials[i]);
+						}
+					}
+				}
+
+				if (OnPropertyChanged)
+				{
+					OnPropertyChanged();
+				}
+			}
+
 			break;
 		}
 		case EPropertyType::Array:
