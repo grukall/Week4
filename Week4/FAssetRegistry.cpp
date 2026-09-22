@@ -248,6 +248,22 @@ bool FAssetRegistry::FindGuidByPath(const std::filesystem::path& Path, FGuid& Ou
 	return true;
 }
 
+bool FAssetRegistry::FindGuidByPath(const std::filesystem::path& Path, FGuid& OutGuid) const
+{
+	const std::filesystem::path Normalized = std::filesystem::weakly_canonical(Path);
+
+	for (const auto& Pair : Entries)
+	{
+		if (std::filesystem::weakly_canonical(Pair.second.Path) == Normalized)
+		{
+			OutGuid = Pair.second.Guid;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 FGuid FAssetRegistry::AcquireGuidForBake(const std::filesystem::path& BakedPath) const
 {
 	// 같은 자리에 이미 구워진 게 있으면 그 GUID를 그대로 쓴다 — 재임포트할 때마다 새로

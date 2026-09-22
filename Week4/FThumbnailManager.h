@@ -36,7 +36,12 @@ public:
 	void Shutdown();
 
 	ImTextureID GetThumbnail(const std::filesystem::path& Path, bool IsDirectory);
+
 	ImTextureID GetUAssetThumbnail(const std::filesystem::path& Path);
+
+	// 로드된 인스턴스로 썸네일을 얻는다. 파일 위치는 GUID로 레지스트리에 물어본다 —
+	// UAsset::AssetName은 표시용 이름이라 경로로 쓸 수 없다.
+	ImTextureID GetAssetThumbnail(UAsset* Asset);
 	ImTextureID GetStaticMeshThumbnail(const std::filesystem::path& Path, UStaticMesh* Mesh);
 	ImTextureID GetMaterialThumbnail(const std::filesystem::path& Path, UMaterial* Material);
 
@@ -63,6 +68,9 @@ private:
 	bool SaveThumbnailDDS(const std::filesystem::path& Path, ID3D11Texture2D* SourceTexture);
 	ID3D11ShaderResourceView* LoadThumbnailDDS(const std::filesystem::path& Path);
 	std::filesystem::path GetThumbnailCachePath(const std::filesystem::path& AssetPath) const;
+
+	// 캐시 키. 등록된 에셋이면 GUID, 아니면 정규화한 경로.
+	std::string MakeThumbnailKey(const std::filesystem::path& AssetPath) const;
 
 private:
 	ID3D11Device* mDevice = nullptr;
